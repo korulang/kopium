@@ -14,8 +14,7 @@
 //   koruc run c_chat_pane.k
 //
 // Expected (when green): chrome appears instantly, the sentence types
-// itself into the body as deltas arrive. Leak-check red at exit is
-// 335_042 (read-file's buffer), same as A.
+// itself into the body as deltas arrive.
 //
 // ── WIP: PARKED AT THE STORE-DIALECT WALL (2026-07-31) ──────────────────
 // This increment currently does NOT compile, on purpose left red. The

@@ -32,10 +32,9 @@
 //   koruc run a_sse_spike.k
 //
 // Expected: a short cheerful sentence appears word by word, then a blank
-// line and "[status 200]" — followed by KORU LEAK CHECK FAILED, which is
-// the KNOWN pinned hole 335_042: std/io:read-file's buffer has no disposer
-// spelling yet (the pin explicitly reserves that ruling for Lars). The red
-// is honest; it moves when the spelling lands.
+// line, "[status 200]", and a clean exit — the leak check went green the
+// day the 335_042 ruling landed (read-file's buffer now carries
+// allocated!, auto-discharged into std/io:free with zero edits here).
 
 import std/io
 import app/auth
