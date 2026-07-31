@@ -7,7 +7,7 @@
 //   ~/.pi/agent/auth.json --std/io:read-file--> yyjson (key extraction)
 //   --> curl:multi.add.post (authenticated POST, stream:true)
 //   --> curl:await ! chunk (bytes as they arrive — the arm landed 2026-07-31)
-//   --> app/sse:feed ! data (SSE line framing, cross-chunk state)
+//   --> koru/sse:feed ! data (SSE line framing, per-stream handle)
 //   --> yyjson per delta (choices[0].delta.content)
 //   --> std/io:print, no newline — the tokens appear as the model types.
 //
@@ -20,8 +20,9 @@
 // day (koru 400_177/178, 400_179, 400_180):
 //   - no std/env: the auth path is hardcoded absolute because HOME cannot
 //     be read. Same hole class as gitgazer's no-std-process.
-//   - SSE framing + bearer-concat live in app/sse (see its header): both
-//     want a koru-libs home.
+//   - SSE framing wanted a koru-libs home — it got one: koru-libs/sse,
+//     lifted from this increment's app-local first draft. bearer-concat
+//     still waits in app/auth.
 //   - the miss-arm ladder in handle-delta: every not-found rung must spell
 //     its own close(doc). Honest, but the shape yearns for a combinator.
 //   - anthropic/claude-fable-5 via OpenRouter→Bedrock streamed EMPTY
@@ -37,7 +38,8 @@
 // is honest; it moves when the spelling lands.
 
 import std/io
-import app/sse
+import app/auth
+import koru/sse
 import koru/curl
 import koru/yyjson
 
@@ -64,17 +66,16 @@ handle-delta = koru/yyjson:parse(text: payload)
 // twin (`await`) because this increment is headless — increment B swaps in
 // `poll` under a vaxis tick, and THIS TOR DOES NOT CHANGE SHAPE.
 tor stream { auth: string }
-stream = koru/curl:multi.new()
+stream = koru/sse:new(): s |> koru/curl:multi.new()
 |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: "{\"model\":\"anthropic/claude-haiku-4.5\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with one short cheerful sentence announcing that kopium is streaming.\"}]}", headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } })
 |> koru/curl:multi.start()
 | started p |> koru/curl:await(p)
-    ! chunk ch |> app/sse:feed(bytes: ch.data)
+    ! chunk ch |> koru/sse:feed(s, bytes: ch.data)
         ! data d |> handle-delta(payload: d)
         | ok |> _
-        | overflow |> std/io:print.ln("kopium: sse buffer overflow")
     ! finished r |> std/io:print("\n[status {{ r.status:d }}]\n") |> koru/curl:close(resp: r)
-    | done m |> koru/curl:multi.close(m)
-| failed e |> std/io:print.ln("kopium: start failed: {{ e.msg:s }}")
+    | done m |> koru/curl:multi.close(m) |> koru/sse:close(s)
+| failed e |> std/io:print.ln("kopium: start failed: {{ e.msg:s }}") |> koru/sse:close(s)
 
 // Load the OpenRouter key from pi's auth store, build the bearer header
 // (a COPY — the key is a borrow into doc's arena), close the doc, stream.
@@ -83,7 +84,7 @@ std/io:read-file(path: "/Users/larsde/.pi/agent/auth.json")
     | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "openrouter")
         | found orv |> koru/yyjson:object.get(doc, v: orv, key: "key")
             | found kv |> koru/yyjson:as.string(doc, v: kv)
-                | ok k |> app/sse:bearer(key: k): auth |> koru/yyjson:close(doc) |> stream(auth)
+                | ok k |> app/auth:bearer(key: k): auth |> koru/yyjson:close(doc) |> stream(auth)
                 | wrong-type |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: openrouter key is not a string")
             | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter.key in auth store")
         | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter entry in auth store")

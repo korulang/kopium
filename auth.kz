@@ -1,0 +1,17 @@
+// kopium — auth-header helper. (The SSE framing that used to live beside
+// this graduated to koru-libs/sse as a real package with a per-stream
+// handle; this file keeps only what has no lib home yet.)
+//
+// "Bearer {key}" — the key is a borrow into a yyjson doc the caller is
+// about to close, so this COPIES. FINDING: string concatenation in koru
+// today is either std/string's instance machinery or this — a one-line
+// allocPrint tor. The ergonomic gap is real; std/string:format is the
+// missing tor.
+
+const std = @import("std");
+
+~pub tor bearer { key: string } -> string
+
+~proc bearer|zig {
+    return std.fmt.allocPrint(std.heap.page_allocator, "Bearer {s}", .{key}) catch @panic("kopium: OOM building auth header");
+}

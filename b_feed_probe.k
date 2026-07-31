@@ -1,9 +1,9 @@
 // Increment B-zero, a network-free probe — feed fabricated SSE bytes through app/sse:feed and the
-// handle-delta ladder, no network. Proves (or indicts) the arm plumbing:
+// handle-delta ladder, no network — now through koru-libs/sse's handle:
 // expected output is "AB" then "probe done".
 
 import std/io
-import app/sse
+import koru/sse
 import koru/yyjson
 
 tor handle-delta { payload: string }
@@ -21,7 +21,6 @@ handle-delta = koru/yyjson:parse(text: payload)
     | not-found |> koru/yyjson:close(doc)
 | err e |> std/io:print.ln("probe: delta parse failed: {{ e.msg:s }}")
 
-app/sse:feed(bytes: "data: {\"choices\":[{\"delta\":{\"content\":\"A\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"B\"}}]}\n\ndata: [DONE]\n\n")
+koru/sse:new(): s |> koru/sse:feed(s, bytes: "data: {\"choices\":[{\"delta\":{\"content\":\"A\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"B\"}}]}\n\ndata: [DONE]\n\n")
 ! data d |> handle-delta(payload: d)
-| ok |> std/io:print.ln("") |> std/io:print.ln("probe done")
-| overflow |> std/io:print.ln("probe overflow")
+| ok |> std/io:print.ln("") |> koru/sse:close(s) |> std/io:print.ln("probe done")
