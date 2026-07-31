@@ -13,21 +13,22 @@
 //
 //   koruc run c_chat_pane.k
 //
-// Expected (when green): chrome appears instantly, the sentence types
+// Expected: chrome appears instantly, the sentence types
 // itself into the body as deltas arrive.
 //
-// ── WIP: PARKED AT THE STORE-DIALECT WALL (2026-07-31) ──────────────────
-// This increment currently does NOT compile, on purpose left red. The
-// store dialect is mid-migration in a sibling session (todo/downloads/
-// gitgazer sit dirty in the tree): the checker rejects todo_tui.k's
-// projection form ('the sweep arm binds its row — not a projection
-// block'), while the row-binding form trips phantom tracking on a
-// String<instance> borrowed through a sweep-row field
-// ('argument s has no tracked phantom state, requires <!view|!instance>').
-// One of those two forms must win before this file can speak; it resumes
-// on whichever the migration lands. Everything above the wall — the
-// koru/sse handle in a store, poll-under-tick, the shared delta ladder —
-// already shape-checks.
+// FINDINGS this increment pinned upstream (compiler bugs #6-#8 of the
+// day, all instances of koru's frag-two-lowerings-share-one-contract):
+//   - optional-param injection now lives in FOUR emission homes (400_180
+//     covered two, 400_182 the other two), and raw-call sites pass the
+//     empty Handlers type for effect-carrying targets.
+//   - named store fields don't carry obligations through the `| full`
+//     rejection record (f.s untracked) — the anonymous single-field form
+//     (downloads' idiom) is what this file speaks. FLOATED, not yet pinned.
+//   - a tor's own params don't thread into sweep-arm captures (branch
+//     bindings do — downloads' pr.index) — hence the append lives inline
+//     in the ladder rather than in an absorb tor. FLOATED, not yet pinned.
+//   - `{{ }}` inside a child-tag attribute doesn't lift a component
+//     param — the hint is baked static. FLOATED, not yet pinned.
 
 import std/io
 import std/string
@@ -40,12 +41,12 @@ import koru/sse
 import app/auth
 
 std/store:new(ui) { live: 1[i64] }
-std/store:new(reply, capacity: 2) { text: *std/string:String<instance!> }
+std/store:new(reply, capacity: 2) { *std/string:String<instance!> }
 
 std/store:new(batch, capacity: 2) { *koru/curl:Pending<open!> }
 ! discharge p |> koru/curl:cancel(p) |> koru/curl:multi.close()
 
-std/store:new(framer, capacity: 2) { s: *koru/sse:Stream<framing!> }
+std/store:new(framer, capacity: 2) { *koru/sse:Stream<framing!> }
 
 koru/vaxis:component(topbar) {
     <text>{{ title:s }}</text>
@@ -58,20 +59,16 @@ koru/vaxis:component(statusbar) {
 koru/vaxis:component(frame) {
     <dock>
         <topbar dock="top" h="1" title="== kopium =="/>
-        <statusbar dock="bottom" h="1" hint="{{ hint:s }}"/>
+        <statusbar dock="bottom" h="1" hint="q quit"/>
     </dock>
 }
 
-// Append one delta's text to the transcript. Its own tor so handle-delta
-// can copy the borrowed text out BEFORE closing the doc, without piping
-// past a sweep's arms.
-tor absorb { t: string }
-absorb = std/store:sweep(reply)
-! sweep { buf: entity.text } |> std/string:append(s: buf, text: t)
-    | ok |> _
-    | err _ |> _
-
-// Identical ladder to increment A, with `absorb` where A printed.
+// Identical ladder to increment A, with a transcript append where A
+// printed. The append lives INLINE in the ok arm: `t` is a branch binding
+// there, and branch bindings thread into sweep-arm captures (downloads'
+// pr.index precedent) where a tor parameter would not (floated finding).
+// No explicit close on that arm — append is the last use of the doc's
+// arena, and auto-discharge places the close.
 tor handle-delta { payload: string }
 handle-delta = koru/yyjson:parse(text: payload)
 | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "choices")
@@ -79,13 +76,16 @@ handle-delta = koru/yyjson:parse(text: payload)
         | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "delta")
             | found dv |> koru/yyjson:object.get(doc, v: dv, key: "content")
                 | found tv |> koru/yyjson:as.string(doc, v: tv)
-                    | ok t |> absorb(t) |> koru/yyjson:close(doc)
+                    | ok t |> std/store:sweep(reply)
+                        ! sweep buf |> std/string:append(s: buf, text: t)
+                            | ok |> _
+                            | err _ |> _
                     | wrong-type |> koru/yyjson:close(doc)
                 | not-found |> koru/yyjson:close(doc)
             | not-found |> koru/yyjson:close(doc)
         | out-of-range |> koru/yyjson:close(doc)
     | not-found |> koru/yyjson:close(doc)
-| err _ |> absorb(t: " [kopium: delta parse failed] ")
+| err _ |> _
 
 // One frame's worth of transfer — poll BORROWS the promise out of the
 // store, chunks drain through the same framing as increment A.
@@ -93,7 +93,7 @@ tor pump {}
 pump = std/store:sweep(batch)
 ! sweep p |> koru/curl:poll(p)
     ! chunk ch |> std/store:sweep(framer)
-        ! sweep { fs: entity.s } |> koru/sse:feed(s: fs, bytes: ch.data)
+        ! sweep fs |> koru/sse:feed(s: fs, bytes: ch.data)
             ! data d |> handle-delta(payload: d)
             | ok |> _
     ! finished r |> std/store:stored { ui.live: 0 } |> koru/curl:close(resp: r)
@@ -104,15 +104,16 @@ tor start-stream { auth: string }
 start-stream = koru/sse:new(): s |> std/store:insert(framer) { s }
 | row _ |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: "{\"model\":\"anthropic/claude-haiku-4.5\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"In two or three cheerful sentences, introduce yourself as kopium, a koru rebirth of the pi coding agent, streaming live inside its own terminal UI for the first time.\"}]}", headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
     | started p |> std/store:insert(batch) { p }
+        | row _ |> _
         | full f |> koru/curl:cancel(p: f): m |> koru/curl:multi.close(m)
     | failed _ |> std/store:stored { ui.live: 0 }
-| full f |> koru/sse:close(f.s)
+| full f |> koru/sse:close(s: f)
 
 // Seed the empty transcript row.
 std/string:from-page(text: "")
 | ok a |> std/string:take(s: a): text |> std/store:insert(reply) { text }
     | row _ |> _
-    | full f |> std/string:free(s: f.text)
+    | full f |> std/string:free(s: f)
 | err _ |> _
 
 // Key from pi's auth store (same flow as increment A), then launch.
@@ -133,9 +134,9 @@ koru/vaxis:run(title: "kopium")
 | err e |> std/io:print.ln("kopium failed: {{ e:s }}")
 
 koru/vaxis(kopium)
-! draw w |> frame(win: w, hint: "q quit")
+! draw w |> frame(win: w)
     |> koru/vaxis:sub-fill(parent: w, top: 1, bottom: 1): body
     |> std/store:sweep(reply)
-    ! sweep { buf: entity.text } |> std/string:read(s: buf): text |> koru/vaxis:write-in(win: body, x: 0, y: 0, text)
+    ! sweep buf |> std/string:read(s: buf): text |> koru/vaxis:write-in(win: body, x: 0, y: 0, text)
 ! tick _ when ui.live == 1 |> pump()
 ! key k when k.ch == 'q' |> koru/vaxis:quit()
