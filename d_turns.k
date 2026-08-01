@@ -85,24 +85,38 @@ seed-draft = std/string:from-page(text: "")
     | full f |> std/string:free(s: f)
 | err _ |> _
 
-// Identical delta ladder to increment B.
+// The delta ladder, POINT-FREE. Increment B wrote this five levels deep with
+// `| not-found |> close(doc)` three times, byte for byte — the `analysis`
+// pyramid from the compiler, in an app. It collapses now: each stage leaves
+// exactly one branch unclaimed, so the thread runs the whole ladder and the
+// three chokes sit at the dedent, one per way the JSON can disappoint us.
+//
+// `doc` rides every stage explicitly — it's a value the thread can't carry, so
+// no stage goes bare. The collapse is per-stage, which is the point.
+//
+// What the branch names bought: this ladder is HETEROGENEOUS (`not-found` from
+// an object lookup, `out-of-range` from an index, `wrong-type` from a cast),
+// and until koru 807107f9 a choke replicated onto every stage whether it
+// declared the branch or not — so this exact shape was the one the feature
+// couldn't reach. Found by reading these three duplicate lines and asking why.
+// See holes/2_pointfree_choke_replicates_dead_claims.
+//
+// Extraction only: handle-delta now hands the text back and `pump` decides
+// what to do with it. The transcript append moved to the caller.
 tor handle-delta { payload: string }
+| ok string
+| gone
 handle-delta = koru/yyjson:parse(text: payload)
-| ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "choices")
-    | found cs |> koru/yyjson:array.get(doc, v: cs, index: 0)
-        | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "delta")
-            | found dv |> koru/yyjson:object.get(doc, v: dv, key: "content")
-                | found tv |> koru/yyjson:as.string(doc, v: tv)
-                    | ok t |> std/store:sweep(transcript)
-                        ! sweep buf |> std/string:append(s: buf, text: t)
-                            | ok |> _
-                            | err _ |> _
-                    | wrong-type |> koru/yyjson:close(doc)
-                | not-found |> koru/yyjson:close(doc)
-            | not-found |> koru/yyjson:close(doc)
-        | out-of-range |> koru/yyjson:close(doc)
-    | not-found |> koru/yyjson:close(doc)
-| err _ |> _
+| ok doc |> koru/yyjson:root(doc): r
+    |> koru/yyjson:object.get(doc, v: r, key: "choices")
+    |> koru/yyjson:array.get(doc, index: 0)
+    |> koru/yyjson:object.get(doc, key: "delta")
+    |> koru/yyjson:object.get(doc, key: "content")
+    |> koru/yyjson:as.string(doc)
+    | not-found |> koru/yyjson:close(doc) => gone
+    | out-of-range |> koru/yyjson:close(doc) => gone
+    | wrong-type |> koru/yyjson:close(doc) => gone
+| err _ => gone
 
 // One frame's worth of transfer. `| complete` only raises the retire
 // flag — the batch row is taken out on the NEXT tick, never from inside
@@ -113,6 +127,11 @@ pump = std/store:sweep(batch)
     ! chunk ch |> std/store:sweep(framer)
         ! sweep fs |> koru/sse:feed(s: fs, bytes: ch.data)
             ! data d |> handle-delta(payload: d)
+                | ok t |> std/store:sweep(transcript)
+                    ! sweep buf |> std/string:append(s: buf, text: t)
+                        | ok |> _
+                        | err _ |> _
+                | gone |> _
             | ok |> _
     ! finished r |> std/store:stored { ui.live: 0 } |> koru/curl:close(resp: r)
     | running |> _
