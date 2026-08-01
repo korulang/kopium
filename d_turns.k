@@ -122,13 +122,13 @@ handle-delta = koru/yyjson:parse(text: payload)
 // flag — the batch row is taken out on the NEXT tick, never from inside
 // its own sweep.
 tor pump {}
-pump = std/store:sweep(batch)
-! sweep p |> koru/curl:poll(p)
-    ! chunk ch |> std/store:sweep(framer)
-        ! sweep fs |> koru/sse:feed(s: fs, bytes: ch.data)
+pump = std/store:query(batch)
+! query p |> koru/curl:poll(p)
+    ! chunk ch |> std/store:query(framer)
+        ! query fs |> koru/sse:feed(s: fs, bytes: ch.data)
             ! data d |> handle-delta(payload: d)
-                | ok t |> std/store:sweep(transcript)
-                    ! sweep buf |> std/string:append(s: buf, text: t)
+                | ok t |> std/store:query(transcript)
+                    ! query buf |> std/string:append(s: buf, text: t)
                         | ok |> _
                         | err _ |> _
                 | gone |> _
@@ -186,26 +186,26 @@ koru/vaxis(kopium)
 ! draw w |> frame(win: w)
     |> koru/vaxis:sub-fill(parent: w, top: 1, bottom: 3): body
     |> koru/vaxis:sub-from-bottom(parent: w, up: 2, h: 1): iw
-    |> std/store:sweep(draft)
-    ! sweep d |> std/string:read(s: d): dtext |> std/fmt:ln("> {{ dtext:s }}_"): line |> koru/vaxis:write-in(win: iw, x: 0, y: 0, line.text) |> std/store:sweep(transcript)
-        ! sweep buf |> std/string:read(s: buf): ttext |> koru/vaxis:write-in(win: body, x: 0, y: 0, text: ttext)
+    |> std/store:query(draft)
+    ! query d |> std/string:read(s: d): dtext |> std/fmt:ln("> {{ dtext:s }}_"): line |> koru/vaxis:write-in(win: iw, x: 0, y: 0, line.text) |> std/store:query(transcript)
+        ! query buf |> std/string:read(s: buf): ttext |> koru/vaxis:write-in(win: body, x: 0, y: 0, text: ttext)
 ! tick _ when ui.live == 1 |> pump()
 ! tick _ when ui.retire == 1 |> retire()
 ! key k when k.ch == 27 |> koru/vaxis:quit()
-! key k when k.ch == 13 and ui.live == 0 and ui.retire == 0 |> std/store:sweep(draft)
-    ! sweep d |> std/string:read(s: d): utext |> app/auth:chat-body(prompt: utext): body |> std/store:sweep(transcript)
-        ! sweep buf |> std/string:append(s: buf, text: "you: ")
+! key k when k.ch == 13 and ui.live == 0 and ui.retire == 0 |> std/store:query(draft)
+    ! query d |> std/string:read(s: d): utext |> app/auth:chat-body(prompt: utext): body |> std/store:query(transcript)
+        ! query buf |> std/string:append(s: buf, text: "you: ")
             | ok |> std/string:append(s: buf, text: utext)
                 | ok |> std/string:append(s: buf, text: "\n\nclaude: ")
                     | ok |> std/string:clear(s: d) |> send(body)
                     | err _ |> _
                 | err _ |> _
             | err _ |> _
-! key k when k.ch == 127 |> std/store:sweep(draft)
-    ! sweep d |> std/string:pop-char(s: d)
-! key k when k.ch == 8 |> std/store:sweep(draft)
-    ! sweep d |> std/string:pop-char(s: d)
-! key k when k.ch >= 32 and k.ch < 127 and ui.live == 0 |> std/store:sweep(draft)
-    ! sweep d |> std/string:append-char(s: d, k.ch)
+! key k when k.ch == 127 |> std/store:query(draft)
+    ! query d |> std/string:pop-char(s: d)
+! key k when k.ch == 8 |> std/store:query(draft)
+    ! query d |> std/string:pop-char(s: d)
+! key k when k.ch >= 32 and k.ch < 127 and ui.live == 0 |> std/store:query(draft)
+    ! query d |> std/string:append-char(s: d, k.ch)
         | ok |> _
         | err _ |> _

@@ -76,8 +76,8 @@ handle-delta = koru/yyjson:parse(text: payload)
         | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "delta")
             | found dv |> koru/yyjson:object.get(doc, v: dv, key: "content")
                 | found tv |> koru/yyjson:as.string(doc, v: tv)
-                    | ok t |> std/store:sweep(reply)
-                        ! sweep buf |> std/string:append(s: buf, text: t)
+                    | ok t |> std/store:query(reply)
+                        ! query buf |> std/string:append(s: buf, text: t)
                             | ok |> _
                             | err _ |> _
                     | wrong-type |> koru/yyjson:close(doc)
@@ -90,10 +90,10 @@ handle-delta = koru/yyjson:parse(text: payload)
 // One frame's worth of transfer — poll BORROWS the promise out of the
 // store, chunks drain through the same framing as increment A.
 tor pump {}
-pump = std/store:sweep(batch)
-! sweep p |> koru/curl:poll(p)
-    ! chunk ch |> std/store:sweep(framer)
-        ! sweep fs |> koru/sse:feed(s: fs, bytes: ch.data)
+pump = std/store:query(batch)
+! query p |> koru/curl:poll(p)
+    ! chunk ch |> std/store:query(framer)
+        ! query fs |> koru/sse:feed(s: fs, bytes: ch.data)
             ! data d |> handle-delta(payload: d)
             | ok |> _
     ! finished r |> std/store:stored { ui.live: 0 } |> koru/curl:close(resp: r)
@@ -136,7 +136,7 @@ koru/vaxis:run(title: "kopium")
 koru/vaxis(kopium)
 ! draw w |> frame(win: w)
     |> koru/vaxis:sub-fill(parent: w, top: 1, bottom: 1): body
-    |> std/store:sweep(reply)
-    ! sweep buf |> std/string:read(s: buf): text |> koru/vaxis:write-in(win: body, x: 0, y: 0, text)
+    |> std/store:query(reply)
+    ! query buf |> std/string:read(s: buf): text |> koru/vaxis:write-in(win: body, x: 0, y: 0, text)
 ! tick _ when ui.live == 1 |> pump()
 ! key k when k.ch == 'q' |> koru/vaxis:quit()
