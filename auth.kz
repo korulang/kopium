@@ -15,3 +15,51 @@ const std = @import("std");
 ~proc bearer|zig {
     return std.fmt.allocPrint(std.heap.page_allocator, "Bearer {s}", .{key}) catch @panic("kopium: OOM building auth header");
 }
+
+// Module-held bearer, remembered once at startup and recalled per send.
+// App-local zig state on purpose: a `send { body }` tor reading auth from a
+// creds STORE would need the tor param inside the sweep arm — the exact
+// shape 690_234 pins as uncaptured. Module state sidesteps nothing the
+// store surface can express today.
+var auth_buf: [512]u8 = undefined;
+var auth_len: usize = 0;
+
+~pub tor remember { auth: string }
+
+~proc remember|zig {
+    if (auth.len > $mod.auth_buf.len) @panic("kopium: bearer too long");
+    @memcpy($mod.auth_buf[0..auth.len], auth);
+    $mod.auth_len = auth.len;
+}
+
+~pub tor recall {} -> string
+
+~proc recall|zig {
+    return $mod.auth_buf[0..$mod.auth_len];
+}
+
+// One user turn -> the request body, with the typed text JSON-escaped.
+// FINDING: this exists because yyjson is read-v0 — building JSON has no
+// koru surface yet (the serialize depth pass ECOSYSTEM.md names). The
+// messages array is single-turn for the same reason: replaying history
+// means serializing the transcript, which wants the real builder.
+~pub tor chat-body { prompt: string } -> string
+
+~proc chat-body|zig {
+    const alloc = std.heap.page_allocator;
+    var out = std.ArrayListUnmanaged(u8){};
+    out.appendSlice(alloc, "{\"model\":\"anthropic/claude-haiku-4.5\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"") catch @panic("kopium: OOM");
+    for (prompt) |ch| {
+        switch (ch) {
+            '"' => out.appendSlice(alloc, "\\\"") catch @panic("kopium: OOM"),
+            '\\' => out.appendSlice(alloc, "\\\\") catch @panic("kopium: OOM"),
+            '\n' => out.appendSlice(alloc, "\\n") catch @panic("kopium: OOM"),
+            '\t' => out.appendSlice(alloc, "\\t") catch @panic("kopium: OOM"),
+            else => {
+                if (ch >= 0x20) out.append(alloc, ch) catch @panic("kopium: OOM");
+            },
+        }
+    }
+    out.appendSlice(alloc, "\"}]}") catch @panic("kopium: OOM");
+    return out.toOwnedSlice(alloc) catch @panic("kopium: OOM");
+}
