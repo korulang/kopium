@@ -1,0 +1,31 @@
+// Same shape as kopium's ladder (a `doc` carried at every stage + a threaded
+// value + per-stage extra args), but HOMOGENEOUS: every stage declares `| gone`.
+~import std/io
+
+~pub tor obj.get { doc: i64, v: i64, key: string }
+| found i64
+| gone
+~proc obj.get|zig { _ = doc; _ = key; return .{ .found = v + 1 }; }
+
+~pub tor arr.get { doc: i64, v: i64, index: i64 }
+| found i64
+| gone
+~proc arr.get|zig { _ = doc; _ = index; return .{ .found = v + 1 }; }
+
+~pub tor as.string { doc: i64, v: i64 }
+| found string
+| gone
+~proc as.string|zig { _ = doc; _ = v; return .{ .found = "hello" }; }
+
+~pub tor ladder { doc: i64, r: i64 }
+| found string
+| gone
+~ladder = obj.get(doc, v: r, key: "choices")
+  |> arr.get(doc, index: 0)
+  |> obj.get(doc, key: "delta")
+  |> as.string(doc)
+| gone => gone
+
+~ladder(doc: 1, r: 2)
+| found s |> std/io:print.ln("got {{ s:s }}")
+| gone |> std/io:print.ln("gone")

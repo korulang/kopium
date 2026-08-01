@@ -1,0 +1,44 @@
+// Mimics kopium's handle-delta ladder: a "doc" carried at every stage plus a
+// threaded value, stages that declare DIFFERENT unclaimed branches.
+~import std/io
+
+~pub tor Doc = { n: i64 }
+~pub tor Val = { n: i64 }
+
+~pub tor obj.get { doc: *Doc, v: *Val, key: string }
+| found *Val
+| not-found
+~proc obj.get|zig {
+    _ = doc; _ = key;
+    return .{ .found = v };
+}
+
+~pub tor arr.get { doc: *Doc, v: *Val, index: i64 }
+| found *Val
+| out-of-range
+~proc arr.get|zig {
+    _ = doc; _ = index;
+    return .{ .found = v };
+}
+
+~pub tor as.string { doc: *Doc, v: *Val }
+| ok string
+| wrong-type
+~proc as.string|zig { _ = doc; _ = v; return .{ .ok = "hello" }; }
+
+~pub tor ladder { doc: *Doc, r: *Val }
+| ok string
+| gone
+~ladder = obj.get(doc, v: r, key: "choices")
+  |> arr.get(doc, index: 0)
+  |> obj.get(doc, key: "delta")
+  |> as.string(doc)
+| not-found => gone
+| out-of-range => gone
+| wrong-type => gone
+
+~var d = Doc { n: 1 }
+~var v = Val { n: 2 }
+~ladder(doc: &d, r: &v)
+| ok s |> std/io:print.ln("got {{ s:s }}")
+| gone |> std/io:print.ln("gone")
