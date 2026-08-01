@@ -1,7 +1,7 @@
 .{
     .name = .d_turns,
     .version = "0.0.0",
-    .fingerprint = 0x2af9c19a5876da52,
+    .fingerprint = 0x2af9c19aa679dce7,
     .dependencies = .{
         .vaxis = .{
             .url = "git+https://github.com/rockorager/libvaxis.git#75035b169e91a51c233f3742161f8eb8eafca659",

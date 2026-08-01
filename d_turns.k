@@ -26,22 +26,29 @@
 // streaming word-by-word at network chunk boundaries, ESC quitting from
 // both mid-stream and post-stream.
 //
-// HONEST RED — `std/string:clear` leaks, so ESC exits 1:
+// The draft-line leak this file found is FIXED — koru 051c9470 taught
+// `clear` and `pop-char` to free what they drop (pinned 610_023/024). All
+// three exit paths now leave clean: one turn, two turns, and ESC mid-stream.
 //
-//   KORU LEAK CHECK FAILED: the produced program leaked (1 outstanding)
+// HONEST RED — the replies come back BLANK. See
+// holes/3_extracted_string_is_a_borrow_that_escapes.
 //
-// NOT this app's bug, and deliberately not routed around. A String's
-// `data` slice IS its allocation record (koru_std/string.kz:12 — there is
-// no capacity field), so `clear`'s `s.data.len = 0` orphans the buffer:
-// the disposer's `allocator.free(s.data)` hits Allocator.free's
-// zero-length early-return and frees nothing. Six-line repro, no TUI and
-// no network — `from-page |> take |> clear |> free` leaks where the same
-// chain without `clear` is clean. `clear` has zero regression coverage in
-// the whole suite, which is how it shipped.
+// The turn machinery is sound: typing echoes, Enter sends, status 200
+// arrives, the `| ok` arm fires on every delta. But `handle-delta` now
+// RETURNS the extracted text instead of appending it inline, and the
+// `string` that `koru/yyjson:as.string` hands back is a BORROW into the
+// document's arena. Auto-discharge closes that arena when the tor exits,
+// so the transcript appends freed memory — five NUL bytes where "HELLO"
+// should be, length intact, exit 0, no diagnostic anywhere.
 //
-// The leak is exactly the draft line the turn was typed into (2 bytes for
-// "hi"), and it is per-clear — i.e. per turn. Bisected: boot clean, typing
-// clean, red the moment Enter runs.
+// Not routed around, and deliberately not fixed here: this is the same
+// hole 610_007 is parked RED on, whose own text says the borrow surface is
+// Lars's ruling to make and must not be answered by invention. What this
+// app adds is severity — 610_007's witness SIGSEGVs, which a harness
+// catches; this one returns plausible data of the right length and exits
+// clean. Increments A and B still work, and they differ in exactly one
+// respect: they consume the text inside the arm that owns the doc. The
+// hazard is the escape, not the extraction.
 
 import std/io
 import std/string
