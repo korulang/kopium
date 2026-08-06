@@ -1,0 +1,36 @@
+// The canned model.
+//
+// `d_turns.k` streams real replies from claude-haiku-4.5 over SSE. This file is
+// that model with the network taken out and the answers written down, so the
+// harness under test is the BRIDGE and not the transport. Swapping this tor for
+// the live one is the whole difference between headless and wired.
+//
+// Turn 3 is the interesting one and it is deliberate: the model names a handle
+// that was never issued. That is not a hostile model, it is an ordinary one —
+// a confident wrong answer is the single most likely thing an LLM emits, and it
+// is the reason a tool surface needs a refusal rather than a validator.
+
+const std = @import("std");
+
+~pub tor say { turn: u32 } -> string
+
+~proc say|zig {
+    return switch (turn) {
+        1 => "open(path: \"agent-notes.txt\")",
+        2 => "append(handle: \"note_0\", text: \"the bridge held this across a turn\")",
+        3 => "close(handle: \"note_7\")",
+        else => "close(handle: \"note_0\")",
+    };
+}
+
+// What the model *meant* by each turn, for the transcript. Prose only.
+~pub tor intent { turn: u32 } -> string
+
+~proc intent|zig {
+    return switch (turn) {
+        1 => "open a note",
+        2 => "write into the note I opened last turn",
+        3 => "close note_7 (a handle nobody ever gave me)",
+        else => "close the note",
+    };
+}
