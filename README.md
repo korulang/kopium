@@ -132,15 +132,14 @@ on a branch.
 `session.k` cans the model so the thing under test is the bridge. `live.k` is
 the other half: `anthropic/claude-haiku-4.5` over OpenRouter is handed the
 `notes` vocabulary and a goal, and whatever it emits goes straight to
-`std/bridge:run`. Nothing inspects the reply first.
+`std/bridge:run`. Nothing inspects the reply first. Every dispatch outcome is
+appended to the transcript, so the agent finds out what happened.
 
 ```
 koruc live.k && ./a.out
 ```
 
 ```
---- session open, the agent's only tool is a Koru interpreter
-
 turn 1  goal: Open a note called agent-notes.txt.
   model> open(path: "agent-notes.txt")
   ok — bridge now holds 1 resource(s)
@@ -150,20 +149,51 @@ turn 2  goal: Write the line 'a live model wrote this' into the note you just op
   ok — bridge now holds 1 resource(s)
 
 turn 3  goal: Close the note note_7.
+  model> close(handle: "note_0")
+  ok — bridge now holds 0 resource(s)
+
+turn 4  goal: Try again.
   model> close(handle: "note_7")
   REFUSED: HandleNotHeld — 'close' never ran
+
+turn 5  goal: Open a note called scratch.txt. Leave it open.
+  model> open(path: "scratch.txt")
+  ok — bridge now holds 1 resource(s)
 --- transcript ends; no hang-up is written below this line
       [disk] note closed, fd released
-[BRIDGE] Invoked 'close' for handle 'note_0' [app.notes:open]
+[BRIDGE] Invoked 'close' for handle 'note_1' [app.notes:open]
 ```
 
-Byte-identical across three consecutive live runs, and `agent-notes.txt`
-contains the line the model wrote. Turn 3 is a real refusal of a real model's
-real answer — it was asked to close `note_7` and it complied, because
-complying is what a model does.
+Stable across three consecutive live runs, and `agent-notes.txt` contains the
+line the model wrote.
 
-Requires `~/.pi/agent/auth.json` with an `openrouter` key, the same store
-`kopium/a_sse_spike.k` reads.
+### Read turn 3 again — that is not the transcript I designed
+
+**The goal says close `note_7`. The model closed `note_0`.** It declined an
+explicit instruction because the tool results in its context told it that
+`note_0` was the handle this session actually held. Before results were fed
+back it complied with the same instruction every time and got refused.
+
+That is the increment working, and it is a better result than the one being
+aimed for — but the honest reading has a second half. Turn 4's goal is only
+*"Try again."*, and the model went straight back to `note_7`, **after** being
+told the session held zero resources. So the feedback informs the next answer
+without dominating it: given a vague instruction it reverted to the literal
+earlier one. The refusal demonstration did not disappear, it moved one turn
+later — and it moved because the agent got better, which is worth more than
+the tidier transcript.
+
+Turn 5 exists because of that. Once turn 3 started closing the note properly,
+the session ended holding nothing and **auto-discharge stopped firing** — the
+fourth thing this example exists to show went dark without a single line of it
+breaking. Turn 5 leaves a resource open so the compiler-written hang-up is
+exercised again, and `note_1` is closed on the way out with no `close` written
+anywhere in `live.k`.
+
+The result messages go in with role `user` and a `[tool result]` prefix rather
+than the OpenAI-shaped `tool` role, which needs a `tool_call` id. This agent's
+tool call is a line of Koru, not a function-call object; the prefix does that
+work honestly instead of faking an id.
 
 ### The session lives in two stores
 
@@ -223,8 +253,8 @@ back as a message is the honest next increment.
   runtime. Deriving the prompt from the scope declaration is the obvious move
   and there is no surface for it: `collect-scopes` walks the AST at compile
   time, but a running program cannot ask a scope what events it has.
-- **No tool result goes back.** The model sees its own invocations, never what
-  they returned. Turn 3's refusal teaches it nothing.
-- **One invocation per turn.** `wire:reply` keeps the first line. A model that
+- **The transcript is a blob, not rows.** One growable String, so nothing can
+  count turns, replay the last N, or compact the middle. See above for why.
+- **One invocation per turn.** `wire:clean` keeps the first line. A model that
   wants `open(…) |> append(…)` in one turn cannot say so.
 - **`max_tokens: 100`, single model, hardcoded URL.** It is a demo.

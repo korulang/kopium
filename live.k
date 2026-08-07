@@ -28,6 +28,7 @@
 // `kopium/a_sse_spike.k` reads.
 
 import std/io
+import std/fmt
 import std/store
 import std/string
 import std/bridge
@@ -101,8 +102,24 @@ record = std/store:query(transcript)
         | err _ |> _
     | err _ |> _
 
-// Read what the model said and run it. `br` is a tor parameter reaching
-// `std/bridge:run` from inside a sweep arm — the shape probe_store.k pins.
+// What the bridge did, as a message the next turn will see.
+//
+// Role "user" rather than "tool": the OpenAI-shaped `tool` role needs a
+// tool_call id, and this agent's tool call is a line of Koru rather than a
+// function-call object. The `[tool result]` prefix is doing that work instead
+// — honest about what it is, and the model reads it fine.
+tor observe { text: string }
+observe = std/store:query(transcript)
+! query h |> app/wire:msg(role: "user", content: text): m |> std/string:append(s: h, text: m)
+    | ok |> _
+    | err _ |> _
+
+// Read what the model said, run it, and TELL IT WHAT HAPPENED. `br` is a tor
+// parameter reaching `std/bridge:run` from inside a sweep arm — the shape
+// probe_store.k pins.
+//
+// Every arm reports. A refusal the agent never hears about is a refusal it
+// will repeat, and turn 4 exists to prove it hears.
 tor drive { br: *std/bridge:Bridge, goal: string }
 drive = std/store:query(reply)
 ! query buf |> std/string:read(s: buf): raw |> app/wire:clean(raw): src
@@ -110,13 +127,28 @@ drive = std/store:query(reply)
     |> record(goal, said: src)
     |> std/bridge:run(br, source: src)
         | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
+            |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s)."): ma
+            |> observe(ma.text)
         | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
+            |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run. HandleNotHeld means you named a handle this session never issued — check which handles you actually opened."): mb
+            |> observe(mb.text)
         | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
+            |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only open, append, close."): mc
+            |> observe(mc.text)
         | parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
+            |> std/fmt:ln("[tool result] That was not a Koru invocation: {{ p.message:s }}. Reply with exactly one invocation and no prose."): md
+            |> observe(md.text)
         | exhausted _ |> std/io:print.ln("  budget exhausted")
+            |> observe(text: "[tool result] budget exhausted; nothing ran.")
         | validation-error v |> std/io:print.ln("  invalid: {{ v:s }}")
+            |> std/fmt:ln("[tool result] invalid invocation: {{ v:s }}"): mf
+            |> observe(mf.text)
         | shape-error sh |> std/io:print.ln("  wrong shape: {{ sh.message:s }}")
+            |> std/fmt:ln("[tool result] wrong shape: {{ sh.message:s }}"): mg
+            |> observe(mg.text)
         | scope-not-found s2 |> std/io:print.ln("  no such scope: {{ s2:s }}")
+            |> std/fmt:ln("[tool result] no such scope: {{ s2:s }}"): mh
+            |> observe(mh.text)
 
 // Clear the in-flight reply before the next ask.
 tor clear-reply {}
@@ -140,6 +172,8 @@ converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
 |> turn(br, n: 1, goal: "Open a note called agent-notes.txt.")
 |> turn(br, n: 2, goal: "Write the line 'a live model wrote this' into the note you just opened.")
 |> turn(br, n: 3, goal: "Close the note note_7.")
+|> turn(br, n: 4, goal: "Try again.")
+|> turn(br, n: 5, goal: "Open a note called scratch.txt. Leave it open.")
 |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
 
 // Seed the two session Strings.
