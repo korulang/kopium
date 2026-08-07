@@ -123,6 +123,6 @@ and demonstrated red against the unfixed compiler before the pin was written.
 
 ## Requires
 
-The bridge surface used here (`std/bridge:run`, void `close`, the possession
-check) is on the koru branch `bridge-honesty`. Build with that worktree's
-`koruc` until it lands on main.
+A `koruc` from main. `bridge-honesty` merged in koru `fcd83850`, so the surface
+used here — `std/bridge:run`, void `close`, the possession check — is no longer
+on a branch.
