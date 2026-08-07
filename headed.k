@@ -270,6 +270,9 @@ std/string:from-page(text: "")
     | full f |> std/string:free(s: f)
 | err _ |> _
 
+// A screen exists now, so the module stops writing to the terminal behind it.
+app/notes:hush()
+
 seed-draft()
 
 std/bridge:create(id: "kopium-headed", scope: "notes"): br |> std/store:insert(session) { br }

@@ -74,10 +74,32 @@ fn slotOf(handle: []const u8) ?usize {
     if ($mod.files[slot]) |f| {
         f.close();
         $mod.files[slot] = null;
-        std.debug.print("      [disk] note closed, fd released\n", .{});
+        if (!$mod.quiet) std.debug.print("      [disk] note closed, fd released\n", .{});
     }
 }
 
+
+
+// ============================================================================
+// HUSH — a TUI owns the terminal, and these procs do not
+// ============================================================================
+//
+// `std.debug.print` goes to stderr, straight at the terminal, while vaxis
+// renders the screen on stdout with cursor positioning. Two writers, one
+// terminal: the output interleaves character by character and the pane turns to
+// noise. Harmless in session.k and live.k, where the prints ARE the output;
+// fatal the moment there is a screen.
+//
+// headed.k calls this once at startup. The transcript still shows every
+// invocation, so nothing is lost — the app renders, the module stops shouting.
+
+var quiet: bool = false;
+
+~pub tor hush {}
+
+~proc hush|zig {
+    $mod.quiet = true;
+}
 
 // ============================================================================
 // SAY — the agent's voice, and it is a TOOL CALL like any other
@@ -99,7 +121,7 @@ fn slotOf(handle: []const u8) ?usize {
 ~pub tor say { text: string }
 
 ~proc say|zig {
-    std.debug.print("      {s}\n", .{text});
+    if (!$mod.quiet) std.debug.print("      {s}\n", .{text});
 }
 
 // ============================================================================
