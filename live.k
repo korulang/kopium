@@ -10,9 +10,17 @@
 // pre-flight checker's, so an invocation that names a handle nobody issued
 // has to die at dispatch and not before.
 //
-// Turn 3 is deliberately impossible: nothing has issued note_7, and asking
-// the model to close it is asking for the confident wrong answer that is the
-// single most likely thing an LLM emits.
+// THE SESSION IS TWO STORES. `transcript` is the conversation, `reply` is the
+// turn in flight, and both are store-held Strings that grow. A bridge that
+// holds resources across turns paired with a model that remembers nothing
+// produces an agent that reopens what it already has — persistence has two
+// halves, and these are the second one.
+//
+// Store capacity is fixed static memory, but that bounds ROWS, not bytes: an
+// owned-String column grows without limit (690_053, 690_060). One row per
+// MESSAGE is the shape a conversation actually wants — countable, replayable,
+// compactable — and that is the one fixed capacity would bite. One growable
+// String is what fits today, and it is a blob.
 //
 //   koruc live.k && ./a.out
 //
@@ -20,6 +28,8 @@
 // `kopium/a_sse_spike.k` reads.
 
 import std/io
+import std/store
+import std/string
 import std/bridge
 import app/notes
 import app/wire
@@ -27,13 +37,24 @@ import koru/sse
 import koru/curl
 import koru/yyjson
 
-// One SSE data payload -> its delta text, appended to the reply buffer.
-//
-// The append happens HERE, inside the arm that still owns `doc`. That is the
-// whole difference between this and `d_turns.k`'s point-free version, which
-// RETURNS the extracted text and hands back freed memory
-// (kopium/holes/3_extracted_string_is_a_borrow_that_escapes). The hazard is
-// the escape, so this one simply does not escape.
+// The conversation so far: escaped, comma-prefixed chat messages, spliced
+// between the system message and the current goal.
+std/store:new(transcript, capacity: 2) { *std/string:String<std/string:instance!> }
+
+// This turn's streamed reply, cleared before each ask.
+std/store:new(reply, capacity: 2) { *std/string:String<std/string:instance!> }
+
+// One SSE delta -> the reply String. Called from inside the arm that still
+// owns `doc`, which is the whole difference between this and `d_turns.k`'s
+// point-free version — that one RETURNS the extracted text and hands back
+// freed memory (kopium/holes/3_extracted_string_is_a_borrow_that_escapes).
+// The hazard is the escape, so this simply does not escape.
+tor collect { text: string }
+collect = std/store:query(reply)
+! query buf |> std/string:append(s: buf, text)
+    | ok |> _
+    | err _ |> _
+
 tor handle-delta { payload: string }
 handle-delta = koru/yyjson:parse(text: payload)
 | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "choices")
@@ -41,7 +62,7 @@ handle-delta = koru/yyjson:parse(text: payload)
         | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "delta")
             | found dv |> koru/yyjson:object.get(doc, v: dv, key: "content")
                 | found tv |> koru/yyjson:as.string(doc, v: tv)
-                    | ok t |> app/wire:collect(text: t) |> koru/yyjson:close(doc)
+                    | ok t |> collect(text: t) |> koru/yyjson:close(doc)
                     | wrong-type |> koru/yyjson:close(doc)
                 | not-found |> koru/yyjson:close(doc)
             | not-found |> koru/yyjson:close(doc)
@@ -52,10 +73,9 @@ handle-delta = koru/yyjson:parse(text: payload)
 // The streaming POST. Blocking (`await`), because this is headless — the same
 // tor under a vaxis tick swaps `await` for `poll` and does not change shape.
 //
-// `body` is a tor PARAMETER rather than a mid-chain binding, and that is not
-// style: punning a binding into `multi.add.post` further down the same chain
-// comes back KORU080 "requires input 'body'". `d_turns.k:155` split at exactly
-// this seam and its comment blames 690_234 — same seam, same reason.
+// `req` rather than `body`: a bare `body` argument puns from a tor PARAMETER
+// but not from a mid-chain `: body` binding, and the failure is a KORU080
+// claiming the input was never supplied. PARSE006 gives the precise rule.
 tor send { req: string }
 send = app/wire:recall(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: req, headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
 | started p |> koru/curl:await(p)
@@ -66,20 +86,28 @@ send = app/wire:recall(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |> 
     | done m |> koru/curl:multi.close(m) |> koru/sse:close(s)
 | failed e |> std/io:print.ln("  transport failed: {{ e.msg:s }}") |> koru/sse:close(s)
 
-// Build this turn's request and fire it.
+// Build this turn's request from the transcript and fire it. `goal` is a tor
+// parameter captured into a sweep arm — 690_234, green since 2026-08-03.
 tor ask { goal: string }
-ask = app/wire:agent-body(goal): body |> send(req: body)
+ask = std/store:query(transcript)
+! query h |> std/string:read(s: h): hist |> app/wire:agent-body(goal, history: hist): body |> send(req: body)
 
-// One turn: state the goal, let the model answer, run what it said.
-// `br` carries no phantom — a turn USES the session, it does not end it.
-tor turn { br: *std/bridge:Bridge, n: u32, goal: string }
-turn = app/wire:reset()
-    |> std/io:print.ln("")
-    |> std/io:print.ln("turn {{ n:d }}  goal: {{ goal:s }}")
-    |> ask(goal)
-    |> app/wire:reply(): src
+// Append this turn to the conversation, so the next one can reason from it.
+tor record { goal: string, said: string }
+record = std/store:query(transcript)
+! query h |> app/wire:msg(role: "user", content: goal): m1 |> std/string:append(s: h, text: m1)
+    | ok |> app/wire:msg(role: "assistant", content: said): m2 |> std/string:append(s: h, text: m2)
+        | ok |> _
+        | err _ |> _
+    | err _ |> _
+
+// Read what the model said and run it. `br` is a tor parameter reaching
+// `std/bridge:run` from inside a sweep arm — the shape probe_store.k pins.
+tor drive { br: *std/bridge:Bridge, goal: string }
+drive = std/store:query(reply)
+! query buf |> std/string:read(s: buf): raw |> app/wire:clean(raw): src
     |> std/io:print.ln("  model> {{ src:s }}")
-    |> app/wire:remember-turn(goal, said: src)
+    |> record(goal, said: src)
     |> std/bridge:run(br, source: src)
         | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
         | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
@@ -90,6 +118,20 @@ turn = app/wire:reset()
         | shape-error sh |> std/io:print.ln("  wrong shape: {{ sh.message:s }}")
         | scope-not-found s2 |> std/io:print.ln("  no such scope: {{ s2:s }}")
 
+// Clear the in-flight reply before the next ask.
+tor clear-reply {}
+clear-reply = std/store:query(reply)
+! query buf |> std/string:clear(s: buf)
+
+// One turn. `br` carries no phantom — a turn USES the session, it does not
+// end it.
+tor turn { br: *std/bridge:Bridge, n: u32, goal: string }
+turn = clear-reply()
+    |> std/io:print.ln("")
+    |> std/io:print.ln("turn {{ n:d }}  goal: {{ goal:s }}")
+    |> ask(goal)
+    |> drive(br, goal)
+
 // The session. Same four demonstrations as session.k, with nobody scripting
 // the invocations.
 tor converse {}
@@ -99,6 +141,19 @@ converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
 |> turn(br, n: 2, goal: "Write the line 'a live model wrote this' into the note you just opened.")
 |> turn(br, n: 3, goal: "Close the note note_7.")
 |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
+
+// Seed the two session Strings.
+std/string:from-page(text: "")
+| ok a |> std/string:take(s: a): t |> std/store:insert(transcript) { t }
+    | row _ |> _
+    | full f |> std/string:free(s: f)
+| err _ |> _
+
+std/string:from-page(text: "")
+| ok b |> std/string:take(s: b): u |> std/store:insert(reply) { u }
+    | row _ |> _
+    | full f |> std/string:free(s: f)
+| err _ |> _
 
 // Startup: the bearer, then the conversation.
 std/io:read-file(path: "/Users/larsde/.pi/agent/auth.json")

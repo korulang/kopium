@@ -1,24 +1,30 @@
 // kopium-headless — the transport, so `live.k` can stay about the bridge.
 //
-// Lifted from `kopium/auth.kz` (bearer / remember / recall, unchanged) and
-// grown two things the headless agent needs: a prompt that hands the model
-// its vocabulary, and a place to accumulate a streamed reply.
+// WHAT LIVES WHERE, and it is a rule rather than a habit: **session state
+// lives in the store; a startup constant does not.** The transcript and the
+// in-flight reply both change every turn and are the session — they are
+// store-held Strings in `live.k`. The bearer token is read once before the
+// first turn and never again; it is module state, and that is the whole
+// honest reason.
 //
-// The reply buffer is module-held Zig state, and that is a considered choice
-// rather than a shortcut. The alternative is a store-held String, which is
-// what `d_turns.k` uses — but reading it back out means a tor param inside a
-// SWEEP arm to reach `std/bridge:run`, which is the shape `690_234` pins as
-// uncaptured. `auth.kz` already made this exact call for `recall` and wrote
-// down why. Same reason, same shape.
+// This file previously held the transcript in a `[16384]u8` module buffer and
+// justified it with "a tor param inside a SWEEP arm would be 690_234". That
+// was WRONG WHEN WRITTEN. 690_234 landed 2026-08-03 and is MUST_RUN green; the
+// justification was copied from `kopium/auth.kz`, where it had been true, and
+// never rechecked. `probe_store.k` settles it directly: a tor whose parameter
+// is the bridge reads a store-held String in a sweep arm and dispatches it.
 //
-// Note what this file does NOT need: the delta text is appended HERE, inside
-// the arm that still owns the yyjson doc, so nothing escapes an arena and
-// holes/3 never fires. That hole bites the RETURN, not the extraction.
+// The hand-rolled version was also strictly worse than the store. It was a
+// fixed 16 KiB with oldest-wins-stops-growing, so a long enough conversation
+// would silently stop recording; a store-held String grows.
+//
+// Nothing here needs holes/3's workaround: `live.k` appends each delta inside
+// the arm that still owns the yyjson doc, so no borrow escapes an arena.
 
 const std = @import("std");
 
 // ============================================================================
-// AUTH — identical to kopium/auth.kz
+// AUTH — read once at startup, never again. Not session state.
 // ============================================================================
 
 ~pub tor bearer { key: string } -> string
@@ -45,38 +51,24 @@ var auth_len: usize = 0;
 }
 
 // ============================================================================
-// THE REPLY BUFFER — one turn's worth of streamed deltas
+// REPLY CLEANUP — pure, no state
 // ============================================================================
 
-var reply_buf: [4096]u8 = undefined;
-var reply_len: usize = 0;
-
-~pub tor reset {}
-
-~proc reset|zig {
-    $mod.reply_len = 0;
-}
-
-// Called from inside the delta arm, while the doc is still open.
-~pub tor collect { text: string }
-
-~proc collect|zig {
-    const room = $mod.reply_buf.len - $mod.reply_len;
-    const n = @min(room, text.len);
-    @memcpy($mod.reply_buf[$mod.reply_len..][0..n], text[0..n]);
-    $mod.reply_len += n;
-}
-
 // The accumulated reply, with surrounding whitespace and any markdown fence
-// stripped — a chat model wraps code in ``` about half the time, and the
-// interpreter is owed source, not a transcript of one.
-~pub tor reply {} -> string
+// stripped, reduced to its first line. A chat model wraps code in ``` about
+// half the time, and the interpreter is owed source, not a transcript of one.
+//
+// This returns a SUB-SLICE of `raw` rather than a copy. Safe here because
+// `raw` is read from a store-held String that outlives the whole flow — but
+// safe by inspection, not by the language, which is 610_007's open question
+// wearing app clothes. A `substring` that allocates is the alternative and it
+// wants an owner to hand the obligation to.
+~pub tor clean { raw: string } -> string
 
-~proc reply|zig {
-    var s = std.mem.trim(u8, $mod.reply_buf[0..$mod.reply_len], " \t\r\n");
+~proc clean|zig {
+    var s = std.mem.trim(u8, raw, " \t\r\n");
 
     if (std.mem.startsWith(u8, s, "```")) {
-        // drop the opening fence and its optional language tag
         const nl = std.mem.indexOfScalar(u8, s, '\n') orelse s.len;
         s = s[@min(nl + 1, s.len)..];
         if (std.mem.lastIndexOf(u8, s, "```")) |end| s = s[0..end];
@@ -92,6 +84,25 @@ var reply_len: usize = 0;
 }
 
 // ============================================================================
+// MESSAGE BUILDING — the transcript is bytes the store holds, built here
+// ============================================================================
+
+// One chat message, escaped and comma-prefixed, ready to append to the
+// transcript String and splice straight into a request body.
+~pub tor msg { role: string, content: string } -> string
+
+~proc msg|zig {
+    const alloc = std.heap.page_allocator;
+    var out = std.ArrayListUnmanaged(u8){};
+    out.appendSlice(alloc, ",{\"role\":\"") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, role) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, "\",\"content\":\"") catch @panic("kopium: OOM");
+    jsonEscape(alloc, &out, content);
+    out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
+    return out.toOwnedSlice(alloc) catch @panic("kopium: OOM");
+}
+
+// ============================================================================
 // THE PROMPT — the vocabulary is the `register` block, restated for the model
 // ============================================================================
 //
@@ -104,53 +115,7 @@ var reply_len: usize = 0;
 // to a running program. Until then the two can drift, and the only thing that
 // catches the drift is `event-denied` at runtime.
 
-// The conversation so far, already JSON-escaped and comma-prefixed, ready to
-// splice between the system message and the current goal.
-//
-// `d_turns.k` cuts this scope explicitly — "each send carries only the newest
-// message" — and pays for it: a bridge that holds resources ACROSS turns
-// paired with a model that remembers nothing produces an agent which reopens
-// what it already has. Measured here on the first live run: turn 2 answered
-// "I haven't opened a note yet, so I need to open one first:" and was refused
-// as not-Koru. The resource was live on the bridge at that moment.
-var hist_buf: [16384]u8 = undefined;
-var hist_len: usize = 0;
-
-// NOTE: no `$mod.` in here. That substitution happens inside `~proc` bodies
-// only; in a plain host-line `fn` the token survives verbatim into the emitted
-// Zig and lands as "expected expression, found invalid token". Container-level
-// vars are reachable by bare name from a fn in the same container anyway.
-fn histAppend(bytes: []const u8) void {
-    const room = hist_buf.len - hist_len;
-    if (bytes.len > room) return; // oldest-wins: a full history stops growing
-    @memcpy(hist_buf[hist_len..][0..bytes.len], bytes);
-    hist_len += bytes.len;
-}
-
-fn histMessage(alloc: std.mem.Allocator, role: []const u8, content: []const u8) void {
-    var msg = std.ArrayListUnmanaged(u8){};
-    defer msg.deinit(alloc);
-    msg.appendSlice(alloc, ",{\"role\":\"") catch return;
-    msg.appendSlice(alloc, role) catch return;
-    msg.appendSlice(alloc, "\",\"content\":\"") catch return;
-    jsonEscape(alloc, &msg, content);
-    msg.appendSlice(alloc, "\"}") catch return;
-    histAppend(msg.items);
-}
-
-// What the agent was asked, and what it said back. Called once per turn, so
-// the next turn sees its own prior invocation and can reason from it — the
-// prompt states that the first handle is note_0, which is only actionable if
-// the model can see that it already called `open`.
-~pub tor remember-turn { goal: string, said: string }
-
-~proc remember-turn|zig {
-    const alloc = std.heap.page_allocator;
-    histMessage(alloc, "user", goal);
-    histMessage(alloc, "assistant", said);
-}
-
-~pub tor agent-body { goal: string } -> string
+~pub tor agent-body { goal: string, history: string } -> string
 
 ~proc agent-body|zig {
     const alloc = std.heap.page_allocator;
@@ -181,7 +146,7 @@ fn histMessage(alloc: std.mem.Allocator, role: []const u8, content: []const u8) 
     out.appendSlice(alloc, "{\"model\":\"anthropic/claude-haiku-4.5\",\"stream\":true,\"max_tokens\":100,\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
     jsonEscape(alloc, &out, system);
     out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
-    out.appendSlice(alloc, $mod.hist_buf[0..$mod.hist_len]) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, history) catch @panic("kopium: OOM");
     out.appendSlice(alloc, ",{\"role\":\"user\",\"content\":\"") catch @panic("kopium: OOM");
     jsonEscape(alloc, &out, goal);
     out.appendSlice(alloc, "\"}]}") catch @panic("kopium: OOM");

@@ -165,6 +165,33 @@ complying is what a model does.
 Requires `~/.pi/agent/auth.json` with an `openrouter` key, the same store
 `kopium/a_sse_spike.k` reads.
 
+### The session lives in two stores
+
+`transcript` is the conversation, `reply` is the turn in flight. Both are
+store-held `*std/string:String<std/string:instance!>` columns that grow, and
+between them they are the whole of the session. Nothing about a turn is kept in
+module memory; the only module state left in `wire.kz` is the bearer token,
+which is read once before the first turn and never changes. **Session state
+lives in the store; a startup constant does not.**
+
+The first version got that wrong and said so confidently. It held the
+transcript in a `[16384]u8` module buffer, justified with *"a tor param inside
+a SWEEP arm would be 690_234"* — copied from `kopium/auth.kz`, where it had
+been true, and never rechecked. **690_234 landed 2026-08-03 and is MUST_RUN
+green.** `probe_store.k` in this directory settles it in twenty lines: a tor
+whose parameter is the bridge reads a store-held String inside a sweep arm and
+dispatches it. The hand-rolled buffer was also strictly worse than the store —
+fixed at 16 KiB, oldest-wins-stops-growing, so a long enough conversation would
+have silently stopped recording.
+
+Worth being exact about what the store can and cannot do here, because the two
+constraints get conflated. **Capacity is fixed static memory, but it bounds
+ROWS, not bytes.** An owned-String column grows without limit (`690_053`,
+`690_060`), which is why one growable String holds an unbounded conversation
+today. What it cannot do is one row per MESSAGE — countable, replayable,
+compactable, which is the shape a conversation actually wants. That is the one
+fixed capacity would bite, and today's answer is a blob.
+
 ### The turn-2 failure that made this worth building
 
 The first live run got turn 1 and turn 3 right and failed turn 2 with:
