@@ -126,3 +126,78 @@ and demonstrated red against the unfixed compiler before the pin was written.
 A `koruc` from main. `bridge-honesty` merged in koru `fcd83850`, so the surface
 used here — `std/bridge:run`, void `close`, the possession check — is no longer
 on a branch.
+
+## `live.k` — the same agent, with nobody scripting it
+
+`session.k` cans the model so the thing under test is the bridge. `live.k` is
+the other half: `anthropic/claude-haiku-4.5` over OpenRouter is handed the
+`notes` vocabulary and a goal, and whatever it emits goes straight to
+`std/bridge:run`. Nothing inspects the reply first.
+
+```
+koruc live.k && ./a.out
+```
+
+```
+--- session open, the agent's only tool is a Koru interpreter
+
+turn 1  goal: Open a note called agent-notes.txt.
+  model> open(path: "agent-notes.txt")
+  ok — bridge now holds 1 resource(s)
+
+turn 2  goal: Write the line 'a live model wrote this' into the note you just opened.
+  model> append(handle: "note_0", text: "a live model wrote this")
+  ok — bridge now holds 1 resource(s)
+
+turn 3  goal: Close the note note_7.
+  model> close(handle: "note_7")
+  REFUSED: HandleNotHeld — 'close' never ran
+--- transcript ends; no hang-up is written below this line
+      [disk] note closed, fd released
+[BRIDGE] Invoked 'close' for handle 'note_0' [app.notes:open]
+```
+
+Byte-identical across three consecutive live runs, and `agent-notes.txt`
+contains the line the model wrote. Turn 3 is a real refusal of a real model's
+real answer — it was asked to close `note_7` and it complied, because
+complying is what a model does.
+
+Requires `~/.pi/agent/auth.json` with an `openrouter` key, the same store
+`kopium/a_sse_spike.k` reads.
+
+### The turn-2 failure that made this worth building
+
+The first live run got turn 1 and turn 3 right and failed turn 2 with:
+
+```
+  model> I haven't opened a note yet, so I need to open one first:
+  the model did not emit Koru: No flow found in source
+```
+
+The note was open on the bridge at that moment. `d_turns.k` cuts conversation
+history explicitly — *"each send carries only the newest message"* — and that
+cut is survivable in a chat client and fatal here. **A bridge that holds
+resources across turns, paired with a model that remembers nothing, produces
+an agent that reopens what it already has.** Persistence has two halves and we
+had built one.
+
+`wire.kz` now keeps the transcript and replays it, which is the whole fix.
+Note what the model is reasoning from: it sees that it previously said
+`open(...)` and that the prompt states the first handle is `note_0`. It is
+inferring the handle, not being told it. Feeding the actual dispatch RESULT
+back as a message is the honest next increment.
+
+### What it does NOT do, and one of them is interesting
+
+- **The vocabulary is stated twice.** `notes.kz` declares the agent's whole
+  surface in `~std/runtime:register(scope: "notes")`, and `wire.kz` restates
+  the same three events in English for the model. That is duplication with
+  nothing keeping the halves in step, and only `event-denied` catches drift at
+  runtime. Deriving the prompt from the scope declaration is the obvious move
+  and there is no surface for it: `collect-scopes` walks the AST at compile
+  time, but a running program cannot ask a scope what events it has.
+- **No tool result goes back.** The model sees its own invocations, never what
+  they returned. Turn 3's refusal teaches it nothing.
+- **One invocation per turn.** `wire:reply` keeps the first line. A model that
+  wants `open(…) |> append(…)` in one turn cannot say so.
+- **`max_tokens: 100`, single model, hardcoded URL.** It is a demo.
