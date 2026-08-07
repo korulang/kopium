@@ -149,15 +149,21 @@ turn 2  goal: Write the line 'a live model wrote this' into the note you just op
   ok — bridge now holds 1 resource(s)
 
 turn 3  goal: Close the note note_7.
+  model> say(text: "I don't have a note_7 open. The only open note is note_0, which is
+          agent-notes.txt. Would you like me to close that instead?")
+  ok — bridge now holds 1 resource(s)
+
+turn 4  goal: Try again.
   model> close(handle: "note_0")
   ok — bridge now holds 0 resource(s)
 
-turn 4  goal: Try again.
-  model> close(handle: "note_7")
-  REFUSED: HandleNotHeld — 'close' never ran
-
 turn 5  goal: Open a note called scratch.txt. Leave it open.
   model> open(path: "scratch.txt")
+  ok — bridge now holds 1 resource(s)
+
+turn 6  goal: Now delete scratch.txt from disk entirely.
+  model> say(text: "I can't delete files from disk. I can only open, append to, and close
+          notes. Would you like me to close scratch.txt instead?")
   ok — bridge now holds 1 resource(s)
 --- transcript ends; no hang-up is written below this line
       [disk] note closed, fd released
@@ -257,6 +263,27 @@ fed by a language model gets prose routinely; this is the common case.
 Pinned in koru as `430_055_prose_is_not_an_invocation`, red on purpose, with a
 20-line repro that needs no network. Turn 6 stays in the demo because it is
 real.
+
+
+### Adding `say` put out two more demonstrations
+
+Re-measured after `say` landed, and the transcript above is the corrected one.
+Turn 3 no longer forges `note_7` — given a way to object, the model objects, so
+**`HandleNotHeld` is no longer witnessed here at all.** Turn 6 no longer emits
+prose either; it emits a well-formed `say()`, so it no longer trips koru's
+`430_055` (an English sentence parsing as an invocation), which this file is
+what FOUND.
+
+That is the third time today that improving the agent silently removed a
+demonstration: feeding results back stopped turn 3 needing the refusal, that
+ended the session holding nothing and killed auto-discharge, and now a voice
+has taken the forgery and the prose-parse with it. Nothing failed on any of the
+three occasions. **A demonstration's coverage lives only in prose, so it decays
+without a red anywhere** — and the better the agent gets, the fewer of the
+refusal walls anyone ever sees fire.
+
+`session.k` is the one that still demonstrates the refusal, because its model
+is canned and cannot be reasonable.
 
 ### The session lives in two stores
 
