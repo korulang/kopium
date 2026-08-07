@@ -186,12 +186,24 @@ act = std/store:query(session)
         |> announce(mh.text)
 
 // The stream is done: take what the model said, record it, run it.
+//
+// THE COPY IS AT `clean` (610_007 stage 2). `raw` is a borrow of the
+// store-held `reply` String, consumed on the next step — the safe shape. What
+// used to travel was `clean`'s SUB-SLICE of it, through `remember-said`,
+// `show` and `act`, and `act` runs whatever event the model chose. Nothing
+// stopped one of those from appending to `reply` and reallocating the bytes
+// `src` points at, owner alive, no free in sight (610_008). `clean` now hands
+// back an owned String; `cs` is a local nothing downstream can reach and it
+// dies on one visible line after the last use.
 tor dispatch {}
 dispatch = std/store:query(reply)
-! query buf |> std/string:read(s: buf): raw |> app/wire:clean(raw): src
-    |> remember-said(role: "assistant", content: src)
-    |> show(text: "\n")
-    |> act(src)
+! query buf |> std/string:read(s: buf): raw |> app/wire:clean(raw)
+    | ok cs |> std/string:read(s: cs): src
+        |> remember-said(role: "assistant", content: src)
+        |> show(text: "\n")
+        |> act(src)
+        |> std/string:free(s: cs)
+    | err _ |> show(text: "\n[could not snapshot the reply]\n\n")
 
 // ── transfer pump, one frame's worth ────────────────────────────────────────
 //

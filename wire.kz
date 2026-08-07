@@ -18,8 +18,13 @@
 // fixed 16 KiB with oldest-wins-stops-growing, so a long enough conversation
 // would silently stop recording; a store-held String grows.
 //
-// Nothing here needs holes/3's workaround: `live.k` appends each delta inside
-// the arm that still owns the yyjson doc, so no borrow escapes an arena.
+// The DELTA path needs nothing from holes/3: `live.k` appends each delta
+// inside the arm that still owns the yyjson doc, so no borrow escapes an
+// arena. The REPLY path did need it, and now uses it — `clean` below returns
+// an owned String rather than a sub-slice of its input, which is holes/3's
+// workaround shape applied to 610_007's own example.
+
+~import std/string
 
 const std = @import("std");
 
@@ -58,14 +63,33 @@ var auth_len: usize = 0;
 // stripped, reduced to its first line. A chat model wraps code in ``` about
 // half the time, and the interpreter is owed source, not a transcript of one.
 //
-// This returns a SUB-SLICE of `raw` rather than a copy. Safe here because
-// `raw` is read from a store-held String that outlives the whole flow — but
-// safe by inspection, not by the language, which is 610_007's open question
-// wearing app clothes. A `substring` that allocates is the alternative and it
-// wants an owner to hand the obligation to.
-~pub tor clean { raw: string } -> string
+// COPY AT THE BOUNDARY (610_007 stage 2). This used to be `{ raw: string } ->
+// string`, returning a SUB-SLICE of its input — a borrow travelling upward out
+// of a tor, which is exactly what 610_007's ruling bans ("borrows flow down,
+// never up"). Its callers then carried that slice of the store-held `reply`
+// String through `remember-said`, `record` and `std/bridge:run`, safe only
+// because nobody on those paths happens to touch the reply store. Nothing
+// checked that, and `append`/`clear` on the owner would have killed the slice
+// with no free anywhere in sight (610_008).
+//
+// Now the sub-slicing stays private in `clean-span` and `clean` hands back an
+// OWNED `*String<view!>`. The copy carries an obligation, so it cannot leak the
+// way a plain allocating `string` return would; the caller reads it, uses it,
+// and frees it inside one visible flow. One memcpy of a chat line, once per
+// turn, on a network boundary — the cost 610_007 priced as noise.
+~pub tor clean { raw: string }
+| ok *std/string:String<std/string:view!>
+| err string
 
-~proc clean|zig {
+~clean = clean-span(raw): span |> std/string:from-page(text: span)
+| ok s => ok s
+| err e => err e
+
+// The byte arithmetic, and nothing else. Deliberately NOT `pub`: its result is
+// a sub-slice of `raw` and must not travel, so its one caller is the line above.
+~tor clean-span { raw: string } -> string
+
+~proc clean-span|zig {
     var s = std.mem.trim(u8, raw, " \t\r\n");
 
     if (std.mem.startsWith(u8, s, "```")) {

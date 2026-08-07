@@ -114,41 +114,62 @@ observe = std/store:query(transcript)
     | ok |> _
     | err _ |> _
 
-// Read what the model said, run it, and TELL IT WHAT HAPPENED. `br` is a tor
-// parameter reaching `std/bridge:run` from inside a sweep arm — the shape
-// probe_store.k pins.
+// Run what the model said and TELL IT WHAT HAPPENED.
+//
+// Split out of `drive` for a lifetime reason, not a tidiness one: `drive` now
+// owns a snapshot String it has to free on every path, and eight sibling
+// branches would mean eight frees. With the branches behind a tor call the
+// free is one line at the end of one chain.
 //
 // Every arm reports. A refusal the agent never hears about is a refusal it
 // will repeat, and turn 4 exists to prove it hears.
+tor act { br: *std/bridge:Bridge, goal: string, source: string }
+act = record(goal, said: source) |> std/bridge:run(br, source)
+| result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
+    |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s)."): ma
+    |> observe(ma.text)
+| dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
+    |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run. HandleNotHeld means you named a handle this session never issued — check which handles you actually opened."): mb
+    |> observe(mb.text)
+| event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
+    |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only open, append, close."): mc
+    |> observe(mc.text)
+| parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
+    |> std/fmt:ln("[tool result] That was not a Koru invocation: {{ p.message:s }}. Reply with exactly one invocation and no prose."): md
+    |> observe(md.text)
+| exhausted _ |> std/io:print.ln("  budget exhausted")
+    |> observe(text: "[tool result] budget exhausted; nothing ran.")
+| validation-error v |> std/io:print.ln("  invalid: {{ v:s }}")
+    |> std/fmt:ln("[tool result] invalid invocation: {{ v:s }}"): mf
+    |> observe(mf.text)
+| shape-error sh |> std/io:print.ln("  wrong shape: {{ sh.message:s }}")
+    |> std/fmt:ln("[tool result] wrong shape: {{ sh.message:s }}"): mg
+    |> observe(mg.text)
+| scope-not-found s2 |> std/io:print.ln("  no such scope: {{ s2:s }}")
+    |> std/fmt:ln("[tool result] no such scope: {{ s2:s }}"): mh
+    |> observe(mh.text)
+
+// Read what the model said, run it, and record the outcome. `br` is a tor
+// parameter reaching `std/bridge:run` from inside a sweep arm — the shape
+// probe_store.k pins.
+//
+// THE COPY IS AT `clean` (610_007 stage 2). `raw` is a borrow of the
+// store-held `reply` String and it is consumed on the very next step, which is
+// the safe shape. What used to travel was `clean`'s SUB-SLICE of that borrow —
+// it went into `record`, into `std/bridge:run`, and out through eight arms,
+// each of which can run arbitrary model-chosen `notes` events. Nothing stopped
+// one of those from appending to `reply` and reallocating the bytes `src`
+// points at, with the owner alive the whole time and no free anywhere
+// (610_008). `clean` now returns an owned String: `cs` is a local nothing
+// downstream can reach, and it dies on one visible line after the last use.
 tor drive { br: *std/bridge:Bridge, goal: string }
 drive = std/store:query(reply)
-! query buf |> std/string:read(s: buf): raw |> std/io:print.ln("  raw  > [{{ raw:s }}]") |> app/wire:clean(raw): src
-    |> std/io:print.ln("  model> {{ src:s }}")
-    |> record(goal, said: src)
-    |> std/bridge:run(br, source: src)
-        | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
-            |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s)."): ma
-            |> observe(ma.text)
-        | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
-            |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run. HandleNotHeld means you named a handle this session never issued — check which handles you actually opened."): mb
-            |> observe(mb.text)
-        | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
-            |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only open, append, close."): mc
-            |> observe(mc.text)
-        | parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
-            |> std/fmt:ln("[tool result] That was not a Koru invocation: {{ p.message:s }}. Reply with exactly one invocation and no prose."): md
-            |> observe(md.text)
-        | exhausted _ |> std/io:print.ln("  budget exhausted")
-            |> observe(text: "[tool result] budget exhausted; nothing ran.")
-        | validation-error v |> std/io:print.ln("  invalid: {{ v:s }}")
-            |> std/fmt:ln("[tool result] invalid invocation: {{ v:s }}"): mf
-            |> observe(mf.text)
-        | shape-error sh |> std/io:print.ln("  wrong shape: {{ sh.message:s }}")
-            |> std/fmt:ln("[tool result] wrong shape: {{ sh.message:s }}"): mg
-            |> observe(mg.text)
-        | scope-not-found s2 |> std/io:print.ln("  no such scope: {{ s2:s }}")
-            |> std/fmt:ln("[tool result] no such scope: {{ s2:s }}"): mh
-            |> observe(mh.text)
+! query buf |> std/string:read(s: buf): raw |> std/io:print.ln("  raw  > [{{ raw:s }}]") |> app/wire:clean(raw)
+    | ok cs |> std/string:read(s: cs): src
+        |> std/io:print.ln("  model> {{ src:s }}")
+        |> act(br, goal, source: src)
+        |> std/string:free(s: cs)
+    | err e |> std/io:print.ln("  could not snapshot the reply: {{ e:s }}")
 
 // Clear the in-flight reply before the next ask.
 tor clear-reply {}
