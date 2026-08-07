@@ -150,14 +150,51 @@ retire = std/store:take(batch[0])
 | item p |> koru/curl:finish(p): m |> koru/curl:multi.close(m) |> std/store:stored { ui.retire: 0 }
 | empty |> std/store:stored { ui.retire: 0 }
 
-// Fire one turn. `body` rides the head chain (a tor param in a SWEEP arm
-// would be 690_234); auth comes from module state for the same reason.
-tor send { body: string }
-send = app/auth:recall(): auth |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body, headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
+// Fire one turn. `req` rather than `body`: a bare `body` argument no longer
+// puns into `multi.add.post` from this shape — the compiler reports KORU080
+// against the `| started` continuation and auto-discharge then fails outright.
+// `live.k` and `headed.k` already carry the same rename for the same reason.
+// Auth comes from module state (a tor param in a SWEEP arm would be 690_234).
+tor send { req: string }
+send = app/auth:recall(): auth |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: req, headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
 | started p |> std/store:stored { ui.live: 1 } |> std/store:insert(batch) { p }
     | row _ |> _
     | full f |> koru/curl:cancel(p: f): m |> koru/curl:multi.close(m)
 | failed _ |> std/store:stored { ui.live: 0 }
+
+// Stamp the turn into the transcript and fire it.
+//
+// This exists because of 610_007 stage 2, and the Enter handler at the bottom
+// of the file is the other half — the vaxis block admits no comments between
+// its arms, so the explanation lives here.
+//
+// The handler used to `read` the store-held draft into `utext` and let that
+// borrow travel: into `chat-body`, back out past a three-deep append ladder,
+// and still live when `clear(s: d)` freed the bytes underneath it one line
+// before `send`. It worked only because `chat-body` happens to copy into a
+// fresh buffer (auth.kz:48-64) — swap it for a tor that returns a view and
+// this is hole 3's blank pane again, silently, exit 0. And per 610_008 the
+// `clear` is not even the only hazard: any append to the draft would have
+// done it too, with the owner alive and no free anywhere.
+//
+// So the handler snapshots the draft with `from-page` first. `snap` is an
+// owned copy nothing else can reach, `utext` is a borrow of a local with a
+// visible death, and the snapshot buys back an ordering: `clear(s: d)` can now
+// run BEFORE the transcript is stamped, because the draft is no longer what
+// the turn is reading from.
+//
+// `commit` is split out for that free, not for tidiness: the append ladder has
+// four leaves, and a snapshot freed in the handler would need a `free` on each
+// one. Behind a tor call it is one line at the end of one chain.
+tor commit { text: string, req: string }
+commit = std/store:query(transcript)
+! query buf |> std/string:append(s: buf, text: "you: ")
+    | ok |> std/string:append(s: buf, text)
+        | ok |> std/string:append(s: buf, text: "\n\nclaude: ")
+            | ok |> send(req)
+            | err _ |> _
+        | err _ |> _
+    | err _ |> _
 
 // Startup: transcript, framer, draft, bearer. No auto-send — the first
 // turn is yours.
@@ -200,14 +237,13 @@ koru/vaxis(kopium)
 ! tick _ when ui.retire == 1 |> retire()
 ! key k when k.ch == 27 |> koru/vaxis:quit()
 ! key k when k.ch == 13 and ui.live == 0 and ui.retire == 0 |> std/store:query(draft)
-    ! query d |> std/string:read(s: d): utext |> app/auth:chat-body(prompt: utext): body |> std/store:query(transcript)
-        ! query buf |> std/string:append(s: buf, text: "you: ")
-            | ok |> std/string:append(s: buf, text: utext)
-                | ok |> std/string:append(s: buf, text: "\n\nclaude: ")
-                    | ok |> std/string:clear(s: d) |> send(body)
-                    | err _ |> _
-                | err _ |> _
-            | err _ |> _
+    ! query d |> std/string:read(s: d): dtext |> std/string:from-page(text: dtext)
+        | ok snap |> std/string:read(s: snap): utext
+            |> app/auth:chat-body(prompt: utext): body
+            |> std/string:clear(s: d)
+            |> commit(text: utext, req: body)
+            |> std/string:free(s: snap)
+        | err _ |> _
 ! key k when k.ch == 127 |> std/store:query(draft)
     ! query d |> std/string:pop-char(s: d)
 ! key k when k.ch == 8 |> std/store:query(draft)

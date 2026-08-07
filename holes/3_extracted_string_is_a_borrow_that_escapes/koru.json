@@ -2,7 +2,7 @@
   "name": "kopium",
   "version": "0.1.0",
   "paths": {
-    "koru": "../../koru-libs",
-    "libs": "../../koru-libs"
+    "koru": "../../../../koru-libs",
+    "libs": "../../../../koru-libs"
   }
 }
