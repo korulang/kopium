@@ -81,3 +81,39 @@ on the borrow-obligation surface"*).
 
 **The want:** returning a borrow past its owner's discharge is a compile error,
 whatever the spelling turns out to be. Today it is a blank chat pane.
+
+## The app is not blocked — measured 2026-08-07
+
+`workaround.k` in this directory is the repro with **one thing changed**: the
+extracted text is copied into an owned `*std/string:String` **before** `close`,
+and the tor hands back the String HANDLE instead of a borrow. It prints
+
+    0000000   E X T R A C T E D :   [ H E L L O ]  \n
+
+against the same fixed payload. `std/string:from-page` `@memcpy`s and takes no
+allocator, so this is spellable in a pure-Koru `.k`; the `<std/string:view!>`
+obligation rides out to the caller, which frees it.
+
+**This is not a proposed fix and does not answer 610_007.** The want stated
+above is unchanged: *returning a borrow past its owner's discharge should be a
+compile error.* Nothing here makes that happen — the workaround is exactly the
+discipline a human has to remember, which is what the ruling exists to remove.
+What it does settle is scheduling: **wiring kopium to a live model is not gated
+on the borrow ruling.**
+
+Two things cost more than they should, and both are worth knowing before anyone
+tries this again:
+
+1. **Hole 2 blocks hole 3's workaround in the obvious spelling.** Dropping
+   `from-page` into the point-free ladder fails with KORU031 — `parse`,
+   `as.string` and `from-page` all declare `| ok`, carrying `*Doc`, `string`
+   and `*String`, and a point-free choke claims a branch name across every
+   stage. The baseline only compiles because `parse`'s `ok` is consumed by an
+   explicit arm, leaving one claimant. Writing the ladder with explicit
+   bindings at each stage — the shape increments A and B used before it went
+   point-free — sidesteps it. So the refactor that EXPOSED hole 3 is also what
+   makes hole 3 awkward to work around.
+2. **The phantom needs the module qualifier.** `<view!>` in a consumer module
+   resolves to that module's namespace and fails with KORU030 naming
+   `copy2:view!`. It is `<std/string:view!>`, the slash-canon spelling
+   660_027 and the 690_05x store pins establish.
