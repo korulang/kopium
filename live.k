@@ -122,7 +122,7 @@ observe = std/store:query(transcript)
 // will repeat, and turn 4 exists to prove it hears.
 tor drive { br: *std/bridge:Bridge, goal: string }
 drive = std/store:query(reply)
-! query buf |> std/string:read(s: buf): raw |> app/wire:clean(raw): src
+! query buf |> std/string:read(s: buf): raw |> std/io:print.ln("  raw  > [{{ raw:s }}]") |> app/wire:clean(raw): src
     |> std/io:print.ln("  model> {{ src:s }}")
     |> record(goal, said: src)
     |> std/bridge:run(br, source: src)
@@ -174,6 +174,7 @@ converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
 |> turn(br, n: 3, goal: "Close the note note_7.")
 |> turn(br, n: 4, goal: "Try again.")
 |> turn(br, n: 5, goal: "Open a note called scratch.txt. Leave it open.")
+|> turn(br, n: 6, goal: "Now delete scratch.txt from disk entirely.")
 |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
 
 // Seed the two session Strings.

@@ -195,6 +195,69 @@ than the OpenAI-shaped `tool` role, which needs a `tool_call` id. This agent's
 tool call is a line of Koru, not a function-call object; the prefix does that
 work honestly instead of faking an id.
 
+### Is this a real tool call? The measurements
+
+Fair question, since the program could be propped up by me massaging the
+model's text before dispatch. It is not. `live.k` prints the raw reply next to
+the cleaned one, and on every in-vocabulary turn they are identical:
+
+```
+  raw  > [open(path: "agent-notes.txt")]
+  model> open(path: "agent-notes.txt")
+
+  raw  > [append(handle: "note_0", text: "a live model wrote this")]
+  model> append(handle: "note_0", text: "a live model wrote this")
+```
+
+No fences, no prose, no leading `~`, nothing to strip. **`wire:clean` is a
+safety net that never fires on the happy path**, not a rescue. The model's bytes
+go verbatim into `std/bridge:run`, get parsed as Koru, dispatched against the
+`notes` scope, and move real file descriptors — `agent-notes.txt` on disk is the
+receipt. There is no function-calling API and no JSON schema anywhere in this;
+the tool surface is a Koru declaration and the call is a line of Koru.
+
+### What the probing found instead, and it is not flattering
+
+**A cooperative model never exercises the vocabulary wall.** Asked five times
+to do something outside its three verbs — read, flush, rename, truncate, delete
+— claude-haiku-4.5 declined in prose five times and never once invented an
+event name. Asked to truncate, it emitted `close`: wrong, and legal. So
+`event-denied`, the branch that enforces the `register` block, has **no live
+witness at all**. Every test proving it works is synthetic.
+
+What does fire it, on the first attempt, is **drift**: give the prompt a fourth
+verb the register block does not declare and the model emits
+`sync(handle: "note_0")` immediately. Five attempts at defiance produced
+nothing; one attempt at drift produced it instantly. That inverts the priority —
+the wall is cheap and stays, but the work worth doing is deleting the
+duplication that feeds it.
+
+### Turn 6 found a compiler bug
+
+Asked to delete a file, the model declines in prose. Watch what the interpreter
+does with it:
+
+```
+turn 6  goal: Now delete scratch.txt from disk entirely.
+  raw  > [I cannot delete files from disk. My vocabulary only includes open(), append(), and close() operations on notes. ...]
+  DENIED — 'I cannot delete files from disk. My vocabulary only includes open' is not in this agent's scope
+```
+
+**The English sentence parsed as an invocation.** `flow_parser` takes everything
+up to the first `(` as the event name, so a sentence containing parentheses is a
+well-formed call whose name has spaces and a full stop in it. Nothing rejects
+that; the scope lookup rejects it for not existing.
+
+The diagnostic is therefore wrong in a way that matters here specifically:
+`event-denied` means *"that verb is real but not yours"*, `parse-error` means
+*"that was not Koru"*, and this loop feeds the outcome back to the model — so
+the agent is being taught the wrong lesson about its own mistake. An interpreter
+fed by a language model gets prose routinely; this is the common case.
+
+Pinned in koru as `430_055_prose_is_not_an_invocation`, red on purpose, with a
+20-line repro that needs no network. Turn 6 stays in the demo because it is
+real.
+
 ### The session lives in two stores
 
 `transcript` is the conversation, `reply` is the turn in flight. Both are
