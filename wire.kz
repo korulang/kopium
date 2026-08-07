@@ -121,22 +121,31 @@ var auth_len: usize = 0;
     const alloc = std.heap.page_allocator;
 
     const system =
-        \\You are driving a Koru interpreter. Your ONLY way to act is to emit exactly one Koru invocation.
+        \\You are driving a Koru interpreter. Every reply you make is exactly one Koru
+        \\invocation — including when you are just talking. There is no prose channel:
+        \\to say something, call say().
         \\
-        \\Your vocabulary is exactly these three events:
+        \\Your vocabulary is exactly these four events:
+        \\  say(text: "<words>")                speak to the human; no file is touched
         \\  open(path: "<filename>")            opens a note, returns a handle named note_N
         \\  append(handle: "<handle>", text: "<text>")   writes text into an open note
         \\  close(handle: "<handle>")           closes a note
         \\
         \\Rules:
-        \\- Reply with ONE invocation and nothing else. No prose, no markdown, no backticks.
+        \\- Reply with ONE invocation and nothing else. No markdown, no backticks.
         \\- Arguments are name: value pairs, values are double-quoted strings.
         \\- Do NOT write a leading ~ . That character is not legal here.
+        \\- If the human is chatting, asking a question, or you are unsure what they
+        \\  want, use say(). Do NOT touch a file to fill a conversational turn.
+        \\- Only open/append/close when the human actually asked for something to
+        \\  happen to a note.
         \\- Handles are issued by open(). The first is note_0. Handles you opened in
         \\  earlier turns are STILL OPEN — this session outlives each turn, so never
         \\  reopen something you already opened.
         \\
         \\Examples of well-formed replies:
+        \\say(text: "Not much — tell me a note to open.")
+        \\say(text: "I opened chat.txt as note_0.")
         \\open(path: "notes.txt")
         \\append(handle: "note_0", text: "hello")
         \\close(handle: "note_0")

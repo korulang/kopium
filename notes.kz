@@ -78,6 +78,30 @@ fn slotOf(handle: []const u8) ?usize {
     }
 }
 
+
+// ============================================================================
+// SAY — the agent's voice, and it is a TOOL CALL like any other
+// ============================================================================
+//
+// Added 2026-08-07 after Lars typed "Hey, what's up?" at the TUI and the agent
+// opened a file. That was not the model improvising: the prompt said "reply
+// with ONE invocation and nothing else, no prose", so a conversational turn had
+// NO legal answer and the model picked the most plausible verb it had.
+//
+// The fix is not a prose escape hatch. Speaking is something the agent does, so
+// it belongs in the vocabulary where every other thing it does lives — declared
+// in the register block, dispatched through the interpreter, refusable. The
+// permission model then covers talking too, which a side channel would not.
+//
+// It holds no resource and mints no obligation: saying something is the one
+// verb here with nothing to clean up.
+
+~pub tor say { text: string }
+
+~proc say|zig {
+    std.debug.print("      {s}\n", .{text});
+}
+
 // ============================================================================
 // THE PERMISSION MODEL
 // ============================================================================
@@ -91,4 +115,5 @@ fn slotOf(handle: []const u8) ?usize {
     open(10)
     append(1)
     close(1)
+    say(1)
 }
