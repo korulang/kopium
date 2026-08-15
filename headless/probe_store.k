@@ -13,6 +13,7 @@ tor drive { br: *std/bridge:Bridge }
 drive = std/store:query(reply)
 ! query buf |> std/string:read(s: buf): src |> std/bridge:run(br, source: src)
     | result r |> std/io:print.ln("  ok — bridge holds {{ r.handles:d }}")
+    | defined d |> std/io:print.ln("  defined {{ d:s }}")
     | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }}")
     | event-denied ev |> std/io:print.ln("  DENIED {{ ev:s }}")
     | parse-error p |> std/io:print.ln("  not koru: {{ p.message:s }}")

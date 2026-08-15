@@ -168,9 +168,11 @@ announce = show(text) |> remember-said(role: "user", content: text)
 
 tor act { src: string }
 act = std/store:query(session)
-! query br |> std/bridge:run(br, source: src)
+! query br |> app/wire:warm-vocab(br) |> std/bridge:run(br, source: src)
     | result r |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s).\n\n"): ma
         |> announce(ma.text)
+    | defined d |> std/fmt:ln("[tool result] defined: '{{ d:s }}' is now a verb in this session's vocabulary — callable on later turns.\n\n"): mi
+        |> announce(mi.text)
     | dispatch-error e |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run — you named a handle this session never issued.\n\n"): mb
         |> announce(mb.text)
     | event-denied ev |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only open, append, close.\n\n"): mc
@@ -296,7 +298,7 @@ std/io:read-file(path: "/Users/larsde/.pi/agent/auth.json")
     | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "openrouter")
         | found orv |> koru/yyjson:object.get(doc, v: orv, key: "key")
             | found kv |> koru/yyjson:as.string(doc, v: kv)
-                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> app/wire:warm-vocab() |> koru/yyjson:close(doc)
+                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> koru/yyjson:close(doc)
                 | wrong-type |> koru/yyjson:close(doc)
             | not-found |> koru/yyjson:close(doc)
         | not-found |> koru/yyjson:close(doc)

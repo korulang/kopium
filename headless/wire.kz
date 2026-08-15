@@ -26,6 +26,7 @@
 
 ~import std/string
 ~import std/runtime
+~import std/bridge
 
 const std = @import("std");
 
@@ -141,24 +142,26 @@ var auth_len: usize = 0;
 // the same bytes now; the prose below is guidance, not vocabulary.
 
 // ============================================================================
-// THE VOCABULARY — fetched from the `register` block once, held like the auth
+// THE VOCABULARY — derived from the SESSION, refreshed every turn
 // ============================================================================
 //
 // `auth` above is the model: read once at startup, held in a module buffer,
-// read again through a proc. The vocabulary is the same shape — it comes from
-// `std/runtime:scope-vocabulary` (koru b1c4ecb6 / 430_057), which renders the
-// scope's events from the compiled descriptor — the prompt and the enforcement
-// are the same bytes. The FLOW below is the real
-// graph reference that retains scope-vocabulary (a raw handler call out of a
-// `|zig` body would be stripped by dead-code elimination, which only sees Koru
-// graph edges). Callers run `warm-vocab()` once at startup, exactly as they
-// do bearer/remember/recall.
+// read again through a proc. The vocabulary is NOT static — it comes from
+// `std/bridge:vocabulary`, which renders the scope's COMPILED events (the
+// `register` block, koru b1c4ecb6 / 430_057 — the prompt and the enforcement
+// are the same bytes) PLUS the session's runtime-defined flows. An invention
+// the agent defined on turn N appears in its own prompt on turn N+1, so the
+// agent's growth loop closes: define → see → use. The FLOW below keeps
+// vocabulary as a real graph reference (a raw handler call out of a `|zig`
+// body would be stripped by dead-code elimination, which only sees Koru graph
+// edges). Callers re-warm per turn, once the bridge exists — `turn`/`act`
+// invoke it with their `br` in hand.
 
-~pub tor warm-vocab {}
+~pub tor warm-vocab { br: *std/bridge:Bridge }
 
-~warm-vocab = std/runtime:scope-vocabulary(name: "notes")
+~warm-vocab = std/bridge:vocabulary(br)
 | ok v |> remember-vocab(vocab: v)
-| not-found |> remember-vocab(vocab: "!! scope-vocabulary: scope 'notes' not found !!")
+| not-found s |> remember-vocab(vocab: "!! bridge vocabulary: scope '{{ s:s }}' not found !!")
 
 var vocab_buf: [2048]u8 = undefined;
 var vocab_len: usize = 0;

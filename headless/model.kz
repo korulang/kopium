@@ -19,6 +19,10 @@ const std = @import("std");
         1 => "open(path: \"agent-notes.txt\")",
         2 => "append(handle: \"note_0\", text: \"the bridge held this across a turn\")",
         3 => "close(handle: \"note_7\")",
+        // The REPL rung: turn 4 DEFINES a verb through `run` — no separate
+        // define verb, the run loop discriminates. Turn 5 calls it.
+        4 => "tor greet { msg: string }\ngreet = say(text: msg)",
+        5 => "greet(msg: \"hello from a defined flow\")",
         else => "close(handle: \"note_0\")",
     };
 }
@@ -31,6 +35,8 @@ const std = @import("std");
         1 => "open a note",
         2 => "write into the note I opened last turn",
         3 => "close note_7 (a handle nobody ever gave me)",
+        4 => "teach the session a new verb that wraps a voice line",
+        5 => "use the verb it just defined",
         else => "close the note",
     };
 }

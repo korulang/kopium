@@ -128,6 +128,9 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
 | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
     |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s)."): ma
     |> observe(ma.text)
+| defined d |> std/io:print.ln("  defined {{ d:s }} — the session's vocabulary now includes it")
+    |> std/fmt:ln("[tool result] defined: '{{ d:s }}' is now a verb in this session's vocabulary — you can call it on a later turn."): mi
+    |> observe(mi.text)
 | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
     |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run. HandleNotHeld means you named a handle this session never issued — check which handles you actually opened."): mb
     |> observe(mb.text)
@@ -179,7 +182,8 @@ clear-reply = std/store:query(reply)
 // One turn. `br` carries no phantom — a turn USES the session, it does not
 // end it.
 tor turn { br: *std/bridge:Bridge, n: u32, goal: string }
-turn = clear-reply()
+turn = app/wire:warm-vocab(br)
+    |> clear-reply()
     |> std/io:print.ln("")
     |> std/io:print.ln("turn {{ n:d }}  goal: {{ goal:s }}")
     |> ask(goal)
@@ -217,7 +221,7 @@ std/io:read-file(path: "/Users/larsde/.pi/agent/auth.json")
     | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "openrouter")
         | found orv |> koru/yyjson:object.get(doc, v: orv, key: "key")
             | found kv |> koru/yyjson:as.string(doc, v: kv)
-                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> app/wire:warm-vocab() |> koru/yyjson:close(doc) |> converse()
+                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse()
                 | wrong-type |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: openrouter key is not a string")
             | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter.key in auth store")
         | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter entry in auth store")

@@ -31,7 +31,13 @@ import app/model
 |> turn(br, n: 1)
 |> turn(br, n: 2)
 |> turn(br, n: 3)
-|> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
+|> turn(br, n: 4)
+|> turn(br, n: 5)
+|> std/io:print.ln("--- the derived vocabulary now includes the session's inventions")
+|> std/bridge:vocabulary(br)
+| ok v |> std/io:print.ln("{{ v:s }}")
+    |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
+| not-found s |> std/io:print.ln("!! scope {{ s:s }} vanished at hang-up")
 
 // One turn: ask the model, show what it said, run it against the bridge, show
 // what the bridge did. The `br` parameter carries no phantom — a turn USES the
@@ -44,6 +50,7 @@ turn = app/model:intent(turn: n): why
     |> std/io:print.ln("  tool> {{ src:s }}")
     |> std/bridge:run(br, source: src)
         | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
+        | defined d |> std/io:print.ln("  defined {{ d:s }} — the session's vocabulary now includes it")
         | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
         | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
         | parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
