@@ -48,7 +48,7 @@ def main() -> None:
         agent = KopiumAgent(
             tools=env.get_tools(),
             domain_policy=env.get_policy(),
-            gate_binary=GATE, domain="mock",
+            domain="mock", gate_binary=GATE,
             llm=llm,
         )
         user = build_user("user_simulator", env, task, llm=llm)

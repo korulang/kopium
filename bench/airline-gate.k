@@ -12,6 +12,7 @@
 // outcome: `say(...)` and no tool call, DB byte-identical to gold.
 
 import std/bridge
+import std/interpreter
 import std/io
 import app/airline_tools
 
@@ -25,7 +26,7 @@ proc event-name|zig {
 
 tor vet { br: *std/bridge:Bridge, source: string }
 vet = std/bridge:run(br, source)
-| result _ |> event-name(source): n |> std/io:print.ln("OK {{ n:s }}")
+| result r |> std/interpreter:value.stringify(r.value): j |> event-name(source): n |> std/io:print.ln("OK {{ n:s }} {{ j:s }}")
 | event-denied ev |> std/io:print.ln("REJECT {{ ev:s }}")
 | parse-error p |> std/io:print.ln("REJECT {{ p.message:s }}")
 | validation-error v |> std/io:print.ln("ERROR {{ v:s }}")

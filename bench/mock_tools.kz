@@ -6,46 +6,59 @@
 // fake database) plus `say`, the voice channel that is the refusal surface in
 // τ³ (a correct refusal = say + no tool call).
 //
-// The procs are stubs on purpose. τ³ executes the real tools against its DB
-// and scores the end-state; the gate's job is to prove an invocation is IN
-// this vocabulary before Python lets it reach the harness. What the procs do
-// here is nothing; what being IN THE BLOCK does is everything — the same
-// register transform that refuses a forged handle in the notes agent refuses
-// a hallucinated verb here.
+// Every write tor returns its OWN PARSED INPUTS as a JSON string. That is how
+// the gate's OK line carries arguments without Python re-parsing Koru: the
+// interpreter parses the invocation, hands each field to this proc, and the
+// proc serializes what it received. Python consumes the gate's JSON verbatim.
+// The procs do NOT perform the tool's effect — τ³ executes the real tools on
+// its DB — but the boundary between "what the model said" and "what the
+// harness runs" is exactly this serialization, in Koru's own world.
+//
+// What the procs do here is nothing but echo the parse; what being IN THE
+// BLOCK does is everything — the same register transform that refuses a
+// forged handle in the notes agent refuses a hallucinated verb here.
 
 ~import std/runtime
 
 const std = @import("std");
 
-~pub tor create-task { user_id: string, title: string, description: string = "" }
+~pub tor create-task { user_id: string, title: string, description: string = "" } -> string
 
 ~proc create-task|zig {
-    _ = user_id;
-    _ = title;
     _ = description;
+    var buf: [1024]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{{\"user_id\": \"{s}\", \"title\": \"{s}\"}}", .{ user_id, title }) catch "{}";
+    return s;
 }
 
-~pub tor get-users {}
+~pub tor get-users {} -> string
 
-~proc get-users|zig {}
+~proc get-users|zig {
+    return "{}";
+}
 
-~pub tor update-task-status { task_id: string, status: string }
+~pub tor update-task-status { task_id: string, status: string } -> string
 
 ~proc update-task-status|zig {
-    _ = task_id;
-    _ = status;
+    var buf: [1024]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{{\"task_id\": \"{s}\", \"status\": \"{s}\"}}", .{ task_id, status }) catch "{}";
+    return s;
 }
 
-~pub tor transfer-to-human-agents { summary: string }
+~pub tor transfer-to-human-agents { summary: string } -> string
 
 ~proc transfer-to-human-agents|zig {
-    _ = summary;
+    var buf: [1024]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{{\"summary\": \"{s}\"}}", .{ summary }) catch "{}";
+    return s;
 }
 
-~pub tor say { text: string }
+~pub tor say { text: string } -> string
 
 ~proc say|zig {
-    _ = text;
+    var buf: [1024]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{{\"text\": \"{s}\"}}", .{text}) catch "{}";
+    return s;
 }
 
 ~std/runtime:register(scope: "mock") {

@@ -1,29 +1,26 @@
 // mock-gate.k — the τ³-bench front door: a line of Koru is the only tool
-// surface, vetted by the interpreter before Python can execute anything.
+// surface, vetted by the interpreter.
 //
-// Protocol: read one invocation from stdin, dispatch it against the mock scope
-// through the bridge, print exactly one machine-readable line, exit.
+// Protocol (stdin -> stdout):
+//   <invocation>  -> OK <event> <value-json>    legal, in-vocabulary; the
+//                                                value-json carries the parsed
+//                                                args the tor serialized
+//                 -> REJECT <detail>            event-denied / not even Koru
+//                 -> ERROR <detail>             validation/shape/dispatch
 //
-//   OK <event>                                  — legal, in-vocabulary invocation
-//   REJECT <name-or-message>                    — event-denied, or not even Koru
-//   ERROR <message>                             — validation/shape/dispatch
+// The vocabulary the model is given comes from mock-vocab.k (the interpreter's
+// own render of the register block). The args on an OK line are the invocation
+// the interpreter PARSED, serialized by the host-side tor stubs — Python
+// consumes the gate's JSON and never re-parses Koru itself.
 //
-// Python parses the event name from the OK line and builds the τ³ ToolCall
-// (Koru spells `create-task`, the harness spells `create_task` — the mapping
-// is one mechanical line, the REFUSAL is the register block deciding, never a
-// Python if-statement). REJECT/ERROR become the agent's spoken refusal.
-//
-//   koruc mock-gate.k
-//   echo 'create-task(user_id: "user_1", title: "buy milk")' | ./a.out
-//   → OK create-task
+//   koruc mock-gate.k && cp a.out mock-gate-binary
+//   echo 'create-task(user_id: "user_1", title: "buy milk")' | ./mock-gate-binary
 
 import std/bridge
+import std/interpreter
 import std/io
 import app/mock_tools
 
-// The event name is the invocation's first token, up to the '(' — the same
-// shape `wire:clean` trusts. Extracted here so the OK line is self-describing
-// and Python never re-parses Koru to learn what ran.
 pub tor event-name { source: string } -> string
 
 proc event-name|zig {
@@ -34,7 +31,7 @@ proc event-name|zig {
 
 tor vet { br: *std/bridge:Bridge, source: string }
 vet = std/bridge:run(br, source)
-| result _ |> event-name(source): n |> std/io:print.ln("OK {{ n:s }}")
+| result r |> std/interpreter:value.stringify(r.value): j |> event-name(source): n |> std/io:print.ln("OK {{ n:s }} {{ j:s }}")
 | event-denied ev |> std/io:print.ln("REJECT {{ ev:s }}")
 | parse-error p |> std/io:print.ln("REJECT {{ p.message:s }}")
 | validation-error v |> std/io:print.ln("ERROR {{ v:s }}")

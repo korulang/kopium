@@ -9,3 +9,6 @@ program.ast.json
 __pycache__/
 airline-gate
 mock-gate-binary
+*-gate-binary
+*-vocab-binary
+results/

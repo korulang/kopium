@@ -17,39 +17,58 @@
 
 const std = @import("std");
 
-~pub tor say { text: string }
+~pub tor say { text: string } -> string
 
 ~proc say|zig {
-    _ = text;
+    var buf: [1024]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{{\"text\": \"{s}\"}}", .{text}) catch "{}";
+    return s;
 }
 
 // Reads — the agent's eyes on the reservation before deciding anything.
-~pub tor get-user-details { user_id: string }
+~pub tor get-user-details { user_id: string } -> string
 
 ~proc get-user-details|zig {
-    _ = user_id;
+    var buf: [1024]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{{\"user_id\": \"{s}\"}}", .{user_id}) catch "{}";
+    return s;
 }
 
-~pub tor get-reservation-details { reservation_id: string }
+~pub tor get-reservation-details { reservation_id: string } -> string
 
 ~proc get-reservation-details|zig {
-    _ = reservation_id;
+    var buf: [1024]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{{\"reservation_id\": \"{s}\"}}", .{reservation_id}) catch "{}";
+    return s;
 }
 
-~pub tor search-direct-flight { origin: string, destination: string, date: string }
+~pub tor search-direct-flight { origin: string, destination: string, date: string } -> string
 
 ~proc search-direct-flight|zig {
-    _ = origin;
-    _ = destination;
-    _ = date;
+    var buf: [1024]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{{\"origin\": \"{s}\", \"destination\": \"{s}\", \"date\": \"{s}\"}}", .{ origin, destination, date }) catch "{}";
+    return s;
 }
 
 // The write the policy guards. IN the block so the model CAN call it — the
 // refusal is the model applying the policy, scored byte-for-byte on the DB.
-~pub tor cancel-reservation { reservation_id: string }
+~pub tor cancel-reservation { reservation_id: string } -> string
 
 ~proc cancel-reservation|zig {
-    _ = reservation_id;
+    var buf: [1024]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{{\"reservation_id\": \"{s}\"}}", .{reservation_id}) catch "{}";
+    return s;
+}
+
+// The policy's escape hatch: when the agent cannot resolve the issue, transfer
+// to a human. Also reachable from the mock domain — the model tried to call it
+// and the block refused; the block must carry every verb the policy names.
+~pub tor transfer-to-human-agents { summary: string } -> string
+
+~proc transfer-to-human-agents|zig {
+    var buf: [1024]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{{\"summary\": \"{s}\"}}", .{summary}) catch "{}";
+    return s;
 }
 
 ~std/runtime:register(scope: "airline") {
@@ -58,4 +77,5 @@ const std = @import("std");
     get-reservation-details(1)
     search-direct-flight(1)
     cancel-reservation(10)
+    transfer-to-human-agents(1)
 }

@@ -24,7 +24,7 @@ from tau2.evaluator.evaluator import EvaluationType
 from kopium_agent import KopiumAgent, AIRLINE_CONFIG
 
 HERE = Path(__file__).parent
-GATE = HERE / "airline-gate"
+GATE = HERE / "airline-gate-binary"
 
 
 def main() -> None:
@@ -58,8 +58,7 @@ def main() -> None:
     agent = KopiumAgent(
         tools=env.get_tools(),
         domain_policy=env.get_policy(),
-        gate_binary=GATE,
-        domain="airline",
+        domain="airline", gate_binary=GATE,
         llm=llm,
     )
     user = build_user("user_simulator", env, task, llm=llm)

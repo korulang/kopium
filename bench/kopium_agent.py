@@ -1,30 +1,33 @@
 #!/usr/bin/env python3
 """
-KOPIUM agent for tau3-bench.
+KOPIUM agent for tau3-bench — the agent uses ONLY Koru as its tool surface.
 
-The agent's ONLY tool surface is a line of Koru vetted by the interpreter:
-every invocation the model produces goes through a gate binary, which
-dispatches it against the `register` block in the domain's *_tools.kz. A verb
-not in the block comes back REJECT from the LANGUAGE. Only an OK line becomes
-a tau3 ToolCall; everything else is a spoken refusal/fix-up.
+Every decision the model makes is ONE line of Koru. Nothing about what may or
+may not be called is typed in this file:
 
-The two spelling worlds meet here in exactly two translations:
-  - tau3 tool names (create_task)  <->  Koru tor names (create-task)
-  - a JSON argument dict           <->  the name: "value" pairs in a Koru line
-    (structured tau3 args ride inside Koru string params as JSON)
+  - The VOCABULARY given to the model is rendered by the interpreter from the
+    register block (mock-vocab-binary / airline-vocab-binary, which call
+    std/runtime:scope-vocabulary). The prompt is built from that output at
+    construction. There is no duplicate tool list here to drift.
+  - The ARGUMENTS are the interpreter's own parse: the host-side tor stubs
+    serialize the fields they received, the gate prints them as JSON on the
+    OK line, and this file consumes that JSON verbatim. There is no re-parse
+    of Koru here.
+  - The REFUSAL is the register block answering event-denied/parse-error; a
+    rejected line becomes the agent's spoken refusal, and tau3 scores the
+    refusal as correct when the policy demands one.
 
-The vocabulary itself — and the refusal — come from the register blocks
-(mock_tools.kz, airline_tools.kz). Nothing in this file decides what the agent
-may or may not call. Notably, `generate()` is called with NO `tools=`: the
-model is handed the vocabulary as prose and must answer in one line of Koru.
+The only tau3 spellings in this file are the mechanical name mapping
+(create-task <-> create_task) and the domain config pointers — both paper-thin
+transports, never a judgment about legality.
 
 Usage:
-    agent = KopiumAgent(tools=..., domain_policy=..., gate_binary=...,
-                        koru_to_tau={...}, vocab=[...], llm=...)
+    agent = KopiumAgent(tools=..., domain_policy=..., domain="mock", llm=...)
 """
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -44,48 +47,41 @@ from tau2.environment.toolkit import Tool
 from tau2.utils.llm_utils import generate
 
 
+def _run_bin(bin_path: Path, stdin: str) -> str:
+    proc = subprocess.run(
+        [str(bin_path)], input=stdin.encode(), capture_output=True, timeout=15
+    )
+    return proc.stdout.decode(errors="replace").strip()
+
+
 @dataclass(frozen=True)
 class DomainConfig:
-    """One benchmark domain: its gate binary, tool-name mapping, vocabulary."""
+    """One benchmark domain: gate + vocab binaries, name map, policy rules."""
 
     name: str
     gate_binary: Path
-    # Koru tor name -> tau3 tool name. Omitted verbs (like `say`, the voice
-    # channel) pass through unchanged.
+    vocab_binary: Path
+    # Koru tor name -> tau3 tool name. `say` stays a Koru word.
     koru_to_tau: dict[str, str] = field(default_factory=dict)
-    # The vocabulary lines exactly as rendered from the register block, shown
-    # to the model. The gate enforces the real thing; drift here only makes
-    # the model guess wrong, never makes an illegal call legal.
-    vocab: list[str] = field(default_factory=list)
-    # Extra rules appended to the system prompt, domain-specific.
+    # Extra policy rules for the system prompt (domain-specific, prose).
     extra_rules: list[str] = field(default_factory=list)
-
-    @property
-    def tau_to_koru(self) -> dict[str, str]:
-        return {v: k for k, v in self.koru_to_tau.items()}
 
 
 # ---------------------------------------------------------------------------
-# The domains, one config each. The register blocks are the authority; these
-# mirror them for the model prompt and the tau3 spelling.
+# The domains. The register blocks (mock_tools.kz, airline_tools.kz) are the
+# authority; these files only name the binaries and the tau3 spellings.
 # ---------------------------------------------------------------------------
 
 MOCK_CONFIG = DomainConfig(
     name="mock",
     gate_binary=Path(__file__).parent / "mock-gate-binary",
+    vocab_binary=Path(__file__).parent / "mock-vocab-binary",
     koru_to_tau={
         "create-task": "create_task",
         "get-users": "get_users",
         "update-task-status": "update_task_status",
         "transfer-to-human-agents": "transfer_to_human_agents",
     },
-    vocab=[
-        "create-task(user_id: string, title: string, description: string)",
-        "get-users()",
-        "update-task-status(task_id: string, status: string)",
-        "transfer-to-human-agents(summary: string)",
-        "say(text: string)",
-    ],
     extra_rules=[
         "Check what has already been done before acting. When a task is "
         "already created or resolved in the tool results, do NOT call the "
@@ -99,23 +95,16 @@ MOCK_CONFIG = DomainConfig(
 
 AIRLINE_CONFIG = DomainConfig(
     name="airline",
-    gate_binary=Path("/Users/larsde/src/kopium/bench/airline-gate"),
+    gate_binary=Path(__file__).parent / "airline-gate-binary",
+    vocab_binary=Path(__file__).parent / "airline-vocab-binary",
     koru_to_tau={
         "get-user-details": "get_user_details",
         "get-reservation-details": "get_reservation_details",
         "search-direct-flight": "search_direct_flight",
         "cancel-reservation": "cancel_reservation",
+        "transfer-to-human-agents": "transfer_to_human_agents",
     },
-    vocab=[
-        "say(text: string)",
-        "get-user-details(user_id: string)",
-        "get-reservation-details(reservation_id: string)",
-        "search-direct-flight(origin: string, destination: string, date: string)",
-        "cancel-reservation(reservation_id: string)",
-    ],
     extra_rules=[
-        # The showcase rule, from the airline policy: the API does not check
-        # cancellation rules — the AGENT must, before calling the API.
         "The cancellation API does NOT check whether cancellation is allowed. "
         "YOU must apply the policy before calling cancel-reservation. When the "
         "policy forbids it (more than 24 hours after booking, no insurance "
@@ -130,21 +119,6 @@ _CONFIGS = {"mock": MOCK_CONFIG, "airline": AIRLINE_CONFIG}
 # `say` is the voice channel in every domain: a plain spoken message, never a
 # tau3 write tool.
 _SPOKEN = {"say"}
-
-
-def get_config(name: str, gate_binary: Optional[Path] = None) -> DomainConfig:
-    cfg = _CONFIGS[name]
-    if gate_binary is not None:
-        # Allow overriding the binary path at construction (the harness may
-        # build it elsewhere).
-        return DomainConfig(
-            name=cfg.name,
-            gate_binary=gate_binary,
-            koru_to_tau=cfg.koru_to_tau,
-            vocab=cfg.vocab,
-            extra_rules=cfg.extra_rules,
-        )
-    return cfg
 
 
 class KopiumAgentState:
@@ -166,22 +140,44 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         self,
         tools: list[Tool],
         domain_policy: str,
-        gate_binary: Path,
         domain: str = "mock",
+        gate_binary: Optional[Path] = None,
         llm: str = "openrouter/anthropic/claude-haiku-4.5",
         llm_args: Optional[dict] = None,
     ):
         super().__init__(tools=tools, domain_policy=domain_policy)
-        self.cfg = get_config(domain, gate_binary=gate_binary)
-        self.koru_to_tau = self.cfg.koru_to_tau
+        if domain not in _CONFIGS:
+            raise KeyError(f"unknown domain {domain!r}")
+        self.domain = domain
+        self.cfg = _CONFIGS[domain]
+        if gate_binary is not None:
+            self.cfg = DomainConfig(
+                name=self.cfg.name,
+                gate_binary=gate_binary,
+                vocab_binary=self.cfg.vocab_binary,
+                koru_to_tau=self.cfg.koru_to_tau,
+                extra_rules=self.cfg.extra_rules,
+            )
         self.llm = llm
         self.llm_args = llm_args or {}
         self.call_count = 0
 
+    # ------------------------------------------------------- the vocabulary
+    def _vocabulary(self) -> str:
+        """The register block's own render — the ONLY source of what the model
+        may call. Empty/error => empty list; the gate still enforces reality,
+        so a broken vocab render can only make the model guess, never let an
+        illegal call through."""
+        out = _run_bin(self.cfg.vocab_binary, "x\n")
+        if out.startswith("ERROR"):
+            return ""
+        return out
+
     def get_init_state(
         self, message_history: Optional[list[Message]] = None
     ) -> KopiumAgentState:
-        vocab_lines = "\n".join(f"- {v}" for v in self.cfg.vocab)
+        vocab = self._vocabulary()
+        vocab_lines = "\n".join(f"- {v}" for v in vocab.splitlines() if v)
         rules = "\n".join(f"- {r}" for r in self.cfg.extra_rules)
         literal_rules = (
             "- If you cannot or must not do what the user asks, call "
@@ -190,9 +186,10 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         system_prompt = (
             f"You are a customer service agent. Every reply is EXACTLY ONE "
             f"invocation in the Koru vocabulary below — nothing else, no prose, "
-            f"no markdown, no leading ~.\n\n"
+            f"no markdown, no leading ~. Arguments are name: \"value\" pairs.\n\n"
             f"## Domain policy\n{self.domain_policy}\n\n"
-            f"## Your vocabulary (exactly these lines, nothing else)\n{vocab_lines}\n\n"
+            f"## Your vocabulary (exactly these lines, rendered from the "
+            f"register block)\n{vocab_lines}\n\n"
             f"## Rules\n{rules}\n{literal_rules}"
         )
         return KopiumAgentState(
@@ -202,7 +199,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
 
     # -------------------------------------------------------------- the gate
     def _gate(self, source: str) -> tuple[str, str]:
-        """Run one Koru line through the domain gate. Returns (status, detail)."""
+        """Run one Koru line through the gate. Returns (status, detail)."""
         try:
             proc = subprocess.run(
                 [str(self.cfg.gate_binary)],
@@ -219,25 +216,23 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         return status, detail.strip()
 
     @staticmethod
-    def _parse_args(source: str) -> dict[str, str]:
-        """Parse `name(arg: "v", arg2: "w")` into {arg: v, ...}.
-
-        Only called on a line the gate already returned OK for. Structured
-        args (lists/objects) ride inside string values as JSON and pass
-        through untouched.
-        """
-        m = re.fullmatch(r"\s*[^(\s]+\s*\((.*)\)\s*", source, re.DOTALL)
-        if not m:
+    def _args_from_value(value_json: str) -> dict:
+        """Unpack the gate's OK payload: the tor stub serialized the parsed
+        fields as a JSON string inside the interpreter's Value JSON:
+        {"branch":"","value":"{...}"}. The inner string IS the args."""
+        try:
+            outer = json.loads(value_json)
+        except json.JSONDecodeError:
             return {}
-        args: dict[str, str] = {}
-        for pair in _split_top_level(m.group(1)):
-            name, _, raw = pair.partition(":")
-            name = name.strip()
-            raw = raw.strip()
-            if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
-                raw = raw[1:-1]
-            args[name] = raw
-        return args
+        inner = outer.get("value")
+        if isinstance(inner, str):
+            try:
+                return json.loads(inner)
+            except json.JSONDecodeError:
+                return {}
+        if isinstance(inner, dict):
+            return inner
+        return {}
 
     # ------------------------------------------------------------ the loop
     def generate_next_message(
@@ -255,7 +250,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             state.messages.append(message)
 
         # 1. Ask the model for ONE line of Koru. No tools are offered — the
-        #    only "tool schema" the model sees is the vocabulary above.
+        #    only "tool schema" the model sees is the register block render.
         response = generate(
             model=self.llm,
             messages=state.system_messages + state.messages,
@@ -273,14 +268,14 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         # 2. The Koru gate decides.
         status, detail = self._gate(reply)
         if status == "OK":
-            koru_name = detail
-            if koru_name in _SPOKEN:
-                args = self._parse_args(reply)
-                text = args.get("text", "")
+            event_name, _, value_json = detail.partition(" ")
+            if event_name in _SPOKEN:
+                args = self._args_from_value(value_json)
+                text = str(args.get("text", ""))
                 out = AssistantMessage.text(text)
             else:
-                tau_name = self.koru_to_tau.get(koru_name, koru_name)
-                args = {k: v for k, v in self._parse_args(reply).items() if v != ""}
+                tau_name = self.cfg.koru_to_tau.get(event_name, event_name)
+                args = self._args_from_value(value_json)
                 out = AssistantMessage.text(
                     "", tool_calls=[ToolCall(name=tau_name, arguments=args)]
                 )
@@ -292,29 +287,3 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
 
         state.messages.append(out)
         return out, state
-
-
-def _split_top_level(s: str) -> list[str]:
-    """Split on commas ignoring quoted commas (arg values are simple here)."""
-    parts: list[str] = []
-    depth = 0
-    cur = ""
-    in_str = False
-    for ch in s:
-        if ch == '"':
-            in_str = not in_str
-            cur += ch
-        elif ch in "([{" and not in_str:
-            depth += 1
-            cur += ch
-        elif ch in ")]}" and not in_str:
-            depth -= 1
-            cur += ch
-        elif ch == "," and depth == 0 and not in_str:
-            parts.append(cur)
-            cur = ""
-        else:
-            cur += ch
-    if cur.strip():
-        parts.append(cur)
-    return parts
