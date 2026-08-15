@@ -22,7 +22,7 @@
 // one. So the lifecycle is wronger than "one tick late" and I stopped rather
 // than keep guessing.
 //
-// THE PART THAT IS NOT MINE: `kopium/d_turns.k` has this same pump/retire shape
+// THE PART THAT IS NOT MINE: `wired/d_turns.k` has this same pump/retire shape
 // and its header records verification with TWO typed turns. If this is the
 // pattern's bug rather than this file's, d_turns has it too and nobody has hit
 // it. That is the first thing to check.
@@ -32,7 +32,7 @@
 //
 // kopium with a head — type at the bottom, the agent acts on a live bridge.
 //
-// This is `kopium/d_turns.k`'s chrome (vaxis dock, transcript pane, edit line,
+// This is `wired/d_turns.k`'s chrome (vaxis dock, transcript pane, edit line,
 // curl multi + SSE under a tick) carrying `live.k`'s agent loop (the notes
 // vocabulary, a real model, a resource bridge that outlives every turn).
 //
@@ -60,7 +60,7 @@
 // 2. `handle-delta` CONSUMES the extracted text inline rather than returning
 //    it. That is the whole difference between this and `d_turns.k`, whose
 //    replies come back as NUL bytes
-//    (kopium/holes/3_extracted_string_is_a_borrow_that_escapes). The hazard is
+//    (wired/holes/3_extracted_string_is_a_borrow_that_escapes). The hazard is
 //    the escape, not the extraction.
 //
 // KNOWN, and visible while you use it: the transcript pane clips rather than

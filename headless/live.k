@@ -25,7 +25,7 @@
 //   koruc live.k && ./a.out
 //
 // Requires ~/.pi/agent/auth.json with an openrouter key — the same store
-// `kopium/a_sse_spike.k` reads.
+// `wired/a_sse_spike.k` reads.
 
 import std/io
 import std/fmt
@@ -48,7 +48,7 @@ std/store:new(reply, capacity: 2) { *std/string:String<std/string:instance!> }
 // One SSE delta -> the reply String. Called from inside the arm that still
 // owns `doc`, which is the whole difference between this and `d_turns.k`'s
 // point-free version — that one RETURNS the extracted text and hands back
-// freed memory (kopium/holes/3_extracted_string_is_a_borrow_that_escapes).
+// freed memory (wired/holes/3_extracted_string_is_a_borrow_that_escapes).
 // The hazard is the escape, so this simply does not escape.
 tor collect { text: string }
 collect = std/store:query(reply)

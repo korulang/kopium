@@ -25,7 +25,7 @@ var opened: usize = 0;
 // returning a bare `-> string` owns what it hands back, and nothing in the
 // interpreter path frees it — the pool dupes into its own arena and releases
 // that copy, so an allocPrint here is a leak the produced program's counter
-// catches on the way out. `kopium/auth.kz` reaches for the same pattern.
+// catches on the way out. `wired/auth.kz` reaches for the same pattern.
 var handle_buf: [MAX_NOTES][16]u8 = undefined;
 var handle_len: [MAX_NOTES]usize = .{0} ** MAX_NOTES;
 

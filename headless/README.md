@@ -1,6 +1,6 @@
 # kopium-headless — an agent whose only tool is a Koru interpreter
 
-`kopium/d_turns.k` is the wired client: vaxis chrome, curl multi + SSE, replies
+`wired/d_turns.k` is the wired client: vaxis chrome, curl multi + SSE, replies
 from `claude-haiku-4.5` streaming into a store-held transcript. It has a network
 and no tools.
 
@@ -296,7 +296,7 @@ lives in the store; a startup constant does not.**
 
 The first version got that wrong and said so confidently. It held the
 transcript in a `[16384]u8` module buffer, justified with *"a tor param inside
-a SWEEP arm would be 690_234"* — copied from `kopium/auth.kz`, where it had
+a SWEEP arm would be 690_234"* — copied from `wired/auth.kz`, where it had
 been true, and never rechecked. **690_234 landed 2026-08-03 and is MUST_RUN
 green.** `probe_store.k` in this directory settles it in twenty lines: a tor
 whose parameter is the bridge reads a store-held String inside a sweep arm and

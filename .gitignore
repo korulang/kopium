@@ -1,0 +1,21 @@
+# koru / zig build artifacts (generated per-app by koruc + zig)
+.zig-cache/
+zig-cache/
+zig-out/
+a.out
+*.o
+# koruc emission artifacts
+backend.zig
+backend_output_emitted.zig
+build_backend.zig
+output_emitted.zig
+program.ast.json
+compiler_env.zig
+*.err
+*.out
+!README.md
+
+# koruc-generated build driver (koru.json is the real manifest; build.zig.zon is source)
+build.zig
+build_output.zig
+agent-notes.txt

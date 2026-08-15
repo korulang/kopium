@@ -10,7 +10,7 @@
 // This file previously held the transcript in a `[16384]u8` module buffer and
 // justified it with "a tor param inside a SWEEP arm would be 690_234". That
 // was WRONG WHEN WRITTEN. 690_234 landed 2026-08-03 and is MUST_RUN green; the
-// justification was copied from `kopium/auth.kz`, where it had been true, and
+// justification was copied from `wired/auth.kz`, where it had been true, and
 // never rechecked. `probe_store.k` settles it directly: a tor whose parameter
 // is the bridge reads a store-held String in a sweep arm and dispatches it.
 //
