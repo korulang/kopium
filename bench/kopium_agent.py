@@ -1,30 +1,33 @@
 #!/usr/bin/env python3
 """
-KOPIUM agent for tau3-bench — the mock-domain pilot.
+KOPIUM agent for tau3-bench.
 
 The agent's ONLY tool surface is a line of Koru vetted by the interpreter:
-every invocation the model produces goes through the mock-gate binary, which
-dispatches it against the `register` block from mock_tools.kz. A verb not in
-the block comes back REJECT from the LANGUAGE. Only an OK line becomes a tau3
-ToolCall; everything else is a spoken refusal/fix-up.
+every invocation the model produces goes through a gate binary, which
+dispatches it against the `register` block in the domain's *_tools.kz. A verb
+not in the block comes back REJECT from the LANGUAGE. Only an OK line becomes
+a tau3 ToolCall; everything else is a spoken refusal/fix-up.
 
 The two spelling worlds meet here in exactly two translations:
   - tau3 tool names (create_task)  <->  Koru tor names (create-task)
   - a JSON argument dict           <->  the name: "value" pairs in a Koru line
+    (structured tau3 args ride inside Koru string params as JSON)
 
-The vocabulary itself — and the refusal — come from mock_tools.kz. Nothing in
-this file decides what the agent may or may not call. Notably, `generate()` is
-called with NO `tools=`: the model is handed the vocabulary as prose and must
-answer in one line of Koru, exactly as a session in the notes agent does.
+The vocabulary itself — and the refusal — come from the register blocks
+(mock_tools.kz, airline_tools.kz). Nothing in this file decides what the agent
+may or may not call. Notably, `generate()` is called with NO `tools=`: the
+model is handed the vocabulary as prose and must answer in one line of Koru.
 
-Usage (from the harness examples' manual-build path):
-    agent = KopiumAgent(tools=env.get_tools(), domain_policy=env.get_policy(), ...)
+Usage:
+    agent = KopiumAgent(tools=..., domain_policy=..., gate_binary=...,
+                        koru_to_tau={...}, vocab=[...], llm=...)
 """
 
 from __future__ import annotations
 
 import re
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -35,30 +38,113 @@ from tau2.data_model.message import (
     SystemMessage,
     UserMessage,
     ToolCall,
+    ToolMessage,
 )
 from tau2.environment.toolkit import Tool
 from tau2.utils.llm_utils import generate
 
-# Koru tor name -> tau3 tool name (two spellings of the same verb)
-_KORU_TO_TAU = {
-    "create-task": "create_task",
-    "get-users": "get_users",
-    "update-task-status": "update_task_status",
-    "transfer-to-human-agents": "transfer_to_human_agents",
-}
-_TAU_TO_KORU = {v: k for k, v in _KORU_TO_TAU.items()}
 
-# The Koru vocabulary line list, exactly as the model must see it. Draws on the
-# register block's events; mirrored here for the model prompt (the gate
-# enforces the real thing — a drift here only makes the model guess wrong, it
-# can never make an illegal call legal).
-_VOCAB = [
-    "create-task(user_id: string, title: string, description: string)",
-    "get-users()",
-    "update-task-status(task_id: string, status: string)",
-    "transfer-to-human-agents(summary: string)",
-    "say(text: string)",
-]
+@dataclass(frozen=True)
+class DomainConfig:
+    """One benchmark domain: its gate binary, tool-name mapping, vocabulary."""
+
+    name: str
+    gate_binary: Path
+    # Koru tor name -> tau3 tool name. Omitted verbs (like `say`, the voice
+    # channel) pass through unchanged.
+    koru_to_tau: dict[str, str] = field(default_factory=dict)
+    # The vocabulary lines exactly as rendered from the register block, shown
+    # to the model. The gate enforces the real thing; drift here only makes
+    # the model guess wrong, never makes an illegal call legal.
+    vocab: list[str] = field(default_factory=list)
+    # Extra rules appended to the system prompt, domain-specific.
+    extra_rules: list[str] = field(default_factory=list)
+
+    @property
+    def tau_to_koru(self) -> dict[str, str]:
+        return {v: k for k, v in self.koru_to_tau.items()}
+
+
+# ---------------------------------------------------------------------------
+# The domains, one config each. The register blocks are the authority; these
+# mirror them for the model prompt and the tau3 spelling.
+# ---------------------------------------------------------------------------
+
+MOCK_CONFIG = DomainConfig(
+    name="mock",
+    gate_binary=Path(__file__).parent / "mock-gate-binary",
+    koru_to_tau={
+        "create-task": "create_task",
+        "get-users": "get_users",
+        "update-task-status": "update_task_status",
+        "transfer-to-human-agents": "transfer_to_human_agents",
+    },
+    vocab=[
+        "create-task(user_id: string, title: string, description: string)",
+        "get-users()",
+        "update-task-status(task_id: string, status: string)",
+        "transfer-to-human-agents(summary: string)",
+        "say(text: string)",
+    ],
+    extra_rules=[
+        "Check what has already been done before acting. When a task is "
+        "already created or resolved in the tool results, do NOT call the "
+        "tool again — confirm to the user via say(text: ...).",
+        "Never repeat a tool call that already succeeded with the same "
+        "purpose.",
+        "Only pass arguments the user actually gave you. Never invent an "
+        "optional argument (like a description the user never mentioned).",
+    ],
+)
+
+AIRLINE_CONFIG = DomainConfig(
+    name="airline",
+    gate_binary=Path("/Users/larsde/src/kopium/bench/airline-gate"),
+    koru_to_tau={
+        "get-user-details": "get_user_details",
+        "get-reservation-details": "get_reservation_details",
+        "search-direct-flight": "search_direct_flight",
+        "cancel-reservation": "cancel_reservation",
+    },
+    vocab=[
+        "say(text: string)",
+        "get-user-details(user_id: string)",
+        "get-reservation-details(reservation_id: string)",
+        "search-direct-flight(origin: string, destination: string, date: string)",
+        "cancel-reservation(reservation_id: string)",
+    ],
+    extra_rules=[
+        # The showcase rule, from the airline policy: the API does not check
+        # cancellation rules — the AGENT must, before calling the API.
+        "The cancellation API does NOT check whether cancellation is allowed. "
+        "YOU must apply the policy before calling cancel-reservation. When the "
+        "policy forbids it (more than 24 hours after booking, no insurance "
+        "covering the reason, portion already flown), refuse via say(text: ...) "
+        "and do NOT call cancel-reservation.",
+        "Only pass arguments the user actually gave you.",
+    ],
+)
+
+_CONFIGS = {"mock": MOCK_CONFIG, "airline": AIRLINE_CONFIG}
+
+# `say` is the voice channel in every domain: a plain spoken message, never a
+# tau3 write tool.
+_SPOKEN = {"say"}
+
+
+def get_config(name: str, gate_binary: Optional[Path] = None) -> DomainConfig:
+    cfg = _CONFIGS[name]
+    if gate_binary is not None:
+        # Allow overriding the binary path at construction (the harness may
+        # build it elsewhere).
+        return DomainConfig(
+            name=cfg.name,
+            gate_binary=gate_binary,
+            koru_to_tau=cfg.koru_to_tau,
+            vocab=cfg.vocab,
+            extra_rules=cfg.extra_rules,
+        )
+    return cfg
 
 
 class KopiumAgentState:
@@ -81,34 +167,33 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         tools: list[Tool],
         domain_policy: str,
         gate_binary: Path,
-        llm: str = "openai/gpt-4.1-mini",
+        domain: str = "mock",
+        llm: str = "openrouter/anthropic/claude-haiku-4.5",
         llm_args: Optional[dict] = None,
     ):
         super().__init__(tools=tools, domain_policy=domain_policy)
-        self.gate_binary = Path(gate_binary)
+        self.cfg = get_config(domain, gate_binary=gate_binary)
+        self.koru_to_tau = self.cfg.koru_to_tau
         self.llm = llm
         self.llm_args = llm_args or {}
         self.call_count = 0
 
-    # ------------------------------------------------------------------ state
     def get_init_state(
         self, message_history: Optional[list[Message]] = None
     ) -> KopiumAgentState:
-        vocab_lines = "\n".join(f"- {v}" for v in _VOCAB)
+        vocab_lines = "\n".join(f"- {v}" for v in self.cfg.vocab)
+        rules = "\n".join(f"- {r}" for r in self.cfg.extra_rules)
+        literal_rules = (
+            "- If you cannot or must not do what the user asks, call "
+            "say(text: ...) with the honest reason, and call NO tool."
+        )
         system_prompt = (
             f"You are a customer service agent. Every reply is EXACTLY ONE "
             f"invocation in the Koru vocabulary below — nothing else, no prose, "
             f"no markdown, no leading ~.\n\n"
             f"## Domain policy\n{self.domain_policy}\n\n"
             f"## Your vocabulary (exactly these lines, nothing else)\n{vocab_lines}\n\n"
-            f"## Rules\n"
-            f"- Check what has already been done before acting. When a task is "
-            f"already created or resolved in the tool results, do NOT call the "
-            f"tool again — confirm to the user via say(text: ...).\n"
-            f"- Never repeat a tool call that already succeeded with the same "
-            f"purpose.\n"
-            f"- Only pass arguments the user actually gave you. Never invent an "
-            f"optional argument (like a description the user never mentioned)."
+            f"## Rules\n{rules}\n{literal_rules}"
         )
         return KopiumAgentState(
             system_messages=[SystemMessage(role="system", content=system_prompt)],
@@ -117,20 +202,19 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
 
     # -------------------------------------------------------------- the gate
     def _gate(self, source: str) -> tuple[str, str]:
-        """Run one Koru line through mock-gate. Returns (status, detail)."""
+        """Run one Koru line through the domain gate. Returns (status, detail)."""
         try:
             proc = subprocess.run(
-                [str(self.gate_binary)],
+                [str(self.cfg.gate_binary)],
                 input=source.encode(),
                 capture_output=True,
-                timeout=10,
+                timeout=15,
             )
         except subprocess.TimeoutExpired:
             return "ERROR", "gate timed out"
         stdout = proc.stdout.decode(errors="replace").strip()
         if not stdout:
             return "ERROR", "gate produced no output"
-        # Lines: "OK <event>" | "REJECT <detail>" | "ERROR <detail>"
         status, _, detail = stdout.partition(" ")
         return status, detail.strip()
 
@@ -138,8 +222,9 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
     def _parse_args(source: str) -> dict[str, str]:
         """Parse `name(arg: "v", arg2: "w")` into {arg: v, ...}.
 
-        Only called on a line the gate already returned OK for. The quotes are
-        the Koru string convention; unquoted values are passed through.
+        Only called on a line the gate already returned OK for. Structured
+        args (lists/objects) ride inside string values as JSON and pass
+        through untouched.
         """
         m = re.fullmatch(r"\s*[^(\s]+\s*\((.*)\)\s*", source, re.DOTALL)
         if not m:
@@ -162,10 +247,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
 
         # tau3 alternates user turns with tool results. A ToolMessage is DB
         # output, not something the user said: label it the way the wire's
-        # [tool result] convention does, so the model can tell a customer's
-        # words from the environment's answer.
-        from tau2.data_model.message import ToolMessage
-
+        # [tool result] convention does.
         if isinstance(message, ToolMessage):
             shown = f"[tool result] {message.content}"
             state.messages.append(UserMessage.text(shown))
@@ -192,15 +274,16 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         status, detail = self._gate(reply)
         if status == "OK":
             koru_name = detail
-            tau_name = _KORU_TO_TAU.get(koru_name, koru_name)
-            if tau_name == "say":
-                # say(...) is the voice channel: a plain-text assistant message
+            if koru_name in _SPOKEN:
                 args = self._parse_args(reply)
                 text = args.get("text", "")
                 out = AssistantMessage.text(text)
             else:
+                tau_name = self.koru_to_tau.get(koru_name, koru_name)
                 args = {k: v for k, v in self._parse_args(reply).items() if v != ""}
-                out = AssistantMessage.text("", tool_calls=[ToolCall(name=tau_name, arguments=args)])
+                out = AssistantMessage.text(
+                    "", tool_calls=[ToolCall(name=tau_name, arguments=args)]
+                )
         else:
             # REJECT or ERROR: the interpreter refused. The agent says so, as
             # the refusal surface — tau3 scores refusals as correct when the

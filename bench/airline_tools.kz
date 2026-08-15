@@ -1,0 +1,61 @@
+// airline-scope.kz — the τ³ airline domain's tool surface, as a Koru register
+// block. The pilot slice: the tools task 0 (the late-cancellation refusal)
+// needs — the reads that let the agent verify the reservation, the write that
+// the POLICY may forbid (cancel-reservation), and the voice channel `say`.
+//
+// Structured τ³ arguments (flights: List[FlightInfo], passengers: List[...],
+// payment_methods: [...]) ride inside Koru STRING params as JSON. The register
+// block still vets the verb and the flat scalars; Python materializes the
+// JSON into τ³'s typed payloads. Full type-carrying grammar (lists of records
+// as first-class Koru values) is the R2 rung — not this slice.
+//
+// Procs are stubs: τ³ executes the real tools on its fake DB. The block's job
+// is the same as in the mock — an event not declared here is refused by the
+// interpreter before Python ever sees it.
+
+~import std/runtime
+
+const std = @import("std");
+
+~pub tor say { text: string }
+
+~proc say|zig {
+    _ = text;
+}
+
+// Reads — the agent's eyes on the reservation before deciding anything.
+~pub tor get-user-details { user_id: string }
+
+~proc get-user-details|zig {
+    _ = user_id;
+}
+
+~pub tor get-reservation-details { reservation_id: string }
+
+~proc get-reservation-details|zig {
+    _ = reservation_id;
+}
+
+~pub tor search-direct-flight { origin: string, destination: string, date: string }
+
+~proc search-direct-flight|zig {
+    _ = origin;
+    _ = destination;
+    _ = date;
+}
+
+// The write the policy guards. IN the block so the model CAN call it — the
+// refusal is the model applying the policy, scored byte-for-byte on the DB.
+~pub tor cancel-reservation { reservation_id: string }
+
+~proc cancel-reservation|zig {
+    _ = reservation_id;
+}
+
+~std/runtime:register(scope: "airline") {
+    say(1)
+    get-user-details(1)
+    get-reservation-details(1)
+    search-direct-flight(1)
+    cancel-reservation(10)
+}

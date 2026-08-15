@@ -34,7 +34,7 @@ from tau2.runner import build_environment, build_user, get_tasks, run_simulation
 from kopium_agent import KopiumAgent
 
 HERE = Path(__file__).parent
-GATE = HERE / "a.out"
+GATE = HERE / "mock-gate-binary"
 
 
 def main() -> None:
@@ -59,7 +59,7 @@ def main() -> None:
     agent = KopiumAgent(
         tools=env.get_tools(),
         domain_policy=env.get_policy(),
-        gate_binary=GATE,
+        gate_binary=GATE, domain="mock",
         llm=llm,
     )
     user = build_user("user_simulator", env, task, llm=llm)

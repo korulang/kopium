@@ -7,3 +7,5 @@ compiler_env.zig
 program.ast.json
 .zig-cache/
 __pycache__/
+airline-gate
+mock-gate-binary
