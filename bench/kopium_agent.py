@@ -100,9 +100,18 @@ AIRLINE_CONFIG = DomainConfig(
     koru_to_tau={
         "get-user-details": "get_user_details",
         "get-reservation-details": "get_reservation_details",
+        "list-all-airports": "list_all_airports",
         "search-direct-flight": "search_direct_flight",
+        "search-onestop-flight": "search_onestop_flight",
+        "get-flight-status": "get_flight_status",
+        "book-reservation": "book_reservation",
         "cancel-reservation": "cancel_reservation",
+        "send-certificate": "send_certificate",
+        "update-reservation-flights": "update_reservation_flights",
+        "update-reservation-passengers": "update_reservation_passengers",
+        "update-reservation-baggages": "update_reservation_baggages",
         "transfer-to-human-agents": "transfer_to_human_agents",
+        "calculate": "calculate",
     },
     extra_rules=[
         "The cancellation API does NOT check whether cancellation is allowed. "
@@ -110,6 +119,8 @@ AIRLINE_CONFIG = DomainConfig(
         "policy forbids it (more than 24 hours after booking, no insurance "
         "covering the reason, portion already flown), refuse via say(text: ...) "
         "and do NOT call cancel-reservation.",
+        "Structured arguments (flights, passengers, payment_methods) are JSON: "
+        "write them as a single string argument containing a JSON array/object.",
         "Only pass arguments the user actually gave you.",
     ],
 )
@@ -265,8 +276,34 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         if not reply:
             reply = 'say(text: "I need a moment.")'
 
-        # 2. The Koru gate decides.
+        # 2. The Koru gate decides. A REJECT means the line was not Koru or not
+        #    in the vocabulary — the interpreter refusing exactly as designed.
+        #    But a drift is not a customer-facing event: it is an internal
+        #    mistake the model should get ONE chance to fix before we burn the
+        #    turn on a spoken refusal. Retry once with the rejection as the
+        #    instruction, because in-vocabulary drift is the one failure mode
+        #    the register block can only detect, not prevent.
         status, detail = self._gate(reply)
+        if status != "OK":
+            state.messages.append(
+                UserMessage.text(
+                    f"[internal] Your last reply was not accepted: {detail}. "
+                    f"Reply with EXACTLY ONE invocation from the vocabulary."
+                )
+            )
+            response = generate(
+                model=self.llm,
+                messages=state.system_messages + state.messages,
+                **self.llm_args,
+            )
+            reply = (response.content or "").strip()
+            if reply.startswith("```"):
+                reply = re.sub(r"```(?:[a-z]*)\n?", "", reply).strip()
+                reply = reply.split("```")[0].strip()
+            if not reply:
+                reply = 'say(text: "I need a moment.")'
+            status, detail = self._gate(reply)
+
         if status == "OK":
             event_name, _, value_json = detail.partition(" ")
             if event_name in _SPOKEN:
@@ -280,9 +317,9 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                     "", tool_calls=[ToolCall(name=tau_name, arguments=args)]
                 )
         else:
-            # REJECT or ERROR: the interpreter refused. The agent says so, as
-            # the refusal surface — tau3 scores refusals as correct when the
-            # policy demands one.
+            # Second rejection: the model cannot find the vocabulary. Say so —
+            # tau3 scores refusals as correct when the policy demands one, and
+            # a breakdown that says nothing is worse than an honest one.
             out = AssistantMessage.text(f"I cannot do that: {detail}")
 
         state.messages.append(out)
