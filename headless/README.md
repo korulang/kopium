@@ -26,12 +26,28 @@ turn 2  model wants to: write into the note I opened last turn
 turn 3  model wants to: close note_7 (a handle nobody ever gave me)
   tool> close(handle: "note_7")
   REFUSED: HandleNotHeld — 'close' never ran
+
+turn 4  model wants to: teach the session a new verb that wraps a voice line
+  tool> tor greet { msg: string }
+greet = say(text: msg)
+  defined greet — the session's vocabulary now includes it
+
+turn 5  model wants to: use the verb it just defined
+  tool> greet(msg: "hello from a defined flow")
+      hello from a defined flow
+  ok — bridge now holds 1 resource(s)
+--- the derived vocabulary now includes the session's inventions
+open(path: string)
+append(handle: string<!open>, text: string)
+close(handle: string<!open>)
+say(text: string)
+greet(msg: string)
 --- transcript ends; no hang-up is written below this line
       [disk] note closed, fd released
 [BRIDGE] Invoked 'close' for handle 'note_0' [app.notes:open]
 ```
 
-## The four things it shows
+## The five things it shows
 
 1. **Turn 1 opens a note, and the turn ends holding it.** Not a leak — an
    outstanding obligation the bridge is carrying on the agent's behalf.
@@ -41,7 +57,15 @@ turn 3  model wants to: close note_7 (a handle nobody ever gave me)
    A confident wrong answer is the single most likely thing an LLM emits, so
    the tool surface needs a refusal rather than a validator. Cost: a diagnostic,
    not somebody else's file descriptor.
-4. **No hang-up is written in `session.k`.** `std/bridge:close` is void, so it
+4. **Turn 4 defines a verb through the same `run` the invocations use.** The
+   run loop discriminates declaration from invocation (the R1 rung of
+   `KOPIUM_RUNTIME.md`): a source starting with `tor` is installed into the
+   session's defined-flows table and reported as `defined greet` — no separate
+   define verb, no register ceremony. Turn 5 dispatches it with its param
+   bound, and the vocabulary print at the end shows the invention sitting
+   alongside the compiled scope: `greet(msg: string)`. What the agent invented
+   is what its own derived prompt will show the agent next session.
+5. **No hang-up is written in `session.k`.** `std/bridge:close` is void, so it
    is a legal auto-discharge candidate and the compiler appends it. Build with
    `--auto-discharge=disable` and the same program is refused by name:
 
@@ -109,7 +133,7 @@ and demonstrated red against the unfixed compiler before the pin was written.
 
 ## What this is not
 
-- **Not wired to a model.** `model.kz` is three canned replies. Swapping that
+- **Not wired to a model.** `model.kz` is five canned replies. Swapping that
   tor for `d_turns.k`'s streaming path is the whole difference, and it is gated
   on kopium's hole 3 (`as.string` returns a borrow into a doc the caller closes,
   so live replies come back as NUL bytes today).
