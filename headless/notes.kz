@@ -1,0 +1,141 @@
+// The agent's ENTIRE vocabulary — three verbs over real files on disk.
+//
+// The `register` block at the bottom is the permission model. It is not a
+// description of the tools; it is the allow-list the interpreter dispatches
+// against, and an event the agent names that is not in it comes back
+// `event-denied`. Tool permissions are a Koru declaration, read by the
+// compiler, rather than a JSON schema checked by hand.
+//
+// `append` consumes `<!open>` and re-issues `<open!>` — the transaction shape
+// (`tx.exec`), not a convenience. USING the note is what proves you hold it, so
+// a forged handle is refused at `append` and not only at `close`. Model it as a
+// plain `string` and the possession check covers teardown while leaving every
+// read and write unguarded, which is the wrong half.
+
+~import std/runtime
+
+const std = @import("std");
+
+const MAX_NOTES = 8;
+
+var files: [MAX_NOTES]?std.fs.File = .{null} ** MAX_NOTES;
+var opened: usize = 0;
+
+// Handles are minted into module-held storage rather than allocated. A proc
+// returning a bare `-> string` owns what it hands back, and nothing in the
+// interpreter path frees it — the pool dupes into its own arena and releases
+// that copy, so an allocPrint here is a leak the produced program's counter
+// catches on the way out. `kopium/auth.kz` reaches for the same pattern.
+var handle_buf: [MAX_NOTES][16]u8 = undefined;
+var handle_len: [MAX_NOTES]usize = .{0} ** MAX_NOTES;
+
+fn slotOf(handle: []const u8) ?usize {
+    // Handles are minted as "note_<slot>"; the interpreter has already refused
+    // any handle this pool never issued before we are reached.
+    if (!std.mem.startsWith(u8, handle, "note_")) return null;
+    const n = std.fmt.parseInt(usize, handle["note_".len..], 10) catch return null;
+    if (n >= MAX_NOTES) return null;
+    return n;
+}
+
+// ============================================================================
+
+~pub tor open { path: string } -> string<open!>
+
+~proc open|zig {
+    const slot = $mod.opened;
+    if (slot >= MAX_NOTES) @panic("notes: too many open notes");
+    $mod.opened += 1;
+
+    const f = std.fs.cwd().createFile(path, .{ .truncate = true }) catch |e| {
+        std.debug.panic("notes: could not create '{s}': {s}", .{ path, @errorName(e) });
+    };
+    $mod.files[slot] = f;
+
+    const minted = std.fmt.bufPrint(&$mod.handle_buf[slot], "note_{d}", .{slot}) catch @panic("notes: handle too long");
+    $mod.handle_len[slot] = minted.len;
+    return $mod.handle_buf[slot][0..$mod.handle_len[slot]];
+}
+
+~pub tor append { handle: string<!open>, text: string } -> string<open!>
+
+~proc append|zig {
+    const slot = slotOf(handle) orelse @panic("notes: append on a handle this module never minted");
+    const f = $mod.files[slot] orelse @panic("notes: append on a closed note");
+    f.writeAll(text) catch @panic("notes: write failed");
+    f.writeAll("\n") catch @panic("notes: write failed");
+    return handle;
+}
+
+~pub tor close { handle: string<!open> }
+
+~proc close|zig {
+    const slot = slotOf(handle) orelse @panic("notes: close on a handle this module never minted");
+    if ($mod.files[slot]) |f| {
+        f.close();
+        $mod.files[slot] = null;
+        if (!$mod.quiet) std.debug.print("      [disk] note closed, fd released\n", .{});
+    }
+}
+
+
+
+// ============================================================================
+// HUSH — a TUI owns the terminal, and these procs do not
+// ============================================================================
+//
+// `std.debug.print` goes to stderr, straight at the terminal, while vaxis
+// renders the screen on stdout with cursor positioning. Two writers, one
+// terminal: the output interleaves character by character and the pane turns to
+// noise. Harmless in session.k and live.k, where the prints ARE the output;
+// fatal the moment there is a screen.
+//
+// headed.k calls this once at startup. The transcript still shows every
+// invocation, so nothing is lost — the app renders, the module stops shouting.
+
+var quiet: bool = false;
+
+~pub tor hush {}
+
+~proc hush|zig {
+    $mod.quiet = true;
+}
+
+// ============================================================================
+// SAY — the agent's voice, and it is a TOOL CALL like any other
+// ============================================================================
+//
+// Added 2026-08-07 after Lars typed "Hey, what's up?" at the TUI and the agent
+// opened a file. That was not the model improvising: the prompt said "reply
+// with ONE invocation and nothing else, no prose", so a conversational turn had
+// NO legal answer and the model picked the most plausible verb it had.
+//
+// The fix is not a prose escape hatch. Speaking is something the agent does, so
+// it belongs in the vocabulary where every other thing it does lives — declared
+// in the register block, dispatched through the interpreter, refusable. The
+// permission model then covers talking too, which a side channel would not.
+//
+// It holds no resource and mints no obligation: saying something is the one
+// verb here with nothing to clean up.
+
+~pub tor say { text: string }
+
+~proc say|zig {
+    if (!$mod.quiet) std.debug.print("      {s}\n", .{text});
+}
+
+// ============================================================================
+// THE PERMISSION MODEL
+// ============================================================================
+//
+// Everything the agent may call, and nothing else. The numbers are per-call
+// costs — the budget knob the interpreter already carries. Metering is parked
+// as a feature, so nothing here sets a limit; the costs are declared because
+// this is the shape that would want one first.
+
+~std/runtime:register(scope: "notes") {
+    open(10)
+    append(1)
+    close(1)
+    say(1)
+}

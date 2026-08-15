@@ -1,0 +1,238 @@
+// kopium-headless — the transport, so `live.k` can stay about the bridge.
+//
+// WHAT LIVES WHERE, and it is a rule rather than a habit: **session state
+// lives in the store; a startup constant does not.** The transcript and the
+// in-flight reply both change every turn and are the session — they are
+// store-held Strings in `live.k`. The bearer token is read once before the
+// first turn and never again; it is module state, and that is the whole
+// honest reason.
+//
+// This file previously held the transcript in a `[16384]u8` module buffer and
+// justified it with "a tor param inside a SWEEP arm would be 690_234". That
+// was WRONG WHEN WRITTEN. 690_234 landed 2026-08-03 and is MUST_RUN green; the
+// justification was copied from `kopium/auth.kz`, where it had been true, and
+// never rechecked. `probe_store.k` settles it directly: a tor whose parameter
+// is the bridge reads a store-held String in a sweep arm and dispatches it.
+//
+// The hand-rolled version was also strictly worse than the store. It was a
+// fixed 16 KiB with oldest-wins-stops-growing, so a long enough conversation
+// would silently stop recording; a store-held String grows.
+//
+// The DELTA path needs nothing from holes/3: `live.k` appends each delta
+// inside the arm that still owns the yyjson doc, so no borrow escapes an
+// arena. The REPLY path did need it, and now uses it — `clean` below returns
+// an owned String rather than a sub-slice of its input, which is holes/3's
+// workaround shape applied to 610_007's own example.
+
+~import std/string
+~import std/runtime
+
+const std = @import("std");
+
+// ============================================================================
+// AUTH — read once at startup, never again. Not session state.
+// ============================================================================
+
+~pub tor bearer { key: string } -> string
+
+~proc bearer|zig {
+    return std.fmt.allocPrint(std.heap.page_allocator, "Bearer {s}", .{key}) catch @panic("kopium: OOM building auth header");
+}
+
+var auth_buf: [512]u8 = undefined;
+var auth_len: usize = 0;
+
+~pub tor remember { auth: string }
+
+~proc remember|zig {
+    if (auth.len > $mod.auth_buf.len) @panic("kopium: bearer too long");
+    @memcpy($mod.auth_buf[0..auth.len], auth);
+    $mod.auth_len = auth.len;
+}
+
+~pub tor recall {} -> string
+
+~proc recall|zig {
+    return $mod.auth_buf[0..$mod.auth_len];
+}
+
+// ============================================================================
+// REPLY CLEANUP — pure, no state
+// ============================================================================
+
+// The accumulated reply, with surrounding whitespace and any markdown fence
+// stripped, reduced to its first line. A chat model wraps code in ``` about
+// half the time, and the interpreter is owed source, not a transcript of one.
+//
+// COPY AT THE BOUNDARY (610_007 stage 2). This used to be `{ raw: string } ->
+// string`, returning a SUB-SLICE of its input — a borrow travelling upward out
+// of a tor, which is exactly what 610_007's ruling bans ("borrows flow down,
+// never up"). Its callers then carried that slice of the store-held `reply`
+// String through `remember-said`, `record` and `std/bridge:run`, safe only
+// because nobody on those paths happens to touch the reply store. Nothing
+// checked that, and `append`/`clear` on the owner would have killed the slice
+// with no free anywhere in sight (610_008).
+//
+// Now the sub-slicing stays private in `clean-span` and `clean` hands back an
+// OWNED `*String<view!>`. The copy carries an obligation, so it cannot leak the
+// way a plain allocating `string` return would; the caller reads it, uses it,
+// and frees it inside one visible flow. One memcpy of a chat line, once per
+// turn, on a network boundary — the cost 610_007 priced as noise.
+~pub tor clean { raw: string }
+| ok *std/string:String<std/string:view!>
+| err string
+
+~clean = clean-span(raw): span |> std/string:from-page(text: span)
+| ok s => ok s
+| err e => err e
+
+// The byte arithmetic, and nothing else. Deliberately NOT `pub`: its result is
+// a sub-slice of `raw` and must not travel, so its one caller is the line above.
+~tor clean-span { raw: string } -> string
+
+~proc clean-span|zig {
+    var s = std.mem.trim(u8, raw, " \t\r\n");
+
+    if (std.mem.startsWith(u8, s, "```")) {
+        const nl = std.mem.indexOfScalar(u8, s, '\n') orelse s.len;
+        s = s[@min(nl + 1, s.len)..];
+        if (std.mem.lastIndexOf(u8, s, "```")) |end| s = s[0..end];
+        s = std.mem.trim(u8, s, " \t\r\n");
+    }
+
+    // One invocation per turn: if the model volunteered prose after it, keep
+    // the first line. A tool call is a line, and this is the cheapest way to
+    // be strict about that without pretending to parse Koru here.
+    if (std.mem.indexOfScalar(u8, s, '\n')) |nl| s = std.mem.trim(u8, s[0..nl], " \t\r");
+
+    return s;
+}
+
+// ============================================================================
+// MESSAGE BUILDING — the transcript is bytes the store holds, built here
+// ============================================================================
+
+// One chat message, escaped and comma-prefixed, ready to append to the
+// transcript String and splice straight into a request body.
+~pub tor msg { role: string, content: string } -> string
+
+~proc msg|zig {
+    const alloc = std.heap.page_allocator;
+    var out = std.ArrayListUnmanaged(u8){};
+    out.appendSlice(alloc, ",{\"role\":\"") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, role) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, "\",\"content\":\"") catch @panic("kopium: OOM");
+    jsonEscape(alloc, &out, content);
+    out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
+    return out.toOwnedSlice(alloc) catch @panic("kopium: OOM");
+}
+
+// ============================================================================
+// THE PROMPT — the vocabulary IS the `register` block, rendered for the model
+// ============================================================================
+//
+// CLOSED 2026-08-13. This used to be duplication: `notes.kz` declared the
+// agent's whole vocabulary in a form the compiler reads, and the prompt below
+// restated the same facts in English — two sources of truth that drifted, with
+// only `event-denied` at runtime to catch it. `std/runtime:scope-vocabulary`
+// (koru b1c4ecb6 / 430_057) is the surface that was missing: a running program
+// asks a scope what it holds and gets `name(arg: type<!obligation>)` lines
+// straight out of the compiled descriptor. The prompt and the enforcement are
+// the same bytes now; the prose below is guidance, not vocabulary.
+
+// ============================================================================
+// THE VOCABULARY — fetched from the `register` block once, held like the auth
+// ============================================================================
+//
+// `auth` above is the model: read once at startup, held in a module buffer,
+// read again through a proc. The vocabulary is the same shape — it comes from
+// `std/runtime:scope-vocabulary` (koru b1c4ecb6 / 430_057), which renders the
+// scope's events from the compiled descriptor — the prompt and the enforcement
+// are the same bytes. The FLOW below is the real
+// graph reference that retains scope-vocabulary (a raw handler call out of a
+// `|zig` body would be stripped by dead-code elimination, which only sees Koru
+// graph edges). Callers run `warm-vocab()` once at startup, exactly as they
+// do bearer/remember/recall.
+
+~pub tor warm-vocab {}
+
+~warm-vocab = std/runtime:scope-vocabulary(name: "notes")
+| ok v |> remember-vocab(vocab: v)
+| not-found |> remember-vocab(vocab: "!! scope-vocabulary: scope 'notes' not found !!")
+
+var vocab_buf: [2048]u8 = undefined;
+var vocab_len: usize = 0;
+
+~tor remember-vocab { vocab: string }
+
+~proc remember-vocab|zig {
+    if (vocab.len > $mod.vocab_buf.len) @panic("kopium: vocabulary too long for its buffer");
+    @memcpy($mod.vocab_buf[0..vocab.len], vocab);
+    $mod.vocab_len = vocab.len;
+}
+
+~pub tor agent-body { goal: string, history: string } -> string
+
+~proc agent-body|zig {
+    const alloc = std.heap.page_allocator;
+    const vocab = $mod.vocab_buf[0..$mod.vocab_len];
+
+    const rules =
+        \\You are driving a Koru interpreter. Every reply you make is exactly one Koru
+        \\invocation — including when you are just talking. There is no prose channel:
+        \\to say something, call say().
+        \\
+        \\Your vocabulary is exactly these events, derived from the scope declaration:
+        \\
+    ;
+
+    const rules2 =
+        \\
+        \\Rules:
+        \\- Reply with ONE invocation and nothing else. No markdown, no backticks.
+        \\- Arguments are name: value pairs, values are double-quoted strings.
+        \\- Do NOT write a leading ~ . That character is not legal here.
+        \\- An argument whose type carries <!name> is a HANDLE: a value you were
+        \\  issued by an earlier call and still hold. Never invent one.
+        \\- If the human is chatting, asking a question, or you are unsure what they
+        \\  want, use say(). Do NOT touch a file to fill a conversational turn.
+        \\- Only open/append/close when the human actually asked for something to
+        \\  happen to a note.
+        \\- Handles are issued by open(). Handles you opened in earlier turns are
+        \\  STILL OPEN — this session outlives each turn, so never reopen something
+        \\  you already opened.
+        \\
+        \\Examples of well-formed replies:
+        \\say(text: "Not much — tell me a note to open.")
+        \\say(text: "I opened chat.txt as note_0.")
+        \\open(path: "notes.txt")
+        \\append(handle: "note_0", text: "hello")
+        \\close(handle: "note_0")
+    ;
+
+    var out = std.ArrayListUnmanaged(u8){};
+    out.appendSlice(alloc, "{\"model\":\"anthropic/claude-haiku-4.5\",\"stream\":true,\"max_tokens\":100,\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
+    jsonEscape(alloc, &out, rules);
+    jsonEscape(alloc, &out, vocab);
+    jsonEscape(alloc, &out, rules2);
+    out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, history) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, ",{\"role\":\"user\",\"content\":\"") catch @panic("kopium: OOM");
+    jsonEscape(alloc, &out, goal);
+    out.appendSlice(alloc, "\"}]}") catch @panic("kopium: OOM");
+    return out.toOwnedSlice(alloc) catch @panic("kopium: OOM");
+}
+
+fn jsonEscape(alloc: std.mem.Allocator, out: *std.ArrayListUnmanaged(u8), text: []const u8) void {
+    for (text) |ch| {
+        switch (ch) {
+            '"' => out.appendSlice(alloc, "\\\"") catch @panic("kopium: OOM"),
+            '\\' => out.appendSlice(alloc, "\\\\") catch @panic("kopium: OOM"),
+            '\n' => out.appendSlice(alloc, "\\n") catch @panic("kopium: OOM"),
+            '\t' => out.appendSlice(alloc, "\\t") catch @panic("kopium: OOM"),
+            else => {
+                if (ch >= 0x20) out.append(alloc, ch) catch @panic("kopium: OOM");
+            },
+        }
+    }
+}
