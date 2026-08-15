@@ -6,3 +6,4 @@ build.zig
 compiler_env.zig
 program.ast.json
 .zig-cache/
+__pycache__/
