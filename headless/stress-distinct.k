@@ -19,6 +19,10 @@
 // construct), mirroring std/runtime:run|zig's exact dispatch fields.
 //
 //      koruc stress-distinct.k && ./a.out 900
+//
+// Exit contract: exit 0 = possession held (all forged refused, reals
+// accepted); exit 1 = possession broken. Nothing parses stdout; the
+// process itself is the verdict.
 
 import std/bridge
 import std/io
@@ -126,6 +130,11 @@ proc hammer|zig {
         std.debug.print("    RESULT: POSSESSION DISTINGUISHES — {d}/{d} forged refused, both held accepted\n", .{ count, count });
     } else {
         std.debug.print("    RESULT: POSSESSION BROKEN\n", .{});
+        // The exit contract: a broken run must fail the process, so the
+        // harness works as a scriptable gate (CI, status checks) without
+        // anything parsing stdout. Exit 0 is the holds verdict, exit 1 is
+        // possession broken.
+        std.process.exit(1);
     }
 }
 
