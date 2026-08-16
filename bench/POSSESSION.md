@@ -24,19 +24,14 @@ the handle count stayed honest while the side effect fired anyway. That is
 the prime-agent equivalent: IPython executes `os.remove(...)` on a path the
 model invented; there is no possession layer to refuse it.
 
-## The scorecard (2026-08-16, koru HEAD `bc554f03`)
+## The scorecard (2026-08-16, koru HEAD `0c2538dd`)
 
-**Resolved: the full 440 family is GREEN on a clean tree.**
+**Resolved: the full 440 family is GREEN — 16/16 on a clean tree.**
 
 The authoritative suite snapshot (`test-results/2026-08-16T13-28-22.json`)
-shows 9/13 green (440_005..013 success, 001..004 failure). The four
-failures were an artifact: this author's earlier single-test runs raced
-the suite's live checkout and clobbered those test dirs mid-suite (the
-harness's own lock warns about exactly this; stale FAILURE markers also
-survived in 001/002/004 until removed).
-
-Re-verification in a clean worktree at the pinned commit
-(`/private/tmp/koru-base`, bc554f03), uncontended:
+shows 9/13 green, but that predates the gauntlet rungs that landed after
+it. Re-verified by both a worktree run and a live full-cluster sweep at
+the current HEAD, uncontended:
 
 | test | property | clean-tree |
 |---|---|---|
@@ -44,15 +39,26 @@ Re-verification in a clean worktree at the pinned commit
 | 440_002 cross_session_discharge | open in run 1, close in run 2 | ✅ |
 | 440_003 forged_handle_refused | `close("file_99")` refused BEFORE proc | ✅ |
 | 440_004 bridge_session_hangup | close releases what the session holds | ✅ |
+| 440_010 guarded_withdrawal | provider outlives dependents at release | ✅ |
+| 440_011 lifo_release_order | independent handles release LIFO | ✅ |
+| 440_012 redefine_resolves | redefinition truly replaces the body | ✅ |
+| 440_013 recovery_exactness | accumulator applies each inverse once | ✅ |
+| 440_014 transitive_chain | three-level chain releases leaf-first | ✅ |
+| 440_015 dual_provider | both providers outlive the merged handle | ✅ |
+| 440_016 false-release gate | unimplemented discharge REFUSED, not silent | ✅ |
 
-Combined with the suite's 440_005..013 greens, the family is effectively
-13/13 on a clean tree. The load-bearing walls of this benchmark — forged
-handle refused, cross-turn conversation — are green and reproducible.
+440_016 is the strongest possession wall this benchmark measures: a
+discharge event declared with the `<!query>` phantom but no implementation
+used to get a synthesized no-op handler — the pool printed `Invoked`,
+marked the handle released, and close reported success while the resource
+was never freed. The register transform now refuses discharge claims
+without an implementation; the leak strands and close panics with the
+count. The load-bearing walls — forged handle refused, cross-turn
+conversation, and now false-release refused — are green and reproducible.
 
-Caveat retained: `koru_std/rules.kz` carries an uncommitted modification
-in the main checkout (the earlier frontend parse error named it); the
-worktree run used the pinned clean revision. A suite from the dirty main
-tree may still flake on it.
+Caveat retired: the `koru_std/rules.kz` uncommitted-modification caveat no
+longer applies — the file is clean at `0c2538dd` (the earlier frontend
+parse error was resolved upstream).
 
 ## headless demo status
 
