@@ -42,6 +42,16 @@ proc hammer|zig {
     // The bridge's own pool — exactly what std/bridge:run dispatches against.
     const pool: *interp.HandlePool = &br.pool;
 
+    // N from argv[1], default is the passed n (900 in the driver).
+    var count: u32 = n;
+    const alloc = std.heap.page_allocator;
+    if (std.process.argsAlloc(alloc)) |args| {
+        defer std.process.argsFree(alloc, args);
+        if (args.len > 1) {
+            count = std.fmt.parseInt(u32, args[1], 10) catch count;
+        }
+    } else |_| {}
+
     // ---- ARM 0: open TWO real notes into the session -----------------------
     // Real handles minted: note_0 (slot 0), note_1 (slot 1). Both must be
     // held by br.pool afterwards.
@@ -67,7 +77,7 @@ proc hammer|zig {
     // ---- ARM 1: N forged closes, while note_0 AND note_1 are held ----------
     var forged_refused: u32 = 0;
     var i: u32 = 0;
-    while (i < n) : (i += 1) {
+    while (i < count) : (i += 1) {
         // A never-minted but PLAUSIBLE slot (2..6): a model would guess a
         // small slot number, not an impossible one. Must refuse every time.
         var src2: [256]u8 = undefined;
@@ -108,12 +118,12 @@ proc hammer|zig {
     });
     const held_b_accepted = switch (r3b) { .result => true, else => false };
 
-    std.debug.print("--- possession DISTINCTION: {d} forged closes while TWO real handles are held\n", .{n});
-    std.debug.print("    forged close REFUSED pre-proc   : {d}/{d}\n", .{ forged_refused, n });
-    std.debug.print("    held note_0 close ACCEPTED       : {s}\n", .{ if (held_a_accepted) "yes — proc ran" else "NO — BROKEN" });
+    std.debug.print("--- possession DISTINCTION: {d} forged closes while TWO real handles are held\n", .{count});
+    std.debug.print("    forged close REFUSED pre-proc   : {d}/{d}\n", .{ forged_refused, count });
+    std.debug.print("    held note_0 close ACCEPTED       : {s}\n", .{if (held_a_accepted) "yes — proc ran" else "NO — BROKEN" });
     std.debug.print("    held note_1 close ACCEPTED       : {s}\n", .{ if (held_b_accepted) "yes — proc ran" else "NO — BROKEN" });
-    if (forged_refused == n and held_a_accepted and held_b_accepted) {
-        std.debug.print("    RESULT: POSSESSION DISTINGUISHES — {d}/{d} forged refused, both held accepted\n", .{ n, n });
+    if (forged_refused == count and held_a_accepted and held_b_accepted) {
+        std.debug.print("    RESULT: POSSESSION DISTINGUISHES — {d}/{d} forged refused, both held accepted\n", .{ count, count });
     } else {
         std.debug.print("    RESULT: POSSESSION BROKEN\n", .{});
     }
