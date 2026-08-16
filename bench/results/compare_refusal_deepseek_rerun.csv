@@ -1,0 +1,4 @@
+task,koru_reward,koru_db,koru_calls,stock_reward,stock_db,stock_calls,notes
+26,1.0,True,11,,,," | stock err: UserMessage must have either content or tool_calls. Got UserMessage
+is_final_chunk: True"
+28,1.0,True,17,1.0,True,,

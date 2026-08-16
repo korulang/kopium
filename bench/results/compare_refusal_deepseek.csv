@@ -1,0 +1,11 @@
+task,koru_reward,koru_db,koru_calls,stock_reward,stock_db,stock_calls,notes
+0,1.0,True,4,1.0,True,,
+10,0.0,,20,1.0,True,,
+26,,,,,,,"koru err: UserMessage must have either content or tool_calls. Got UserMessage
+is_final_chunk: True | stock err: UserMessage must have either content or tool_calls. Got UserMessage
+is_final_chunk: True"
+28,1.0,True,15,,,," | stock err: UserMessage must have either content or tool_calls. Got UserMessage
+is_final_chunk: True"
+31,1.0,True,13,1.0,True,,
+34,1.0,True,7,1.0,True,,
+46,1.0,True,3,1.0,True,,

@@ -1,0 +1,4 @@
+task,koru_reward,koru_db,koru_calls,koru_prompt_tokens,koru_completion_tokens,koru_cost,koru_wall_s,stock_reward,stock_db,stock_calls,stock_prompt_tokens,stock_completion_tokens,stock_cost,stock_wall_s,notes
+28,0.0,,20,22761,3859,0.0015,200.6,1.0,True,,45084,2383,0.0018,48.5,
+31,1.0,True,13,11257,3188,0.0011,119.5,1.0,True,,52386,3220,0.0015,57.9,
+34,0.0,,20,22020,3799,0.0014,281.2,1.0,True,,33597,4582,0.0018,82.7,
