@@ -109,6 +109,22 @@ proves you hold it, so a forged handle is refused at `append` and not only at
 `close`. Model the handle as a plain `string` and the possession check covers
 teardown while leaving every read and write unguarded — which is the wrong half.
 
+## The possession claim, as a gate
+
+`stress-distinct.k` runs the claim at volume in one compiled Koru program: two
+real notes held concurrently on the bridge's own pool, N forged closes
+refused before their procs run, both real closes accepted. The process exit
+code IS the verdict — 0 holds, 1 broken — so nothing parses stdout:
+
+```
+./possession-check.sh            # 900 forged closes
+./possession-check.sh 100000     # any volume
+```
+
+The same distinction is field 440_003 in the koru regression suite
+(`400_RUNTIME_FEATURES/440_RESOURCE_BRIDGE/`, 16/16 green): the harness is
+volume on top of the suite's correctness.
+
 ## The toolchain gap it surfaced (fixed, pinned)
 
 First run, the session's hang-up invoked **`append`** and the file descriptor
