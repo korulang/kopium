@@ -95,6 +95,12 @@ def main() -> None:
     suffix = "full"
     if "--suffix" in sys.argv:
         suffix = sys.argv[sys.argv.index("--suffix") + 1]
+    # Early-exit guard: if koru is demonstrably losing by this many tasks and
+    # this large a margin, stop the run instead of burning hours on a verdict
+    # the first N tasks already delivered. `--no-guard` disables.
+    guard_check = int(sys.argv[sys.argv.index("--guard-check") + 1]) if "--guard-check" in sys.argv else 10
+    guard_margin = float(sys.argv[sys.argv.index("--guard-margin") + 1]) if "--guard-margin" in sys.argv else 0.30
+    guard_enabled = "--no-guard" not in sys.argv
 
     domain = "airline"
     if "--ids" in sys.argv:
@@ -146,15 +152,29 @@ def main() -> None:
             print(f"    => koru {kr} (db={kdb}, n={kcalls}, cost=${kcost if kcost is not None else '--'}, wall={kwall if kwall is not None else '--'}s) "
                   f"| stock {sr} (db={sdb}, n={scalls}, cost=${scost if scost is not None else '--'}, wall={swall if swall is not None else '--'}s)", flush=True)
 
-    ok = sum(1 for r in rows if r[1] and r[1] > 0)
+            krn = sum(1 for r in rows if r[1] and r[1] > 0)
+            srn = sum(1 for r in rows if r[8] and r[8] > 0)
+            done = len(rows)
+            if krn and srn:
+                print(f"    tally {done:2d}: koru {krn:2d} ({krn/done*100:3.0f}%)  stock {srn:2d} ({srn/done*100:3.0f}%)  gap {srn-krn:+d}", flush=True)
+                if guard_enabled and done >= guard_check:
+                    gap = (srn - krn) / done
+                    if gap >= guard_margin and srn > krn:
+                        print(f"EARLY-STOP: at {done} tasks koru {krn}/{done} vs stock {srn}/{done} "
+                              f"(gap {gap*100:.0f}pts ≥ {guard_margin*100:.0f}) — losing is established, stopping.", flush=True)
+                        break
+
+    aborted = len(rows) < len(tasks)
+    krn = sum(1 for r in rows if r[1] and r[1] > 0)
+    srn = sum(1 for r in rows if r[8] and r[8] > 0)
     total_costs = [0.0, 0.0]
     for r in rows:
         if r[6]:
             total_costs[0] += r[6]
         if r[13]:
             total_costs[1] += r[13]
-    print(f"done: {len(rows)} tasks, {out_path}")
-    print(f"koru>0: {ok}/{len(rows)}")
+    print(f"done: {len(rows)} tasks, {out_path}" + ("  [EARLY-STOPPED]" if aborted else ""))
+    print(f"koru>0: {krn}/{len(rows)}  stock>0: {srn}/{len(rows)}")
     print(f"total cost: koru=${total_costs[0]:.4f} stock=${total_costs[1]:.4f}")
 
 
