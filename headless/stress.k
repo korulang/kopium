@@ -1,18 +1,20 @@
-// stress.k — run the possession claim 900 times, in-process, pure Koru.
+// stress.k — run the possession claim N times, in-process, pure Koru.
 //
 // The claim under test: a run may only act on a resource the session HOLDS.
 // `close(handle: "<never-minted>")` must be refused BEFORE the proc runs —
-// the proc is the irreversible half. This file proves it at volume: 900
-// forged handles, 900 refusals, zero side effects, all inside one compiled
-// Koru program. No bench driver, no Python, no network.
+// the proc is the irreversible half. This file proves it at volume: N forged
+// handles, N refusals, zero side effects, all inside one compiled Koru
+// program. No bench driver, no Python, no network.
+//
+// Usage:
+//   koruc stress.k && ./a.out            # N = 900 (default)
+//   ./a.out 5000                        # N = 5000
 //
 // The loop lives in a |zig proc body — the dialect's one legitimate loop
 // construct — and mirrors exactly what std/runtime:run|zig does per call:
 // resolve the scope, dispatch the invocation, inspect the outcome. The forged
 // handle is never in the pool, so assertHandlesHeld fires and the close proc
 // never touches a file.
-//
-//   koruc stress.k && ./a.out
 
 import std/bridge
 import std/io
@@ -20,11 +22,12 @@ import app/notes
 
 // ============================================================================
 // THE HAMMER — N forged close()s against the notes scope, counting refusals.
-// Uses the scope's OWN dispatcher + spec functions — the exact ones
-// runtime:run resolves — so this is the real enforcement, at volume.
+// N comes from argv[1] (default 900). Uses the scope's OWN dispatcher + spec
+// functions — the exact ones runtime:run resolves — so this is the real
+// enforcement, at volume.
 // ============================================================================
 
-tor hammer { n: u32 }
+tor hammer { br: *std/bridge:Bridge }
 
 proc hammer|zig {
     const rt = @import("root").koru_std.koru_runtime;
@@ -37,6 +40,16 @@ proc hammer|zig {
         .scope => |s| s,
         .not_found => @panic("stress: scope 'notes' not registered"),
     };
+
+    // N from argv[1], default 900. Zero-fill so an unset arg is the default.
+    var n: u32 = 900;
+    const alloc = std.heap.page_allocator;
+    if (std.process.argsAlloc(alloc)) |args| {
+        defer std.process.argsFree(alloc, args);
+        if (args.len > 1) {
+            n = std.fmt.parseInt(u32, args[1], 10) catch 900;
+        }
+    } else |_| {}
 
     var refused: u32 = 0;
     var i: u32 = 0;
@@ -89,8 +102,8 @@ proc hammer|zig {
 // The driver — shaped exactly like session.k: a bridge session, then one
 // chained call. `hammer` does not use `br` (it needs no session; the pool
 // holds nothing), but threading it keeps the session-lifetime shape intact.
-tor drive { br: *std/bridge:Bridge, n: u32 }
-drive = hammer(n)
+tor drive { br: *std/bridge:Bridge }
+drive = hammer(br)
 
 [with]std/bridge:create(id: "possession-stress", scope: "notes"): br
-|> drive(br, n: 900)
+|> drive(br)
