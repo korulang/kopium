@@ -305,8 +305,11 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         if reply.startswith("```"):
             reply = re.sub(r"```(?:[a-z]*)\n?", "", reply).strip()
             reply = reply.split("```")[0].strip()
-        if not reply:
-            reply = 'say(text: "I need a moment.")'
+        # NO empty-reply fallback: an empty model reply is a real signal
+        # (the model produced no invocation). Feed it to the gate, which
+        # rejects it, and let the one-retry teaching path below recover it —
+        # manufacturing an in-vocabulary "I need a moment." stall instead
+        # would hide failure as progress and burn the turn.
 
         # 2. The Koru gate decides. A REJECT means the line was not Koru or not
         #    in the vocabulary — the interpreter refusing exactly as designed.
@@ -332,8 +335,6 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             if reply.startswith("```"):
                 reply = re.sub(r"```(?:[a-z]*)\n?", "", reply).strip()
                 reply = reply.split("```")[0].strip()
-            if not reply:
-                reply = 'say(text: "I need a moment.")'
             status, detail = self._gate(reply)
 
         if status == "OK":
