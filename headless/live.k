@@ -2,7 +2,7 @@
 //
 // `session.k` is this program with the model canned, so the thing under test
 // is the bridge. This is the other half: the invocations are not written down
-// anywhere. A live claude-haiku-4.5 is handed the `notes` vocabulary and a
+// anywhere. A live deepseek/deepseek-v4-flash-0731 is handed the `notes` vocabulary and a
 // goal, and whatever it emits goes straight to `std/bridge:run`.
 //
 // Nothing validates the model's reply before it runs. That is the point of

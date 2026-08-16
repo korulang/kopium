@@ -48,7 +48,7 @@ var auth_len: usize = 0;
 ~proc chat-body|zig {
     const alloc = std.heap.page_allocator;
     var out = std.ArrayListUnmanaged(u8){};
-    out.appendSlice(alloc, "{\"model\":\"anthropic/claude-haiku-4.5\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, "{\"model\":\"deepseek/deepseek-v4-flash-0731\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"") catch @panic("kopium: OOM");
     for (prompt) |ch| {
         switch (ch) {
             '"' => out.appendSlice(alloc, "\\\"") catch @panic("kopium: OOM"),

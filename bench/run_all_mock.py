@@ -2,7 +2,7 @@
 """
 Run the full mock-domain set against the Koru gate, one line per task.
 
-  python3 bench/run_all_mock.py [--llm openrouter/anthropic/claude-haiku-4.5]
+  python3 bench/run_all_mock.py [--llm openrouter/deepseek/deepseek-v4-flash-0731]
 
 Prints a table: task, reward, agent calls, and the decisive tool call.
 """
@@ -23,7 +23,7 @@ GATE = HERE / "mock-gate-binary"
 
 
 def main() -> None:
-    llm = "openrouter/anthropic/claude-haiku-4.5"
+    llm = "openrouter/deepseek/deepseek-v4-flash-0731"
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
 

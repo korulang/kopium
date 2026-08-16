@@ -153,7 +153,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         domain_policy: str,
         domain: str = "mock",
         gate_binary: Optional[Path] = None,
-        llm: str = "openrouter/anthropic/claude-haiku-4.5",
+        llm: str = "openrouter/deepseek/deepseek-v4-flash-0731",
         llm_args: Optional[dict] = None,
     ):
         super().__init__(tools=tools, domain_policy=domain_policy)

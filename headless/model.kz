@@ -1,6 +1,6 @@
 // The canned model.
 //
-// `d_turns.k` streams real replies from claude-haiku-4.5 over SSE. This file is
+// `d_turns.k` streams real replies from deepseek/deepseek-v4-flash-0731 over SSE. This file is
 // that model with the network taken out and the answers written down, so the
 // harness under test is the BRIDGE and not the transport. Swapping this tor for
 // the live one is the whole difference between headless and wired.

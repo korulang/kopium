@@ -26,7 +26,7 @@ from tau2.evaluator.evaluator import EvaluationType
 from kopium_agent import KopiumAgent
 
 HERE = Path(__file__).parent
-LLM = "openrouter/anthropic/claude-haiku-4.5"
+LLM = "openrouter/deepseek/deepseek-v4-flash-0731"
 
 
 def run_one(agent_cls, task, domain, gate=None):

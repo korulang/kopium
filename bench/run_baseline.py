@@ -11,7 +11,7 @@ from tau2.orchestrator.orchestrator import Orchestrator
 from tau2.runner import build_environment, build_user, get_tasks, run_simulation
 from tau2.evaluator.evaluator import EvaluationType
 
-LLM = "openrouter/anthropic/claude-haiku-4.5"
+LLM = "openrouter/deepseek/deepseek-v4-flash-0731"
 
 
 def main() -> None:

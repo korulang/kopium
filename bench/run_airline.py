@@ -29,7 +29,7 @@ GATE = HERE / "airline-gate-binary"
 
 def main() -> None:
     task_id = sys.argv[1] if len(sys.argv) > 1 else "0"
-    llm = "openrouter/anthropic/claude-haiku-4.5"
+    llm = "openrouter/deepseek/deepseek-v4-flash-0731"
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
 

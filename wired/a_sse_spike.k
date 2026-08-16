@@ -66,7 +66,7 @@ handle-delta = koru/yyjson:parse(text: payload)
 // `poll` under a vaxis tick, and THIS TOR DOES NOT CHANGE SHAPE.
 tor stream { auth: string }
 stream = koru/sse:new(): s |> koru/curl:multi.new()
-|> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: "{\"model\":\"anthropic/claude-haiku-4.5\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with one short cheerful sentence announcing that kopium is streaming.\"}]}", headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } })
+|> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: "{\"model\":\"deepseek/deepseek-v4-flash-0731\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with one short cheerful sentence announcing that kopium is streaming.\"}]}", headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } })
 |> koru/curl:multi.start()
 | started p |> koru/curl:await(p)
     ! chunk ch |> koru/sse:feed(s, bytes: ch.data)

@@ -102,7 +102,7 @@ pump = std/store:query(batch)
 
 tor start-stream { auth: string }
 start-stream = koru/sse:new(): s |> std/store:insert(framer) { s }
-| row _ |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: "{\"model\":\"anthropic/claude-haiku-4.5\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"In two or three cheerful sentences, introduce yourself as kopium, a koru rebirth of the pi coding agent, streaming live inside its own terminal UI for the first time.\"}]}", headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
+| row _ |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: "{\"model\":\"deepseek/deepseek-v4-flash-0731\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"In two or three cheerful sentences, introduce yourself as kopium, a koru rebirth of the pi coding agent, streaming live inside its own terminal UI for the first time.\"}]}", headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
     | started p |> std/store:insert(batch) { p }
         | row _ |> _
         | full f |> koru/curl:cancel(p: f): m |> koru/curl:multi.close(m)

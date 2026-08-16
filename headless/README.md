@@ -1,7 +1,7 @@
 # kopium-headless — an agent whose only tool is a Koru interpreter
 
 `wired/d_turns.k` is the wired client: vaxis chrome, curl multi + SSE, replies
-from `claude-haiku-4.5` streaming into a store-held transcript. It has a network
+from `deepseek/deepseek-v4-flash-0731` streaming into a store-held transcript. It has a network
 and no tools.
 
 This is the same harness with the network taken out and one tool put in. The
@@ -154,7 +154,7 @@ on a branch.
 ## `live.k` — the same agent, with nobody scripting it
 
 `session.k` cans the model so the thing under test is the bridge. `live.k` is
-the other half: `anthropic/claude-haiku-4.5` over OpenRouter is handed the
+the other half: `deepseek/deepseek-v4-flash-0731` over OpenRouter is handed the
 `notes` vocabulary and a goal, and whatever it emits goes straight to
 `std/bridge:run`. Nothing inspects the reply first. Every dispatch outcome is
 appended to the transcript, so the agent finds out what happened.
