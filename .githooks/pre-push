@@ -1,0 +1,26 @@
+#!/bin/bash
+# pre-push — the possession gate, at the push moment.
+#
+# Every push must prove the load-bearing claim of this repo: the compiler
+# refuses a forged handle before the proc runs, and admits exactly what the
+# session holds. `possession-check.sh` builds and runs the dual-hold stress
+# (N=900); its exit code is the verdict (0 holds, 1 broken). A broken claim
+# aborts the push; a missing toolchain fails loud rather than degrading.
+#
+# Bypassing is never the answer — --no-verify ships a lie about the
+# boundary this repo exists to demonstrate.
+
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if ! command -v koruc >/dev/null 2>&1; then
+    echo "pre-push: possession gate blocked — koruc not on PATH." >&2
+    echo "          Build it: cd /Users/larsde/src/koru && zig build" >&2
+    echo "          then symlink zig-out/bin/koruc onto PATH." >&2
+    exit 1
+fi
+
+cd "$root/headless"
+echo "pre-push: possession gate — 900 forged closes, 2 real holds…"
+./possession-check.sh 900

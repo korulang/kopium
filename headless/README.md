@@ -125,6 +125,19 @@ The same distinction is field 440_003 in the koru regression suite
 (`400_RUNTIME_FEATURES/440_RESOURCE_BRIDGE/`, 16/16 green): the harness is
 volume on top of the suite's correctness.
 
+## The gate runs at push time
+
+A committed pre-push hook (`.githooks/pre-push`) runs the gate on every
+push — a broken possession claim aborts the push; a missing `koruc` fails
+loud. Enable it in any checkout:
+
+```
+git config core.hooksPath .githooks
+```
+
+`--no-verify` bypasses it; that is never the answer — it ships a lie about
+the boundary this repo exists to demonstrate.
+
 ## The toolchain gap it surfaced (fixed, pinned)
 
 First run, the session's hang-up invoked **`append`** and the file descriptor
