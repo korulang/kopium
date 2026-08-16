@@ -143,8 +143,8 @@ def main() -> None:
             rows.append(row)
             w.writerow(row)
             f.flush()
-            print(f"    => koru {kr} (db={kdb}, n={kcalls}, cost=${kcost:.4f}, wall={kwall:.1f}s) "
-                  f"| stock {sr} (db={sdb}, n={scalls}, cost=${scost:.4f}, wall={swall:.1f}s)", flush=True)
+            print(f"    => koru {kr} (db={kdb}, n={kcalls}, cost=${kcost if kcost is not None else '--'}, wall={kwall if kwall is not None else '--'}s) "
+                  f"| stock {sr} (db={sdb}, n={scalls}, cost=${scost if scost is not None else '--'}, wall={swall if swall is not None else '--'}s)", flush=True)
 
     ok = sum(1 for r in rows if r[1] and r[1] > 0)
     total_costs = [0.0, 0.0]

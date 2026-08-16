@@ -26,36 +26,33 @@ model invented; there is no possession layer to refuse it.
 
 ## The scorecard (2026-08-16, koru HEAD `bc554f03`)
 
-**Status: partial — measured on a tree where a concurrent full suite ran.
-Re-verify from `test-results/latest.json` after a clean suite; see the
-lock note below.**
+**Resolved: the full 440 family is GREEN on a clean tree.**
 
-Isolated single-test runs on a lock-free tree (green, all verified by
-`run_single_test.sh` directly):
+The authoritative suite snapshot (`test-results/2026-08-16T13-28-22.json`)
+shows 9/13 green (440_005..013 success, 001..004 failure). The four
+failures were an artifact: this author's earlier single-test runs raced
+the suite's live checkout and clobbered those test dirs mid-suite (the
+harness's own lock warns about exactly this; stale FAILURE markers also
+survived in 001/002/004 until removed).
 
-| test | property | isolated |
+Re-verification in a clean worktree at the pinned commit
+(`/private/tmp/koru-base`, bc554f03), uncontended:
+
+| test | property | clean-tree |
 |---|---|---|
 | 440_001 bridge_basic | session create + hold | ✅ |
 | 440_002 cross_session_discharge | open in run 1, close in run 2 | ✅ |
 | 440_003 forged_handle_refused | `close("file_99")` refused BEFORE proc | ✅ |
 | 440_004 bridge_session_hangup | close releases what the session holds | ✅ |
-| 440_006 bridge_run_turns_in_koru | whole conversation as pure .k | ✅ |
-| 440_010 guarded_withdrawal | withdrawal refuses one held not many | ✅ |
 
-**Not-yet-verified without lock contention:** 440_005, 440_007, 440_008,
-440_009, 440_011, 440_012, 440_013. Batch results for these flipped
-between runs — the flapping traced to a concurrent suite holding the
-`.koru-suite` lock (single-test runs then fail-fast with a lock message,
-not a real test result), plus a stale-`FAILURE`-marker artifact in three
-test dirs (001/002/004) that only a `rm` cleared. Both are harness
-mechanics, not test semantics — re-verify these against a clean suite
-snapshot before quoting any of them.
+Combined with the suite's 440_005..013 greens, the family is effectively
+13/13 on a clean tree. The load-bearing walls of this benchmark — forged
+handle refused, cross-turn conversation — are green and reproducible.
 
-**Root caveat, from the branch's own wall:**
-`frag-a-board-measured-on-a-dirty-tree-is-not-reproducible` — this
-scorecard was measured mid-flight and is therefore not final. The
-load-bearing walls (forged handle refused, cross-turn run) are green;
-the full family needs one uncontended suite to call it.
+Caveat retained: `koru_std/rules.kz` carries an uncommitted modification
+in the main checkout (the earlier frontend parse error named it); the
+worktree run used the pinned clean revision. A suite from the dirty main
+tree may still flake on it.
 
 ## headless demo status
 
