@@ -164,7 +164,7 @@ var auth_len: usize = 0;
 
 ~warm-grammar = std/bridge:grammar(br)
 | ok g |> remember-grammar(grammar: g)
-| not-found s |> remember-grammar(grammar: "!! bridge grammar: scope '{{ s:s }}' not found !!")
+| not-found _ |> remember-grammar(grammar: "!! bridge grammar: scope not found !!")
 
 var grammar_buf: [4096]u8 = undefined;
 var grammar_len: usize = 0;
