@@ -142,61 +142,58 @@ var auth_len: usize = 0;
 // the same bytes now; the prose below is guidance, not vocabulary.
 
 // ============================================================================
-// THE VOCABULARY — derived from the SESSION, refreshed every turn
+// THE PROMPT — grammar AND vocabulary derived from the SESSION, refreshed
+// every turn
 // ============================================================================
 //
 // `auth` above is the model: read once at startup, held in a module buffer,
-// read again through a proc. The vocabulary is NOT static — it comes from
-// `std/bridge:vocabulary`, which renders the scope's COMPILED events (the
-// `register` block, koru b1c4ecb6 / 430_057 — the prompt and the enforcement
-// are the same bytes) PLUS the session's runtime-defined flows. An invention
-// the agent defined on turn N appears in its own prompt on turn N+1, so the
-// agent's growth loop closes: define → see → use. The FLOW below keeps
-// vocabulary as a real graph reference (a raw handler call out of a `|zig`
+// read again through a proc. The prompt is NOT static — it comes from
+// `std/bridge:grammar` (koru wire-grammar branch, 430_063 / 440_017), which
+// renders the wire's shape rules — the same sentences `parse.wire` enforces
+// on every turn — above the scope's COMPILED events PLUS the session's
+// runtime-defined flows. An invention the agent defined on turn N appears in
+// its own prompt on turn N+1, so the agent's growth loop closes: define →
+// see → use. The lesson and the law are one declaration read twice; nothing
+// about the grammar is hand-typed here anymore. The FLOW below keeps
+// grammar as a real graph reference (a raw handler call out of a `|zig`
 // body would be stripped by dead-code elimination, which only sees Koru graph
 // edges). Callers re-warm per turn, once the bridge exists — `turn`/`act`
 // invoke it with their `br` in hand.
 
-~pub tor warm-vocab { br: *std/bridge:Bridge }
+~pub tor warm-grammar { br: *std/bridge:Bridge }
 
-~warm-vocab = std/bridge:vocabulary(br)
-| ok v |> remember-vocab(vocab: v)
-| not-found s |> remember-vocab(vocab: "!! bridge vocabulary: scope '{{ s:s }}' not found !!")
+~warm-grammar = std/bridge:grammar(br)
+| ok g |> remember-grammar(grammar: g)
+| not-found s |> remember-grammar(grammar: "!! bridge grammar: scope '{{ s:s }}' not found !!")
 
-var vocab_buf: [2048]u8 = undefined;
-var vocab_len: usize = 0;
+var grammar_buf: [4096]u8 = undefined;
+var grammar_len: usize = 0;
 
-~tor remember-vocab { vocab: string }
+~tor remember-grammar { grammar: string }
 
-~proc remember-vocab|zig {
-    if (vocab.len > $mod.vocab_buf.len) @panic("kopium: vocabulary too long for its buffer");
-    @memcpy($mod.vocab_buf[0..vocab.len], vocab);
-    $mod.vocab_len = vocab.len;
+~proc remember-grammar|zig {
+    if (grammar.len > $mod.grammar_buf.len) @panic("kopium: grammar too long for its buffer");
+    @memcpy($mod.grammar_buf[0..grammar.len], grammar);
+    $mod.grammar_len = grammar.len;
 }
 
 ~pub tor agent-body { goal: string, history: string } -> string
 
 ~proc agent-body|zig {
     const alloc = std.heap.page_allocator;
-    const vocab = $mod.vocab_buf[0..$mod.vocab_len];
+    const grammar = $mod.grammar_buf[0..$mod.grammar_len];
 
     const rules =
-        \\You are driving a Koru interpreter. Every reply you make is exactly one Koru
-        \\invocation — including when you are just talking. There is no prose channel:
-        \\to say something, call say().
-        \\
-        \\Your vocabulary is exactly these events, derived from the scope declaration:
+        \\You are driving a Koru interpreter. Every reply you make is exactly one wire
+        \\line — including when you are just talking. There is no prose channel:
+        \\to say something, call say(). What you may call and how a line is written
+        \\are both derived from the session's own declaration:
         \\
     ;
 
     const rules2 =
         \\
-        \\Rules:
-        \\- Reply with ONE invocation and nothing else. No markdown, no backticks.
-        \\- Arguments are name: value pairs, values are double-quoted strings.
-        \\- Do NOT write a leading ~ . That character is not legal here.
-        \\- An argument whose type carries <!name> is a HANDLE: a value you were
-        \\  issued by an earlier call and still hold. Never invent one.
+        \\Session rules:
         \\- If the human is chatting, asking a question, or you are unsure what they
         \\  want, use say(). Do NOT touch a file to fill a conversational turn.
         \\- Only open/append/close when the human actually asked for something to
@@ -216,7 +213,7 @@ var vocab_len: usize = 0;
     var out = std.ArrayListUnmanaged(u8){};
     out.appendSlice(alloc, "{\"model\":\"deepseek/deepseek-v4-flash-0731\",\"stream\":true,\"max_tokens\":100,\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
     jsonEscape(alloc, &out, rules);
-    jsonEscape(alloc, &out, vocab);
+    jsonEscape(alloc, &out, grammar);
     jsonEscape(alloc, &out, rules2);
     out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
     out.appendSlice(alloc, history) catch @panic("kopium: OOM");

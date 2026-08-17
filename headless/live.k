@@ -182,7 +182,7 @@ clear-reply = std/store:query(reply)
 // One turn. `br` carries no phantom — a turn USES the session, it does not
 // end it.
 tor turn { br: *std/bridge:Bridge, n: u32, goal: string }
-turn = app/wire:warm-vocab(br)
+turn = app/wire:warm-grammar(br)
     |> clear-reply()
     |> std/io:print.ln("")
     |> std/io:print.ln("turn {{ n:d }}  goal: {{ goal:s }}")

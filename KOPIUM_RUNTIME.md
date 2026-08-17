@@ -18,8 +18,8 @@ One declaration, four derived things:
 | derived surface | status | where |
 |---|---|---|
 | **Enforcement** — possession, budget, teardown | DONE | the bridge today (`std/bridge`, the `register` transform, `assertHandlesHeld`) |
-| **Prompt** — the agent's world, byte-identical to enforcement | DONE | `std/runtime:scope-vocabulary` (430_057), consumed by kopium-headless `wire.kz` |
-| **Grammar** — a restricted, terminating wire grammar per vocabulary | TODO | rung R2 below |
+| **Prompt** — the agent's world, byte-identical to enforcement | DONE | `std/runtime:scope-vocabulary` (430_057) + `scope-grammar` (430_063) + `std/bridge:grammar` (440_017), consumed by kopium-headless `wire.kz` |
+| **Grammar** — a restricted, terminating wire grammar per vocabulary | DONE | `std/runtime:parse.wire` (430_059–430_062); the bridge gates every non-declaration turn on it |
 | **Flow-compiler** — defined flows lowered to native handlers | TODO | rung R3 below |
 
 The same binary runs a notes-agent, a git-agent, a math-agent: the vocabulary
@@ -177,9 +177,15 @@ syscall. Flows are the common path; native modules are the exception.
   scope filtering. The interpreter-side change, at the `runtime.kz:1396`
   registry seam. This is the experiment: the agent defines a flow, sees it in
   its derived vocabulary, and dispatches it under the same possession rules.
-- **R2 — grammar derivation.** A restricted wire grammar generated from the
-  register block: the model can only express calls in the vocabulary, with no
-  general-expression escape hatch. "Terminating" made syntactic.
+- **R2 — grammar derivation.** LANDED 2026-08-17 (koru `wire-grammar`
+  branch): `std/runtime:parse.wire` is the restricted grammar — one
+  invocation, quoted string values, nothing after the closing paren; prose,
+  chains and truncation refuse at parse time with diagnostics written for the
+  model. `std/bridge:run` gates every non-declaration turn on it, and
+  `scope-grammar` / `std/bridge:grammar` render the same rules into the
+  prompt: the lesson and the law are one declaration read twice. Deferred,
+  not rejected: per-field parse-time checking (the comptime scope table has
+  the data).
 - **R3 — the flow-compiler.** Defined flows lower to native handlers at
   definition time, bounded by the vocabulary. The summonable recompile.
 - **R4 — native primitive modules.** The rare escape hatch for genuinely new

@@ -168,7 +168,7 @@ announce = show(text) |> remember-said(role: "user", content: text)
 
 tor act { src: string }
 act = std/store:query(session)
-! query br |> app/wire:warm-vocab(br) |> std/bridge:run(br, source: src)
+! query br |> app/wire:warm-grammar(br) |> std/bridge:run(br, source: src)
     | result r |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s).\n\n"): ma
         |> announce(ma.text)
     | defined d |> std/fmt:ln("[tool result] defined: '{{ d:s }}' is now a verb in this session's vocabulary — callable on later turns.\n\n"): mi
