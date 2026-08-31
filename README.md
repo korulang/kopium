@@ -18,6 +18,8 @@ mechanism all derived from the declaration.
 - **`wired/holes/`** — compiler/toolchain gaps kopium tripped, each with a
   repro. When one closes, the pin moves into the koru regression suite and the
   HOLE.md records the verdict.
+- **`gauntlet/`** — external-oracle campaigns (ledger, closer, verdict).
+  Pins stay in koru; see `gauntlet/cordis/` for the Cordis parity run.
 
 ## The one law
 
