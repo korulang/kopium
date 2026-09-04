@@ -201,7 +201,7 @@ converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
 |> turn(br, model, max_tokens, temperature, n: 1, goal: "Open a note called agent-notes.txt.")
 |> turn(br, model, max_tokens, temperature, n: 2, goal: "Write the line 'a live model wrote this' into the note you just opened.")
 |> turn(br, model, max_tokens, temperature, n: 3, goal: "Close the note note_7.")
-|> turn(br, model, max_tokens, temperature, n: 4, goal: "Try again.")
+|> turn(br, model, max_tokens, temperature, n: 4, goal: "Close the note note_0.")
 |> turn(br, model, max_tokens, temperature, n: 5, goal: "Open a note called scratch.txt. Leave it open.")
 |> turn(br, model, max_tokens, temperature, n: 6, goal: "Now delete scratch.txt from disk entirely.")
 |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
