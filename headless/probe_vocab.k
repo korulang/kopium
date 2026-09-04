@@ -10,5 +10,5 @@ import app/notes
 
 std/bridge:create(id: "probe", scope: "notes"): br
 |> app/wire:warm-grammar(br)
-|> app/wire:agent-body(model: "deepseek/deepseek-v4-flash-0731", goal: "open a note called hello.txt", history: ""): body
+|> app/wire:agent-body(model: "deepseek/deepseek-v4-flash-0731", max_tokens: 100, goal: "open a note called hello.txt", history: ""): body
 |> std/io:print.ln("{{ body:s }}")

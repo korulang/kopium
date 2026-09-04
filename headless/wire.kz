@@ -177,7 +177,7 @@ var grammar_len: usize = 0;
     $mod.grammar_len = grammar.len;
 }
 
-~pub tor agent-body { model: string, goal: string, history: string } -> string
+~pub tor agent-body { model: string, max_tokens: u32, goal: string, history: string } -> string
 
 ~proc agent-body|zig {
     const alloc = std.heap.page_allocator;
@@ -218,7 +218,13 @@ var grammar_len: usize = 0;
     // the test target is one literal at the call site, not a zig-embedded edit.
     out.appendSlice(alloc, "{\"model\":\"") catch @panic("kopium: OOM");
     out.appendSlice(alloc, model) catch @panic("kopium: OOM");
-    out.appendSlice(alloc, "\",\"stream\":true,\"max_tokens\":100,\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
+    // Budget is a parameter for the same reason: a reasoning model spends
+    // tokens thinking before it emits the line (Muse Spark burned 20/20 on
+    // reasoning under the old 100), so the cap rides with the model choice.
+    out.appendSlice(alloc, "\",\"stream\":true,\"max_tokens\":") catch @panic("kopium: OOM");
+    const budget = std.fmt.allocPrint(alloc, "{d}", .{max_tokens}) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, budget) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, ",\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
     jsonEscape(alloc, &out, rules);
     jsonEscape(alloc, &out, grammar);
     jsonEscape(alloc, &out, rules2);
