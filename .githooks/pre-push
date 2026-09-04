@@ -1,11 +1,15 @@
 #!/bin/bash
-# pre-push — the possession gate, at the push moment.
+# pre-push — the possession + refusal gates, at the push moment.
 #
-# Every push must prove the load-bearing claim of this repo: the compiler
+# Every push must prove the load-bearing claims of this repo: the compiler
 # refuses a forged handle before the proc runs, and admits exactly what the
 # session holds. `possession-check.sh` builds and runs the dual-hold stress
-# (N=900); its exit code is the verdict (0 holds, 1 broken). A broken claim
-# aborts the push; a missing toolchain fails loud rather than degrading.
+# (N=900); its exit code is the verdict (0 holds, 1 broken). `refusal-check.sh`
+# pins the refusal demonstrations to the canned session (turn 3 forged-handle
+# REFUSED, turn 6 drift DENIED, hang-up discharges) — the live wire cannot
+# produce these anymore, so the gate keeps their coverage from decaying into
+# prose. A broken claim aborts the push; a missing toolchain fails loud
+# rather than degrading.
 #
 # Bypassing is never the answer — --no-verify ships a lie about the
 # boundary this repo exists to demonstrate.
@@ -24,3 +28,5 @@ fi
 cd "$root/headless"
 echo "pre-push: possession gate — 900 forged closes, 2 real holds…"
 ./possession-check.sh 900
+echo "pre-push: refusal gate — canned session, 3 pins…"
+./refusal-check.sh

@@ -14,7 +14,13 @@
 //   3. Turn 3 names a handle that was never issued. It is REFUSED before the
 //      proc runs, so a wrong answer costs a diagnostic instead of somebody
 //      else's file descriptor.
-//   4. Nobody closes anything. The hang-up below is not written in this file —
+//   4. Turn 4 defines a verb through `run`, turn 5 calls it — the session's
+//      growth mechanism, no register ceremony.
+//   5. Turn 6 names a verb nobody declared. It is DENIED at the vocabulary
+//      wall: the register block, not a validator. The live wire cannot
+//      produce this anymore (its prompt IS the declaration), so the canned
+//      turn keeps the wall witnessed.
+//   6. Nobody closes anything. The hang-up below is not written in this file —
 //      `std/bridge:close` is void, so the compiler appends it, and the note is
 //      released on the way out. Compile with `--auto-discharge=disable` and
 //      this program is refused by name instead.
@@ -33,6 +39,7 @@ import app/model
 |> turn(br, n: 3)
 |> turn(br, n: 4)
 |> turn(br, n: 5)
+|> turn(br, n: 6)
 |> std/io:print.ln("--- the derived vocabulary now includes the session's inventions")
 |> std/bridge:vocabulary(br)
 | ok v |> std/io:print.ln("{{ v:s }}")
