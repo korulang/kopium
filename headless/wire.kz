@@ -177,7 +177,7 @@ var grammar_len: usize = 0;
     $mod.grammar_len = grammar.len;
 }
 
-~pub tor agent-body { model: string, max_tokens: u32, goal: string, history: string } -> string
+~pub tor agent-body { model: string, max_tokens: u32, temperature: string, goal: string, history: string } -> string
 
 ~proc agent-body|zig {
     const alloc = std.heap.page_allocator;
@@ -224,6 +224,11 @@ var grammar_len: usize = 0;
     out.appendSlice(alloc, "\",\"stream\":true,\"max_tokens\":") catch @panic("kopium: OOM");
     const budget = std.fmt.allocPrint(alloc, "{d}", .{max_tokens}) catch @panic("kopium: OOM");
     out.appendSlice(alloc, budget) catch @panic("kopium: OOM");
+    // Temperature rides along as raw JSON-number text ("0", "0.7"): a float
+    // tor param would raise format questions in the splice, and the caller
+    // owns the value the same way it owns the model choice.
+    out.appendSlice(alloc, ",\"temperature\":") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, temperature) catch @panic("kopium: OOM");
     out.appendSlice(alloc, ",\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
     jsonEscape(alloc, &out, rules);
     jsonEscape(alloc, &out, grammar);

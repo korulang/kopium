@@ -92,9 +92,9 @@ send = app/wire:recall(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |> 
 
 // Build this turn's request from the transcript and fire it. `goal` is a tor
 // parameter captured into a sweep arm — 690_234, green since 2026-08-03.
-tor ask { model: string, max_tokens: u32, goal: string }
+tor ask { model: string, max_tokens: u32, temperature: string, goal: string }
 ask = std/store:query(transcript)
-! query h |> std/string:read(s: h): hist |> app/wire:agent-body(model, max_tokens, goal, history: hist): body |> send(req: body)
+! query h |> std/string:read(s: h): hist |> app/wire:agent-body(model, max_tokens, temperature, goal, history: hist): body |> send(req: body)
 
 // Append this turn to the conversation, so the next one can reason from it.
 tor record { goal: string, said: string }
@@ -185,25 +185,25 @@ clear-reply = std/store:query(reply)
 
 // One turn. `br` carries no phantom — a turn USES the session, it does not
 // end it.
-tor turn { br: *std/bridge:Bridge, model: string, max_tokens: u32, n: u32, goal: string }
+tor turn { br: *std/bridge:Bridge, model: string, max_tokens: u32, temperature: string, n: u32, goal: string }
 turn = app/wire:warm-grammar(br)
     |> clear-reply()
     |> std/io:print.ln("")
     |> std/io:print.ln("turn {{ n:d }}  goal: {{ goal:s }}")
-    |> ask(model, max_tokens, goal)
+    |> ask(model, max_tokens, temperature, goal)
     |> drive(br, goal)
 
 // The session. Same four demonstrations as session.k, with nobody scripting
 // the invocations.
-tor converse { model: string, max_tokens: u32 }
+tor converse { model: string, max_tokens: u32, temperature: string }
 converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
 |> std/io:print.ln("--- session open, the agent's only tool is a Koru interpreter")
-|> turn(br, model, max_tokens, n: 1, goal: "Open a note called agent-notes.txt.")
-|> turn(br, model, max_tokens, n: 2, goal: "Write the line 'a live model wrote this' into the note you just opened.")
-|> turn(br, model, max_tokens, n: 3, goal: "Close the note note_7.")
-|> turn(br, model, max_tokens, n: 4, goal: "Try again.")
-|> turn(br, model, max_tokens, n: 5, goal: "Open a note called scratch.txt. Leave it open.")
-|> turn(br, model, max_tokens, n: 6, goal: "Now delete scratch.txt from disk entirely.")
+|> turn(br, model, max_tokens, temperature, n: 1, goal: "Open a note called agent-notes.txt.")
+|> turn(br, model, max_tokens, temperature, n: 2, goal: "Write the line 'a live model wrote this' into the note you just opened.")
+|> turn(br, model, max_tokens, temperature, n: 3, goal: "Close the note note_7.")
+|> turn(br, model, max_tokens, temperature, n: 4, goal: "Try again.")
+|> turn(br, model, max_tokens, temperature, n: 5, goal: "Open a note called scratch.txt. Leave it open.")
+|> turn(br, model, max_tokens, temperature, n: 6, goal: "Now delete scratch.txt from disk entirely.")
 |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
 
 // Seed the two session Strings.
@@ -225,7 +225,7 @@ std/io:read-file(path: "/Users/larsde/.pi/agent/auth.json")
     | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "openrouter")
         | found orv |> koru/yyjson:object.get(doc, v: orv, key: "key")
             | found kv |> koru/yyjson:as.string(doc, v: kv)
-                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse(model: "meta/muse-spark-1.3-contributor", max_tokens: 1024)
+                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse(model: "meta/muse-spark-1.3-contributor", max_tokens: 1024, temperature: "0")
                 | wrong-type |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: openrouter key is not a string")
             | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter.key in auth store")
         | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter entry in auth store")
