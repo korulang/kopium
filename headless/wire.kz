@@ -229,7 +229,7 @@ var grammar_len: usize = 0;
     // owns the value the same way it owns the model choice.
     out.appendSlice(alloc, ",\"temperature\":") catch @panic("kopium: OOM");
     out.appendSlice(alloc, temperature) catch @panic("kopium: OOM");
-    out.appendSlice(alloc, ",\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, ",\"stream_options\":{\"include_usage\":true},\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
     jsonEscape(alloc, &out, rules);
     jsonEscape(alloc, &out, grammar);
     jsonEscape(alloc, &out, rules2);

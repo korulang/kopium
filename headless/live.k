@@ -60,10 +60,43 @@ collect = std/store:query(reply)
     | err _ |> _
 
 tor handle-delta { payload: string }
+// Per-chunk usage reporter. OpenRouter attaches `usage` to a choices-bearing
+// chunk (not a choiceless one) when `stream_options.include_usage` is set, so
+// this runs on EVERY data line and stays silent unless the key is present.
+// The three numbers answer the only question worth asking a reasoning model:
+// did the budget burn on thinking (reasoning ≈ completion) or on the line?
+tor note-usage { doc: *koru/yyjson:Doc<koru/yyjson:open>, r: *koru/yyjson:Value }
+note-usage = koru/yyjson:object.get(doc, v: r, key: "usage")
+| found u |> koru/yyjson:object.get(doc, v: u, key: "prompt_tokens")
+    | found pv |> koru/yyjson:as.int(doc, v: pv)
+        | ok p |> koru/yyjson:object.get(doc, v: u, key: "completion_tokens")
+            | found cv |> koru/yyjson:as.int(doc, v: cv)
+                | ok c |> koru/yyjson:object.get(doc, v: u, key: "completion_tokens_details")
+                    | found dt |> koru/yyjson:object.get(doc, v: dt, key: "reasoning_tokens")
+                        | found rv |> koru/yyjson:as.int(doc, v: rv)
+                            | ok rt |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} reasoning {{ rt:d }}")
+                            | wrong-type |> _
+                        | not-found |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} (no reasoning split)")
+                    | not-found |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} (no details)")
+                | wrong-type |> _
+            | not-found |> _
+        | wrong-type |> _
+    | not-found |> _
+| not-found |> _
+
+// Final-chunk marker. `finish_reason` is null on every content delta and a
+// real string exactly once, so this prints one line per turn with no compare.
+tor note-finish { doc: *koru/yyjson:Doc<koru/yyjson:open>, v: *koru/yyjson:Value }
+note-finish = koru/yyjson:object.get(doc, v, key: "finish_reason")
+| found fv |> koru/yyjson:as.string(doc, v: fv)
+    | ok fr |> std/io:print.ln("  [wire-note] finish_reason: {{ fr:s }}")
+    | wrong-type |> _
+| not-found |> _
+
 handle-delta = koru/yyjson:parse(text: payload)
-| ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "choices")
+| ok doc |> koru/yyjson:root(doc): r |> note-usage(doc, r) |> koru/yyjson:object.get(doc, v: r, key: "choices")
     | found cs |> koru/yyjson:array.get(doc, v: cs, index: 0)
-        | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "delta")
+        | found c0 |> note-finish(doc, v: c0) |> koru/yyjson:object.get(doc, v: c0, key: "delta")
             | found dv |> koru/yyjson:object.get(doc, v: dv, key: "content")
                 | found tv |> koru/yyjson:as.string(doc, v: tv)
                     | ok t |> collect(text: t) |> koru/yyjson:close(doc)
@@ -225,7 +258,7 @@ std/io:read-file(path: "/Users/larsde/.pi/agent/auth.json")
     | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "openrouter")
         | found orv |> koru/yyjson:object.get(doc, v: orv, key: "key")
             | found kv |> koru/yyjson:as.string(doc, v: kv)
-                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse(model: "meta/muse-spark-1.3-contributor", max_tokens: 1024, temperature: "0")
+                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse(model: "meta/muse-spark-1.3-contributor", max_tokens: 4096, temperature: "0")
                 | wrong-type |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: openrouter key is not a string")
             | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter.key in auth store")
         | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter entry in auth store")
