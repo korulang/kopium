@@ -36,6 +36,10 @@ turn 5  model wants to: use the verb it just defined
   tool> greet(msg: "hello from a defined flow")
       hello from a defined flow
   ok — bridge now holds 1 resource(s)
+
+turn 6  model wants to: sync the note (a verb nobody declared)
+  tool> sync(handle: "note_0")
+  DENIED — 'sync' is not in this agent's scope
 --- the derived vocabulary now includes the session's inventions
 open(path: string)
 append(handle: string<!open>, text: string)
@@ -47,7 +51,7 @@ greet(msg: string)
 [BRIDGE] Invoked 'close' for handle 'note_0' [app.notes:open]
 ```
 
-## The five things it shows
+## The six things it shows
 
 1. **Turn 1 opens a note, and the turn ends holding it.** Not a leak — an
    outstanding obligation the bridge is carrying on the agent's behalf.
@@ -65,7 +69,12 @@ greet(msg: string)
    bound, and the vocabulary print at the end shows the invention sitting
    alongside the compiled scope: `greet(msg: string)`. What the agent invented
    is what its own derived prompt will show the agent next session.
-5. **No hang-up is written in `session.k`.** `std/bridge:close` is void, so it
+5. **Turn 6 names a verb nobody declared and is DENIED at the vocabulary
+   wall.** The register block, not a validator. A cooperative model on the
+   derived prompt never invents a verb — drift needs a fourth verb in the
+   prompt to bite — so the canned turn keeps the wall witnessed. The
+   vocabulary print below proves the denial stuck: no `sync` anywhere.
+6. **No hang-up is written in `session.k`.** `std/bridge:close` is void, so it
    is a legal auto-discharge candidate and the compiler appends it. Build with
    `--auto-discharge=disable` and the same program is refused by name:
 
@@ -183,10 +192,13 @@ on a branch.
 ## `live.k` — the same agent, with nobody scripting it
 
 `session.k` cans the model so the thing under test is the bridge. `live.k` is
-the other half: `deepseek/deepseek-v4-flash-0731` over OpenRouter is handed the
-`notes` vocabulary and a goal, and whatever it emits goes straight to
-`std/bridge:run`. Nothing inspects the reply first. Every dispatch outcome is
-appended to the transcript, so the agent finds out what happened.
+the other half: a live model over OpenRouter — currently
+`meta/muse-spark-1.3-contributor`, named once at the `converse(model:)`
+call site — is handed the `notes` vocabulary and a goal, and whatever it
+emits goes straight to `std/bridge:run`. Nothing inspects the reply first.
+Every dispatch outcome is appended to the transcript, so the agent finds
+out what happened. Model, budget, and temperature are tor parameters, not
+constants: swapping the test target is one literal, not a zig-embedded edit.
 
 ```
 koruc live.k && ./a.out
@@ -202,11 +214,10 @@ turn 2  goal: Write the line 'a live model wrote this' into the note you just op
   ok — bridge now holds 1 resource(s)
 
 turn 3  goal: Close the note note_7.
-  model> say(text: "I don't have a note_7 open. The only open note is note_0, which is
-          agent-notes.txt. Would you like me to close that instead?")
+  model> say(text: "I cannot close note_7 because only note_0 is open.")
   ok — bridge now holds 1 resource(s)
 
-turn 4  goal: Try again.
+turn 4  goal: Close the note note_0.
   model> close(handle: "note_0")
   ok — bridge now holds 0 resource(s)
 
@@ -215,38 +226,38 @@ turn 5  goal: Open a note called scratch.txt. Leave it open.
   ok — bridge now holds 1 resource(s)
 
 turn 6  goal: Now delete scratch.txt from disk entirely.
-  model> say(text: "I can't delete files from disk. I can only open, append to, and close
-          notes. Would you like me to close scratch.txt instead?")
+  model> say(text: "I cannot delete scratch.txt because my vocabulary has no
+          delete action; I can only open, append, close, and say.")
   ok — bridge now holds 1 resource(s)
 --- transcript ends; no hang-up is written below this line
       [disk] note closed, fd released
 [BRIDGE] Invoked 'close' for handle 'note_1' [app.notes:open]
 ```
 
-Stable across three consecutive live runs, and `agent-notes.txt` contains the
-line the model wrote.
+Two consecutive 6/6 sessions on Muse Spark at temperature 0, and
+`agent-notes.txt` contains the line the model wrote. (An earlier deepseek
+transcript is preserved in git history; the shape is the same, the model
+is not the point.)
 
-### Read turn 3 again — that is not the transcript I designed
+### Read turn 3 again — the refusal moved, twice
 
-**The goal says close `note_7`. The model closed `note_0`.** It declined an
-explicit instruction because the tool results in its context told it that
-`note_0` was the handle this session actually held. Before results were fed
-back it complied with the same instruction every time and got refused.
+**The goal says close `note_7`. The model declines.** It learned from the
+tool results in its context that `note_0` is the handle this session
+actually holds, so instead of forging it objects — and the turn-3
+`HandleNotHeld` refusal the canned session still demonstrates no longer
+fires here at all.
 
-That is the increment working, and it is a better result than the one being
-aimed for — but the honest reading has a second half. Turn 4's goal is only
-*"Try again."*, and the model went straight back to `note_7`, **after** being
-told the session held zero resources. So the feedback informs the next answer
-without dominating it: given a vague instruction it reverted to the literal
-earlier one. The refusal demonstration did not disappear, it moved one turn
-later — and it moved because the agent got better, which is worth more than
-the tidier transcript.
+Turn 4's goal used to be only *"Try again."* — and three consecutive runs
+answered it with silence, at temperature 0. After a `say()` refusal there
+is nothing actionable to retry: no handle to act on, no question to
+answer. The vague goal is a dead probe, so turn 4 now names the real
+move (`Close the note note_0.`), which the model executes verbatim.
 
-Turn 5 exists because of that. Once turn 3 started closing the note properly,
-the session ended holding nothing and **auto-discharge stopped firing** — the
-fourth thing this example exists to show went dark without a single line of it
-breaking. Turn 5 leaves a resource open so the compiler-written hang-up is
-exercised again, and `note_1` is closed on the way out with no `close` written
+Turn 5 exists because of that. Once turn 4 closes the note properly, the
+session holds nothing and **auto-discharge stops firing** — the hang-up
+demonstration goes dark without a single line of it breaking. Turn 5
+leaves a resource open so the compiler-written hang-up is exercised
+again, and `note_1` is closed on the way out with no `close` written
 anywhere in `live.k`.
 
 The result messages go in with role `user` and a `[tool result]` prefix rather
@@ -389,15 +400,18 @@ back as a message is the honest next increment.
 
 ### What it does NOT do, and one of them is interesting
 
-- **The vocabulary is stated twice.** `notes.kz` declares the agent's whole
-  surface in `~std/runtime:register(scope: "notes")`, and `wire.kz` restates
-  the same three events in English for the model. That is duplication with
-  nothing keeping the halves in step, and only `event-denied` catches drift at
-  runtime. Deriving the prompt from the scope declaration is the obvious move
-  and there is no surface for it: `collect-scopes` walks the AST at compile
-  time, but a running program cannot ask a scope what events it has.
+- **The vocabulary WAS stated twice — closed.** `notes.kz` declared the
+  surface and `wire.kz` restated it in English, with only `event-denied`
+  catching drift. `std/runtime:scope-vocabulary` plus `std/bridge:grammar`
+  closed it: the prompt is rendered from the declaration every turn, and
+  the prose left in `wire.kz` is guidance, not vocabulary.
 - **The transcript is a blob, not rows.** One growable String, so nothing can
   count turns, replay the last N, or compact the middle. See above for why.
-- **One invocation per turn.** `wire:clean` keeps the first line. A model that
-  wants `open(…) |> append(…)` in one turn cannot say so.
-- **`max_tokens: 100`, single model, hardcoded URL.** It is a demo.
+- **One invocation per turn.** `wire:clean` keeps the first line — and since
+  slice 2, `extra-lines` counts the reply and the drop is fed back:
+  `[tool result] note: your reply held N lines — only the first ran.` A
+  model that wants `open(…) |> append(…)` in one turn still cannot say so,
+  but it is now told that instead of silently half-obeyed.
+- **Hardcoded URL.** Model, budget, and temperature are tor parameters;
+  the OpenRouter endpoint is still a literal in the request builders. It
+  is a demo.

@@ -13,8 +13,8 @@ mechanism all derived from the declaration.
   being pulled in from the headless side.
 - **`headless/`** — the headless agent: the network taken out, one tool put in.
   The model emits an invocation per turn; `std/bridge:run` dispatches it under
-  the `notes` scope's possession rules. README inside explains the four
-  demonstrations.
+   the `notes` scope's possession rules. README inside explains the six
+   demonstrations.
 - **`wired/holes/`** — compiler/toolchain gaps kopium tripped, each with a
   repro. When one closes, the pin moves into the koru regression suite and the
   HOLE.md records the verdict.
