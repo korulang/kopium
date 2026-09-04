@@ -1,0 +1,7 @@
+name: kopium.refusal.pins_held
+kind: measured
+shape: scalar
+face: in
+membrane: false
+route: surface
+note: refusal gate pins held (3 = holds, 0 = broken). Emitted by wm/run.sh, fauceted by wm/faucet.sh to world.signal.kopium.refusal.pins_held. Surface only — health telemetry, never wake.

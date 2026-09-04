@@ -1,0 +1,7 @@
+name: kopium.wire.law_witnessed
+kind: measured
+shape: scalar
+face: in
+membrane: false
+route: surface
+note: wire law witnessed flag (1 = many 2, head runs; 0 = not witnessed). Emitted by wm/run.sh, fauceted by wm/faucet.sh to world.signal.kopium.wire.law_witnessed. Surface only — health telemetry, never wake.
