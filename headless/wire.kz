@@ -201,6 +201,9 @@ var grammar_len: usize = 0;
         \\- Handles are issued by open(). Handles you opened in earlier turns are
         \\  STILL OPEN — this session outlives each turn, so never reopen something
         \\  you already opened.
+        \\- If the action is impossible — wrong handle, missing handle, out-of-vocabulary
+        \\  action, or you are stuck — call say(text: "...") and explain why. Never
+        \\  emit an empty reply, prose, or "...".
         \\
         \\Examples of well-formed replies:
         \\say(text: "Not much — tell me a note to open.")

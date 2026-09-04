@@ -32,6 +32,7 @@ import std/fmt
 import std/store
 import std/string
 import std/bridge
+import std/interpreter
 import app/notes
 import app/wire
 import koru/sse
@@ -125,8 +126,9 @@ observe = std/store:query(transcript)
 // will repeat, and turn 4 exists to prove it hears.
 tor act { br: *std/bridge:Bridge, goal: string, source: string }
 act = record(goal, said: source) |> std/bridge:run(br, source)
-| result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
-    |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s)."): ma
+| result r |> std/interpreter:value.stringify(r.value): v
+    |> std/io:print.ln("  ok — returned {{ v:s }}, bridge now holds {{ r.handles:d }} resource(s)")
+    |> std/fmt:ln("[tool result] ok, it ran and returned {{ v:s }}. The session now holds {{ r.handles:d }} open resource(s)."): ma
     |> observe(ma.text)
 | defined d |> std/io:print.ln("  defined {{ d:s }} — the session's vocabulary now includes it")
     |> std/fmt:ln("[tool result] defined: '{{ d:s }}' is now a verb in this session's vocabulary — you can call it on a later turn."): mi
