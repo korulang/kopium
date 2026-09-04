@@ -261,9 +261,9 @@ fresh-framer = drop-framer() |> koru/sse:new(): s |> std/store:insert(framer) { 
 | row _ |> _
 | full f |> koru/sse:close(s: f)
 
-tor fire { goal: string }
+tor fire { model: string, goal: string }
 fire = retire() |> fresh-framer() |> std/store:query(history)
-! query h |> std/string:read(s: h): hist |> app/wire:agent-body(goal, history: hist): body |> send(req: body)
+! query h |> std/string:read(s: h): hist |> app/wire:agent-body(model, goal, history: hist): body |> send(req: body)
 
 // ── startup ─────────────────────────────────────────────────────────────────
 std/string:from-page(text: "kopium ready. tell the agent to open a note.\n\n")
@@ -326,7 +326,7 @@ koru/vaxis(kopium)
         |> show(text: "\n\nagent: ")
         |> remember-said(role: "user", content: utext)
         |> ask(goal: utext)
-        |> fire(goal: utext)
+        |> fire(model: "deepseek/deepseek-v4-flash-0731", goal: utext)
         |> std/string:clear(s: d)
 ! key k when k.ch == 127 |> std/store:query(draft)
     ! query d |> std/string:pop-char(s: d)

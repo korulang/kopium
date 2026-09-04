@@ -2,8 +2,10 @@
 //
 // `session.k` is this program with the model canned, so the thing under test
 // is the bridge. This is the other half: the invocations are not written down
-// anywhere. A live deepseek/deepseek-v4-flash-0731 is handed the `notes` vocabulary and a
-// goal, and whatever it emits goes straight to `std/bridge:run`.
+// anywhere. A live model — named once at the `converse(model:)` call site at
+// the bottom of this file, default deepseek/deepseek-v4-flash-0731 — is handed
+// the `notes` vocabulary and a goal, and whatever it emits goes straight to
+// `std/bridge:run`.
 //
 // Nothing validates the model's reply before it runs. That is the point of
 // the whole exercise — the refusal is the tool surface's job, not a
@@ -90,9 +92,9 @@ send = app/wire:recall(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |> 
 
 // Build this turn's request from the transcript and fire it. `goal` is a tor
 // parameter captured into a sweep arm — 690_234, green since 2026-08-03.
-tor ask { goal: string }
+tor ask { model: string, goal: string }
 ask = std/store:query(transcript)
-! query h |> std/string:read(s: h): hist |> app/wire:agent-body(goal, history: hist): body |> send(req: body)
+! query h |> std/string:read(s: h): hist |> app/wire:agent-body(model, goal, history: hist): body |> send(req: body)
 
 // Append this turn to the conversation, so the next one can reason from it.
 tor record { goal: string, said: string }
@@ -183,25 +185,25 @@ clear-reply = std/store:query(reply)
 
 // One turn. `br` carries no phantom — a turn USES the session, it does not
 // end it.
-tor turn { br: *std/bridge:Bridge, n: u32, goal: string }
+tor turn { br: *std/bridge:Bridge, model: string, n: u32, goal: string }
 turn = app/wire:warm-grammar(br)
     |> clear-reply()
     |> std/io:print.ln("")
     |> std/io:print.ln("turn {{ n:d }}  goal: {{ goal:s }}")
-    |> ask(goal)
+    |> ask(model, goal)
     |> drive(br, goal)
 
 // The session. Same four demonstrations as session.k, with nobody scripting
 // the invocations.
-tor converse {}
+tor converse { model: string }
 converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
 |> std/io:print.ln("--- session open, the agent's only tool is a Koru interpreter")
-|> turn(br, n: 1, goal: "Open a note called agent-notes.txt.")
-|> turn(br, n: 2, goal: "Write the line 'a live model wrote this' into the note you just opened.")
-|> turn(br, n: 3, goal: "Close the note note_7.")
-|> turn(br, n: 4, goal: "Try again.")
-|> turn(br, n: 5, goal: "Open a note called scratch.txt. Leave it open.")
-|> turn(br, n: 6, goal: "Now delete scratch.txt from disk entirely.")
+|> turn(br, model, n: 1, goal: "Open a note called agent-notes.txt.")
+|> turn(br, model, n: 2, goal: "Write the line 'a live model wrote this' into the note you just opened.")
+|> turn(br, model, n: 3, goal: "Close the note note_7.")
+|> turn(br, model, n: 4, goal: "Try again.")
+|> turn(br, model, n: 5, goal: "Open a note called scratch.txt. Leave it open.")
+|> turn(br, model, n: 6, goal: "Now delete scratch.txt from disk entirely.")
 |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
 
 // Seed the two session Strings.
@@ -223,7 +225,7 @@ std/io:read-file(path: "/Users/larsde/.pi/agent/auth.json")
     | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "openrouter")
         | found orv |> koru/yyjson:object.get(doc, v: orv, key: "key")
             | found kv |> koru/yyjson:as.string(doc, v: kv)
-                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse()
+                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse(model: "deepseek/deepseek-v4-flash-0731")
                 | wrong-type |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: openrouter key is not a string")
             | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter.key in auth store")
         | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter entry in auth store")
