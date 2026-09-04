@@ -208,7 +208,11 @@ drive = std/store:query(reply)
     | ok cs |> std/string:read(s: cs): src
         |> std/io:print.ln("  model> {{ src:s }}")
         |> act(br, goal, source: src)
-        |> std/string:free(s: cs)
+        |> app/wire:extra-lines(raw)
+        | one |> std/string:free(s: cs)
+        | many n |> std/fmt:ln("[tool result] note: your reply held {{ n:d }} lines — one invocation per turn, so only the first ran."): mq
+            |> observe(mq.text)
+            |> std/string:free(s: cs)
     | err e |> std/io:print.ln("  could not snapshot the reply: {{ e:s }}")
 
 // Clear the in-flight reply before the next ask.

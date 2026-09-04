@@ -109,6 +109,26 @@ var auth_len: usize = 0;
     return s;
 }
 
+// How many lines the reply held. The wire is one invocation per turn by law
+// (R2: chains refuse at parse time), and `clean` above enforces it by keeping
+// the first line — but a drop the agent never hears about is a drop it will
+// repeat. The `many` arm lets the caller say so; `one` covers the happy path
+// and the empty reply alike.
+~pub tor extra-lines { raw: string }
+| one
+| many u64
+
+~proc extra-lines|zig {
+    const s = std.mem.trim(u8, raw, " \t\r\n");
+    if (s.len == 0) return .{ .one = .{} };
+    var n: u64 = 1;
+    for (s) |ch| {
+        if (ch == '\n') n += 1;
+    }
+    if (n <= 1) return .{ .one = .{} };
+    return .{ .many = n };
+}
+
 // ============================================================================
 // MESSAGE BUILDING — the transcript is bytes the store holds, built here
 // ============================================================================
