@@ -102,3 +102,17 @@ collapse can't reach.
 
     koruc build input.kz     # 8× KORU021 — dead claims replicated onto every stage
     koruc build control.kz   # builds; ./a.out prints "got hello"
+
+## Verdict — CLOSED 2026-09-05
+
+Fixed by koru `807107f9` (2026-08-01): `levelContinuations` filters chokes
+per stage the way `soleSurvivor` already did; exactness enforced at the
+choke (every claim must land on at least one stage). Pinned in-tree as
+`210_197_pointfree_choke_heterogeneous_stages` (green) and
+`210_198_pointfree_choke_claims_no_stage` (refusal).
+
+Caveat found at close: the original `input.kz` in this directory used
+`~pub tor Doc = {...}` nominal-record construction, which was never valid
+spelling — it demonstrated nothing. Replaced with the same ladder in
+current dialect; verified green on koru main (`got hello`, exit 0).
+`control.kz` (homogeneous) remains as the contrast case.

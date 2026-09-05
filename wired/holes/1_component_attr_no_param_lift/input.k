@@ -1,8 +1,15 @@
-// Repro for HOLE.md — `{{ hint:s }}` in a child-tag attribute should lift
-// `hint` into frame's params; instead the caller's `hint:` arg is refused:
-//   error: no field named 'hint' in struct '…frame_event.Input'
+// Repro for HOLE.md — CLOSED 2026-09-05 (see verdict at the bottom of HOLE.md).
 //
-//   koruc run input.k   (from this directory; fails today)
+// `hint={{ hint:s }}` (BARE braces) in a child-tag attribute lifts `hint`
+// into frame's params and forwards it to statusbar. This builds clean and
+// the `frame(win: w, hint: "lifted?")` call typechecks.
+//
+// Spelling note: QUOTES mean literal. `hint="{{ hint:s }}"` passes the
+// literal string through — no lift, and the caller's `hint:` arg is refused
+// (quotes = literal, bare braces = forward). Interpolation inside quoted
+// attr strings would be a new feature (fmt rail for attrs), unfiled.
+//
+//   koruc build input.k   (from this directory; green since e262a87)
 
 import std/io
 import koru/vaxis
@@ -13,7 +20,7 @@ koru/vaxis:component(statusbar) {
 
 koru/vaxis:component(frame) {
     <dock>
-        <statusbar dock="bottom" h="1" hint="{{ hint:s }}"/>
+        <statusbar dock="bottom" h="1" hint={{ hint:s }}/>
     </dock>
 }
 

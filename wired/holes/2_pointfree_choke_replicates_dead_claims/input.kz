@@ -1,32 +1,37 @@
-// Mimics kopium's handle-delta ladder: a "doc" carried at every stage plus a
-// threaded value, stages that declare DIFFERENT unclaimed branches.
+// Hole 2 repro, re-spelled 2026-09-05 in current dialect.
+//
+// The original file used `~pub tor Doc = {...}` nominal-record construction,
+// which was never the language — so it demonstrated nothing. This is the same
+// ladder (carried `doc` + threaded value, stages with DIFFERENT unclaimed
+// branches) in valid spelling: heterogeneous chokes over a point-free chain.
+//
+// CLOSED: koru 807107f9 filters choke replication per stage (pins
+// 210_197 heterogeneous green, 210_198 choke-claims-no-stage refusal).
+// `koruc build ladder.kz && ./a.out` prints "got hello".
 ~import std/io
 
-~pub tor Doc = { n: i64 }
-~pub tor Val = { n: i64 }
-
-~pub tor obj.get { doc: *Doc, v: *Val, key: string }
-| found *Val
+~pub tor obj.get { doc: i64, v: i64, key: string }
+| found i64
 | not-found
 ~proc obj.get|zig {
     _ = doc; _ = key;
     return .{ .found = v };
 }
 
-~pub tor arr.get { doc: *Doc, v: *Val, index: i64 }
-| found *Val
+~pub tor arr.get { doc: i64, v: i64, index: i64 }
+| found i64
 | out-of-range
 ~proc arr.get|zig {
     _ = doc; _ = index;
     return .{ .found = v };
 }
 
-~pub tor as.string { doc: *Doc, v: *Val }
+~pub tor as.string { doc: i64, v: i64 }
 | ok string
 | wrong-type
 ~proc as.string|zig { _ = doc; _ = v; return .{ .ok = "hello" }; }
 
-~pub tor ladder { doc: *Doc, r: *Val }
+~pub tor ladder { doc: i64, r: i64 }
 | ok string
 | gone
 ~ladder = obj.get(doc, v: r, key: "choices")
@@ -37,8 +42,6 @@
 | out-of-range => gone
 | wrong-type => gone
 
-~var d = Doc { n: 1 }
-~var v = Val { n: 2 }
-~ladder(doc: &d, r: &v)
+~ladder(doc: 1, r: 2)
 | ok s |> std/io:print.ln("got {{ s:s }}")
 | gone |> std/io:print.ln("gone")

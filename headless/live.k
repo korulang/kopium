@@ -60,11 +60,15 @@ collect = std/store:query(reply)
     | err _ |> _
 
 tor handle-delta { payload: string }
-// Per-chunk usage reporter. OpenRouter attaches `usage` to a choices-bearing
-// chunk (not a choiceless one) when `stream_options.include_usage` is set, so
-// this runs on EVERY data line and stays silent unless the key is present.
-// The three numbers answer the only question worth asking a reasoning model:
-// did the budget burn on thinking (reasoning ≈ completion) or on the line?
+// Per-turn terminal reporter. Measured 2026-09-05 (hole 4): OpenRouter sends
+// the terminal choices payload TWICE per turn — once bare (finish_reason set,
+// usage null) and once with usage attached (same finish_reason, ~500 bytes
+// longer). sse:feed and curl await/poll deliver faithfully (counted live:
+// every distinct payload exactly once), so the doubling is provider shape,
+// not a toolchain defect — consumers key on it, not on events. This prints
+// NOTHING for content chunks and bare terminals, exactly one summary line
+// for the usage-bearing event. A bare terminal whose usage twin never
+// arrives prints nothing; that stream is broken anyway (empty reply).
 tor note-usage { doc: *koru/yyjson:Doc<koru/yyjson:open>, r: *koru/yyjson:Value }
 note-usage = koru/yyjson:object.get(doc, v: r, key: "usage")
 | found u |> koru/yyjson:object.get(doc, v: u, key: "prompt_tokens")
@@ -74,32 +78,49 @@ note-usage = koru/yyjson:object.get(doc, v: r, key: "usage")
                 | ok c |> koru/yyjson:object.get(doc, v: u, key: "completion_tokens_details")
                     | found dt |> koru/yyjson:object.get(doc, v: dt, key: "reasoning_tokens")
                         | found rv |> koru/yyjson:as.int(doc, v: rv)
-                            | ok rt |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} reasoning {{ rt:d }}")
+                            | ok rt |> report-full(doc, r, p, c, rt)
                             | wrong-type |> _
-                        | not-found |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} (no reasoning split)")
-                    | not-found |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} (no details)")
+                        | not-found |> report-part(doc, r, p, c, why: "no reasoning split")
+                    | not-found |> report-part(doc, r, p, c, why: "no details")
                 | wrong-type |> _
             | not-found |> _
         | wrong-type |> _
     | not-found |> _
 | not-found |> _
 
-// Final-chunk marker. `finish_reason` is null on every content delta and a
-// real string exactly once, so this prints one line per turn with no compare.
-tor note-finish { doc: *koru/yyjson:Doc<koru/yyjson:open>, v: *koru/yyjson:Value }
-note-finish = koru/yyjson:object.get(doc, v, key: "finish_reason")
-| found fv |> koru/yyjson:as.string(doc, v: fv)
-    | ok fr |> std/io:print.ln("  [wire-note] finish_reason: {{ fr:s }}")
-    | wrong-type |> _
-| not-found |> _
+// Summary printers. Usage numbers arrive as owned i64 bindings and thread
+// down as tor params; finish_reason is a borrow printed inside the owning
+// arm (never escapes — hole 3's rule). The descent repeats per printer:
+// shared would need returning the borrow, which is the banned shape.
+tor report-full { doc: *koru/yyjson:Doc<koru/yyjson:open>, r: *koru/yyjson:Value, p: i64, c: i64, rt: i64 }
+report-full = koru/yyjson:object.get(doc, v: r, key: "choices")
+| found cs |> koru/yyjson:array.get(doc, v: cs, index: 0)
+    | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "finish_reason")
+        | found fv |> koru/yyjson:as.string(doc, v: fv)
+            | ok fr |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} reasoning {{ rt:d }} finish: {{ fr:s }}") |> std/io:free(content: fr)
+            | wrong-type |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} reasoning {{ rt:d }} finish: ?")
+        | not-found |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} reasoning {{ rt:d }} finish: ?")
+    | out-of-range |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} reasoning {{ rt:d }} finish: ?")
+| not-found |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} reasoning {{ rt:d }} finish: ?")
+
+tor report-part { doc: *koru/yyjson:Doc<koru/yyjson:open>, r: *koru/yyjson:Value, p: i64, c: i64, why: string }
+report-part = koru/yyjson:object.get(doc, v: r, key: "choices")
+| found cs |> koru/yyjson:array.get(doc, v: cs, index: 0)
+    | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "finish_reason")
+        | found fv |> koru/yyjson:as.string(doc, v: fv)
+            | ok fr |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} ({{ why:s }}) finish: {{ fr:s }}") |> std/io:free(content: fr)
+            | wrong-type |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} ({{ why:s }}) finish: ?")
+        | not-found |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} ({{ why:s }}) finish: ?")
+    | out-of-range |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} ({{ why:s }}) finish: ?")
+| not-found |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} ({{ why:s }}) finish: ?")
 
 handle-delta = koru/yyjson:parse(text: payload)
 | ok doc |> koru/yyjson:root(doc): r |> note-usage(doc, r) |> koru/yyjson:object.get(doc, v: r, key: "choices")
     | found cs |> koru/yyjson:array.get(doc, v: cs, index: 0)
-        | found c0 |> note-finish(doc, v: c0) |> koru/yyjson:object.get(doc, v: c0, key: "delta")
+        | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "delta")
             | found dv |> koru/yyjson:object.get(doc, v: dv, key: "content")
                 | found tv |> koru/yyjson:as.string(doc, v: tv)
-                    | ok t |> collect(text: t) |> koru/yyjson:close(doc)
+                    | ok t |> collect(text: t) |> std/io:free(content: t) |> koru/yyjson:close(doc)
                     | wrong-type |> koru/yyjson:close(doc)
                 | not-found |> koru/yyjson:close(doc)
             | not-found |> koru/yyjson:close(doc)
@@ -127,7 +148,7 @@ send = app/wire:recall(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |> 
 // parameter captured into a sweep arm — 690_234, green since 2026-08-03.
 tor ask { model: string, max_tokens: u32, temperature: string, goal: string }
 ask = std/store:query(transcript)
-! query h |> std/string:read(s: h): hist |> app/wire:agent-body(model, max_tokens, temperature, goal, history: hist): body |> send(req: body)
+! query h |> std/fmt:ln("{{ h:S }}"): hist |> app/wire:agent-body(model, max_tokens, temperature, goal, history: hist.text): body |> send(req: body)
 
 // Append this turn to the conversation, so the next one can reason from it.
 tor record { goal: string, said: string }
@@ -204,11 +225,11 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
 // downstream can reach, and it dies on one visible line after the last use.
 tor drive { br: *std/bridge:Bridge, goal: string }
 drive = std/store:query(reply)
-! query buf |> std/string:read(s: buf): raw |> std/io:print.ln("  raw  > [{{ raw:s }}]") |> app/wire:clean(raw)
-    | ok cs |> std/string:read(s: cs): src
-        |> std/io:print.ln("  model> {{ src:s }}")
-        |> act(br, goal, source: src)
-        |> app/wire:extra-lines(raw)
+! query buf |> std/fmt:ln("{{ buf:S }}"): raw |> std/io:print.ln("  raw  > [{{ raw.text:s }}]") |> app/wire:clean(raw: raw.text)
+    | ok cs |> std/fmt:ln("{{ cs:S }}"): src
+        |> std/io:print.ln("  model> {{ src.text:s }}")
+        |> act(br, goal, source: src.text)
+        |> app/wire:extra-lines(raw: raw.text)
         | one |> std/string:free(s: cs)
         | many n |> std/fmt:ln("[tool result] note: your reply held {{ n:d }} lines — one invocation per turn, so only the first ran."): mq
             |> observe(mq.text)
@@ -262,7 +283,7 @@ std/io:read-file(path: "/Users/larsde/.pi/agent/auth.json")
     | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "openrouter")
         | found orv |> koru/yyjson:object.get(doc, v: orv, key: "key")
             | found kv |> koru/yyjson:as.string(doc, v: kv)
-                | ok k |> app/wire:bearer(key: k): auth |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse(model: "meta/muse-spark-1.3-contributor", max_tokens: 100000, temperature: "0")
+                | ok k |> app/wire:bearer(key: k): auth |> std/io:free(content: k) |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse(model: "meta/muse-spark-1.3-contributor", max_tokens: 100000, temperature: "0")
                 | wrong-type |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: openrouter key is not a string")
             | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter.key in auth store")
         | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter entry in auth store")

@@ -4,6 +4,7 @@
 import std/io
 import std/store
 import std/string
+import std/fmt
 import std/bridge
 import app/notes
 
@@ -11,7 +12,7 @@ std/store:new(reply, capacity: 2) { *std/string:String<std/string:instance!> }
 
 tor drive { br: *std/bridge:Bridge }
 drive = std/store:query(reply)
-! query buf |> std/string:read(s: buf): src |> std/bridge:run(br, source: src)
+! query buf |> std/fmt:ln("{{ buf:S }}"): src |> std/bridge:run(br, source: src.text)
     | result r |> std/io:print.ln("  ok — bridge holds {{ r.handles:d }}")
     | defined d |> std/io:print.ln("  defined {{ d:s }}")
     | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }}")

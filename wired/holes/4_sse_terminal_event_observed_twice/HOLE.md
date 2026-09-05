@@ -74,11 +74,57 @@ cd headless && koruc live.k && ./a.out 2>&1 | sort | uniq -c | sort -rn | head
 # Every [usage]/[wire-note] line has count 2; every model> line has count 1.
 ```
 
-## The settler (not yet run)
+## The settler (ran 2026-09-05 — see verdict)
 
 Print (or count) the raw `payload` per `handle-delta` call for one
 turn: identical bytes twice → the feed/await loop duplicates, fix in
 koru (`koru/sse`, `koru/curl`); two distinct events → provider shape,
 handle in kopium (key the usage print on first-seen id). A canned-bytes
 probe straight through `sse:feed` counting `! data` firings would
-settle it with zero tokens and no network.
+settle it with zero tokens and no network. — RAN 2026-09-05, see verdict.
+
+## Verdict — SETTLED 2026-09-05: provider shape, toolchain cleared
+
+The settler ran, in four layers, and reading 2 (feed/curl duplicates) is
+dead:
+
+1. **Canned `sse:feed` probe** (`probe.k` in this directory, zero tokens):
+   mid-JSON splits, mid-`data:`-prefix splits, CRLF + keepalive + `retry`
+   noise — every distinct payload fires exactly once. Feeding the same
+   bytes twice fires twice, which is contract-correct: feed is a byte
+   framer, not an exactly-once layer.
+2. **`curl await/poll` code-read**: the slot buffer is cleared behind every
+   `! chunk` firing; `finished` carries only status + what trailed the
+   final drain. No re-delivery path.
+3. **Live Koru count** (`headless/probe_hole4.k`, one turn): 7 `! data`
+   firings through the full stack, every distinct payload exactly once —
+   5 content events, 1 bare terminal, 1 usage terminal.
+4. **Wire captures** (Python, short/long/reasoning/natural-stop turns):
+   OpenRouter sends the terminal choices payload TWICE — once bare
+   (`finish_reason` set, `usage` null) and once with usage attached (same
+   `finish_reason`, ~500 bytes longer). Usage itself arrives exactly once
+   per turn in all five measured shapes (11-event reasoning turn
+   included).
+
+So the `[wire-note]` doubling is explained provider shape: two `F:stop`
+events per turn, and any per-event finish print fires twice. Fixed in
+kopium, not koru: `headless/live.k` retires the standalone `note-finish`
+and keys the summary on the usage-bearing event (`note-usage` →
+`report-full`/`report-part`), one line per turn —
+`[usage] prompt P completion C reasoning R finish: stop`. The `[DONE]`
+sentinel, keepalives, and blank lines stay silent in feed, as before.
+The old `[wire-note] finish_reason:` line format is gone; nothing pinned
+it (only transcripts and docs referenced it).
+
+**Residual, stated plainly:** the original `[usage]`-printed-twice half of
+the symptom is UNREPRODUCED — five wire shapes show one usage event per
+turn, and the current consumer prints once per turn in all of them. Best
+reading is transient provider behavior on the 09-04 long-reasoning turns
+(100k budget), not a delivery bug: every layer that could duplicate was
+counted clean. If it recurs, the re-probe is `probe_hole4.k` (live count)
+against a long turn — three minutes, fractions of a cent.
+
+**Content-ghost note:** the terminal pair carries empty/absent `content`,
+so `collect` appending per event is harmless today. A provider that ever
+repeats a NON-empty content chunk would double-append; no measured shape
+does. Watch item, not work.

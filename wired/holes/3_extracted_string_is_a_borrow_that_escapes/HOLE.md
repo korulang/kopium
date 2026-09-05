@@ -116,4 +116,49 @@ tries this again:
 2. **The phantom needs the module qualifier.** `<view!>` in a consumer module
    resolves to that module's namespace and fails with KORU030 naming
    `copy2:view!`. It is `<std/string:view!>`, the slash-canon spelling
-   660_027 and the 690_05x store pins establish.
+   660_027 and the 690_05x store pins establish. (Update 2026-09-05: the
+   CONSUME side is `<std/string:!view>` on tor input params — unqualified
+   `<!view>` resolves consumer-side too. Both spellings bit during the
+   `d_turns.k` wiring; both are in the verdict below.)
+
+## Verdict — WORKED AROUND in kopium 2026-09-05, ruling still koru-side
+
+`wired/d_turns.k` is GREEN on the workaround: `handle-delta` went back to
+the explicit pyramid, copies the delta text into an owned String BEFORE
+`close`, and hands the HANDLE (`*String<std/string:view!>`) back; `pump`
+calls `absorb`, which reads once, appends once, frees once. Verified live
+under a pty: typed `hello`, Enter, `claude: Hello! How can I help you
+today?` streamed word-by-word, ESC quit, exit 0. The blank pane is gone.
+The discipline is load-bearing and named in the file: the from-page copy
+is the first thing to delete the day 610_007 lands.
+
+Three findings from the wiring, all reproduced in isolation:
+
+1. **Obligations cannot cross a sweep boundary to their discharger.**
+   Appending inside a `! query` sweep with `free` in the leaves dies
+   KORU030 (obligation not discharged). The shape that compiles: the
+   handle crosses a TOR boundary as an explicit consume param
+   (`*String<std/string:!view>` — slash-canon; unqualified `<!view>`
+   resolves to the consumer module and dies KORU030), and the sweep
+   inside carries only the read borrow. Tor params also need the
+   explicit label at the call site (`absorb(h)`, not `absorb(h: h)`).
+2. **`take(store[0])` with a literal is silently empty.** `take` addresses
+   by ROW HANDLE (`take(game[r])`, pinned 690_024), and a literal `0`
+   never addresses a row — brand 0 is reserved — so it compiles clean
+   and yields `empty`. This was ALSO the shape of `d_turns.k`'s own
+   `retire` (`take(batch[0])`): retire never retired, the batch leaked
+   one row per turn, and the two-turn verification never caught it (turn
+   3 would have hit `full`). Fixed the same way: send stashes the insert
+   row handle (`stored { ui.brow: rh }`), retire takes
+   `batch[ui.brow]` — tor-level, no query needed. Row handles are
+   integers (slot in 24 bits, brand in 8 — 690_196), so an i64 field
+   carries one. FLOATED to the store surface: `take(store[0])` arguably
+   deserves KORU161 (a literal is never a handle) instead of silent
+   empty — not smelt here, another session owns store.
+3. **Scalar-store `| full` carries no payload** (unlike String stores,
+   where `full` evicts the row value). Noted while probing; no action.
+
+The want is unchanged: returning a borrow past its owner's discharge must
+be a compile error. Nothing here makes that happen — this file, the app,
+and the three findings above are the discipline a human has to remember,
+which is what the ruling exists to remove.

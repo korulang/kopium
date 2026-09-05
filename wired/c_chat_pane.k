@@ -64,12 +64,11 @@ koru/vaxis:component(frame) {
 }
 
 // Identical ladder to increment A, with a transcript append where A
-// printed. The append lives INLINE in the ok arm: `t` is a branch binding
-// there, and branch bindings thread into sweep-arm captures (downloads'
-// pr.index precedent) where a tor parameter would not (floated finding).
-// No explicit close on that arm — append is the last use of the doc's
-// arena, and auto-discharge places the close.
+// printed. The append lives INLINE in the ok arm. `t` is now an OWNED copy
+// (`allocated!`, auto-freed) instead of an arena borrow — same lines as
+// before the ruling, minus the hole.
 tor handle-delta { payload: string }
+
 handle-delta = koru/yyjson:parse(text: payload)
 | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "choices")
     | found cs |> koru/yyjson:array.get(doc, v: cs, index: 0)
@@ -122,7 +121,7 @@ std/io:read-file(path: "/Users/larsde/.pi/agent/auth.json")
     | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "openrouter")
         | found orv |> koru/yyjson:object.get(doc, v: orv, key: "key")
             | found kv |> koru/yyjson:as.string(doc, v: kv)
-                | ok k |> app/auth:bearer(key: k): auth |> koru/yyjson:close(doc) |> start-stream(auth)
+                | ok k |> app/auth:bearer(key: k): auth |> std/io:free(content: k) |> koru/yyjson:close(doc) |> start-stream(auth)
                 | wrong-type |> koru/yyjson:close(doc) |> std/store:stored { ui.live: 0 }
             | not-found |> koru/yyjson:close(doc) |> std/store:stored { ui.live: 0 }
         | not-found |> koru/yyjson:close(doc) |> std/store:stored { ui.live: 0 }
@@ -137,6 +136,6 @@ koru/vaxis(kopium)
 ! draw w |> frame(win: w)
     |> koru/vaxis:sub-fill(parent: w, top: 1, bottom: 1): body
     |> std/store:query(reply)
-    ! query buf |> std/string:read(s: buf): text |> koru/vaxis:write-in(win: body, x: 0, y: 0, text)
+    ! query buf |> std/fmt:ln("{{ buf:S }}"): t |> koru/vaxis:write-in(win: body, x: 0, y: 0, t.text)
 ! tick _ when ui.live == 1 |> pump()
 ! key k when k.ch == 'q' |> koru/vaxis:quit()

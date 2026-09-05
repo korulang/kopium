@@ -11,5 +11,5 @@ app/wire:extra-lines(raw: "open(path: a)\nclose(handle: note_0)")
 | many n |> std/io:print.ln("many {{ n:d }} — the dropped line is feedback, not silence")
 
 app/wire:clean(raw: "open(path: a)\nclose(handle: note_0)")
-| ok first |> std/string:read(s: first): f |> std/io:print.ln("head runs: [{{ f:s }}]") |> std/string:free(s: first)
+| ok first |> std/io:print.ln("head runs: [{{ first:S }}]") |> std/string:free(s: first)
 | err e |> std/io:print.ln("clean failed: {{ e:s }}")

@@ -27,7 +27,6 @@ extract = koru/yyjson:parse(text: payload)
 | err _ => gone
 
 extract(payload: "{\"choices\":[{\"delta\":{\"content\":\"HELLO\"}}]}")
-| ok s |> std/string:read(s): t
-    |> std/io:print.ln("EXTRACTED: [{{ t:s }}]")
+| ok s |> std/io:print.ln("EXTRACTED: [{{ s:S }}]")
     |> std/string:free(s)
 | gone |> std/io:print.ln("GONE — extracted nothing")

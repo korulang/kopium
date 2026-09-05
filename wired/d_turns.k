@@ -30,25 +30,15 @@
 // `clear` and `pop-char` to free what they drop (pinned 610_023/024). All
 // three exit paths now leave clean: one turn, two turns, and ESC mid-stream.
 //
-// HONEST RED — the replies come back BLANK. See
-// holes/3_extracted_string_is_a_borrow_that_escapes.
-//
-// The turn machinery is sound: typing echoes, Enter sends, status 200
-// arrives, the `| ok` arm fires on every delta. But `handle-delta` now
-// RETURNS the extracted text instead of appending it inline, and the
-// `string` that `koru/yyjson:as.string` hands back is a BORROW into the
-// document's arena. Auto-discharge closes that arena when the tor exits,
-// so the transcript appends freed memory — five NUL bytes where "HELLO"
-// should be, length intact, exit 0, no diagnostic anywhere.
-//
-// Not routed around, and deliberately not fixed here: this is the same
-// hole 610_007 is parked RED on, whose own text says the borrow surface is
-// Lars's ruling to make and must not be answered by invention. What this
-// app adds is severity — 610_007's witness SIGSEGVs, which a harness
-// catches; this one returns plausible data of the right length and exits
-// clean. Increments A and B still work, and they differ in exactly one
-// respect: they consume the text inside the arm that owns the doc. The
-// hazard is the escape, not the extraction.
+// GREEN 2026-09-05 — first on the workaround, now on the ruling.
+// handle-delta went back to the explicit pyramid and copied the text into
+// an owned String BEFORE `close`; then 610_007 LANDED (KORU095 bans the
+// returned borrow, `as.string` copies out of the arena itself) and the whole
+// ladder collapsed into consume-inline: extract, copy, append, close — one
+// nest, void tor, auto-freed. Replies land. What changed is exactly one
+// thing from the red shape: nothing extracted crosses a discharge — the
+// borrow never leaves the arm that owns the doc, because a copy leaves
+// instead.
 
 import std/io
 import std/string
@@ -60,7 +50,7 @@ import koru/yyjson
 import koru/sse
 import app/auth
 
-std/store:new(ui) { live: 0[i64], retire: 0[i64] }
+std/store:new(ui) { live: 0[i64], retire: 0[i64], brow: 0[i64] }
 std/store:new(transcript, capacity: 2) { *std/string:String<instance!> }
 std/store:new(draft, capacity: 2) { *std/string:String<instance!> }
 
@@ -92,61 +82,45 @@ seed-draft = std/string:from-page(text: "")
     | full f |> std/string:free(s: f)
 | err _ |> _
 
-// The delta ladder, POINT-FREE. Increment B wrote this five levels deep with
-// `| not-found |> close(doc)` three times, byte for byte — the `analysis`
-// pyramid from the compiler, in an app. It collapses now: each stage leaves
-// exactly one branch unclaimed, so the thread runs the whole ladder and the
-// three chokes sit at the dedent, one per way the JSON can disappoint us.
-//
-// `doc` rides every stage explicitly — it's a value the thread can't carry, so
-// no stage goes bare. The collapse is per-stage, which is the point.
-//
-// What the branch names bought: this ladder is HETEROGENEOUS (`not-found` from
-// an object lookup, `out-of-range` from an index, `wrong-type` from a cast),
-// and until koru 807107f9 a choke replicated onto every stage whether it
-// declared the branch or not — so this exact shape was the one the feature
-// couldn't reach. Found by reading these three duplicate lines and asking why.
-// See holes/2_pointfree_choke_replicates_dead_claims.
-//
-// Extraction only: handle-delta now hands the text back and `pump` decides
-// what to do with it. The transcript append moved to the caller.
+// The delta ladder, EXPLICIT — deliberately not point-free. Going point-free
+// is what exposed hole 3 (the return turned an inline consume into an
+// escape). When 610_007 landed, `as.string` started copying out of the arena
+// itself — so this ladder consumes the copy INLINE (append to the transcript
+// right here) and returns NOTHING (void tor: nested `=>` re-raise of a unit
+// branch miscompiles in the backend, and there is nothing to carry out).
+// The debt is minted, used, and freed in one nest and never crosses a tor
+// boundary. See holes/3_extracted_string_is_a_borrow_that_escapes.
 tor handle-delta { payload: string }
-| ok string
-| gone
 handle-delta = koru/yyjson:parse(text: payload)
 | ok doc |> koru/yyjson:root(doc): r
     |> koru/yyjson:object.get(doc, v: r, key: "choices")
-    |> koru/yyjson:array.get(doc, index: 0)
-    |> koru/yyjson:object.get(doc, key: "delta")
-    |> koru/yyjson:object.get(doc, key: "content")
-    |> koru/yyjson:as.string(doc)
-    | not-found |> koru/yyjson:close(doc) => gone
-    | out-of-range |> koru/yyjson:close(doc) => gone
-    | wrong-type |> koru/yyjson:close(doc) => gone
-| err _ => gone
-
-// One frame's worth of transfer. `| complete` only raises the retire
-// flag — the batch row is taken out on the NEXT tick, never from inside
-// its own sweep.
+        | found ch |> koru/yyjson:array.get(doc, v: ch, index: 0)
+            | found el |> koru/yyjson:object.get(doc, v: el, key: "delta")
+                | found dl |> koru/yyjson:object.get(doc, v: dl, key: "content")
+                    | found ct |> koru/yyjson:as.string(doc, v: ct)
+                        | ok t |> koru/yyjson:close(doc) |> std/store:query(transcript)
+                            ! query buf |> std/string:append(s: buf, text: t)
+                                | ok |> _
+                                | err _ |> _
+                        | wrong-type |> koru/yyjson:close(doc)
+                    | not-found |> koru/yyjson:close(doc)
+                | not-found |> koru/yyjson:close(doc)
+            | out-of-range |> koru/yyjson:close(doc)
+        | not-found |> koru/yyjson:close(doc)
+| err _ |> _
 tor pump {}
 pump = std/store:query(batch)
 ! query p |> koru/curl:poll(p)
     ! chunk ch |> std/store:query(framer)
         ! query fs |> koru/sse:feed(s: fs, bytes: ch.data)
             ! data d |> handle-delta(payload: d)
-                | ok t |> std/store:query(transcript)
-                    ! query buf |> std/string:append(s: buf, text: t)
-                        | ok |> _
-                        | err _ |> _
-                | gone |> _
             | ok |> _
     ! finished r |> std/store:stored { ui.live: 0 } |> koru/curl:close(resp: r)
     | running |> _
     | complete |> std/store:stored { ui.retire: 1 }
-
 // Retire the finished batch so the next turn starts clean.
 tor retire {}
-retire = std/store:take(batch[0])
+retire = std/store:take(batch[ui.brow])
 | item p |> koru/curl:finish(p): m |> koru/curl:multi.close(m) |> std/store:stored { ui.retire: 0 }
 | empty |> std/store:stored { ui.retire: 0 }
 
@@ -158,7 +132,7 @@ retire = std/store:take(batch[0])
 tor send { req: string }
 send = app/auth:recall(): auth |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: req, headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
 | started p |> std/store:stored { ui.live: 1 } |> std/store:insert(batch) { p }
-    | row _ |> _
+    | row rh |> std/store:stored { ui.brow: rh }
     | full f |> koru/curl:cancel(p: f): m |> koru/curl:multi.close(m)
 | failed _ |> std/store:stored { ui.live: 0 }
 
@@ -177,15 +151,12 @@ send = app/auth:recall(): auth |> koru/curl:multi.new() |> koru/curl:multi.add.p
 // `clear` is not even the only hazard: any append to the draft would have
 // done it too, with the owner alive and no free anywhere.
 //
-// So the handler snapshots the draft with `from-page` first. `snap` is an
-// owned copy nothing else can reach, `utext` is a borrow of a local with a
-// visible death, and the snapshot buys back an ordering: `clear(s: d)` can now
-// run BEFORE the transcript is stamped, because the draft is no longer what
-// the turn is reading from.
-//
-// `commit` is split out for that free, not for tidiness: the append ladder has
-// four leaves, and a snapshot freed in the handler would need a `free` on each
-// one. Behind a tor call it is one line at the end of one chain.
+// So the handler copies the draft with `fmt:ln` first (`read` retired under
+// 610_007 — there is no borrow to travel anymore). `u.text` is a fresh
+// allocated string nothing else can reach, and the copy buys back the
+// ordering: `clear(s: d)` runs BEFORE the transcript is stamped, because
+// the draft is no longer what the turn is reading from. Auto-discharge
+// frees the copy after the chain.
 tor commit { text: string, req: string }
 commit = std/store:query(transcript)
 ! query buf |> std/string:append(s: buf, text: "you: ")
@@ -231,19 +202,15 @@ koru/vaxis(kopium)
     |> koru/vaxis:sub-fill(parent: w, top: 1, bottom: 3): body
     |> koru/vaxis:sub-from-bottom(parent: w, up: 2, h: 1): iw
     |> std/store:query(draft)
-    ! query d |> std/string:read(s: d): dtext |> std/fmt:ln("> {{ dtext:s }}_"): line |> koru/vaxis:write-in(win: iw, x: 0, y: 0, line.text) |> std/store:query(transcript)
-        ! query buf |> std/string:read(s: buf): ttext |> koru/vaxis:write-in(win: body, x: 0, y: 0, text: ttext)
+    ! query d |> std/fmt:ln("> {{ d:S }}_"): line |> koru/vaxis:write-in(win: iw, x: 0, y: 0, line.text) |> std/store:query(transcript)
+        ! query buf |> std/fmt:ln("{{ buf:S }}"): tline |> koru/vaxis:write-in(win: body, x: 0, y: 0, tline.text)
 ! tick _ when ui.live == 1 |> pump()
 ! tick _ when ui.retire == 1 |> retire()
-! key k when k.ch == 27 |> koru/vaxis:quit()
 ! key k when k.ch == 13 and ui.live == 0 and ui.retire == 0 |> std/store:query(draft)
-    ! query d |> std/string:read(s: d): dtext |> std/string:from-page(text: dtext)
-        | ok snap |> std/string:read(s: snap): utext
-            |> app/auth:chat-body(prompt: utext): body
-            |> std/string:clear(s: d)
-            |> commit(text: utext, req: body)
-            |> std/string:free(s: snap)
-        | err _ |> _
+    ! query d |> std/fmt:ln("{{ d:S }}"): u
+        |> app/auth:chat-body(prompt: u.text): body
+        |> std/string:clear(s: d)
+        |> commit(u.text, req: body)
 ! key k when k.ch == 127 |> std/store:query(draft)
     ! query d |> std/string:pop-char(s: d)
 ! key k when k.ch == 8 |> std/store:query(draft)
