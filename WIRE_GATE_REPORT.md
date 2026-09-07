@@ -103,14 +103,38 @@ They compose exactly as 08-07 ruled: strict refuses pre-flight, lenient
 runs and reports. Neither half alone is the product — strict-only is the
 gate again, lenient-only is mush.
 
-**Live ambiguity (probe `headless/probe_define_arms.k`, uncommitted):**
-armed bodies install fine (`DEFINED choose`), dispatch dies with opaque
-`ValidationFailed`. Unestablished whether that's the shape-checker
-demanding totality or something dumber (arg validation, scope wiring).
-Discriminating run: drop the `bad` arm and re-run — identical error means
-not arm-counting; changed error locates the shape-checker.
+**Discriminated 2026-09-07 (probes `/tmp/probe_single.k`, `/tmp/probe_multi.k`, throwaway):**
+single-arm bodies fail IDENTICALLY (`DEFINED`, then `REFUSED: ValidationFailed`) —
+not arm-counting, not the shape-checker demanding totality. Two core defects instead,
+both in the runtime-define path (`koru_std/interpreter.kz`), no harness involvement:
+1. **Dispatch re-parse rejects what define accepts** — `define` validates with the full
+  parser (inline arms `pick(text) | ok v |> ...` parse fine), but dispatch re-parses the
+  stored `body_source` with lightweight `flow_parser.parseFlow` (`interpreter.kz:2536`),
+  which expects arms on their own `|` lines and fails the inline shape. The `.err` maps to
+  bare `error.ValidationFailed` (`interpreter.kz:2549`) with the parser's message
+  ("Invalid invocation syntax") discarded — hence opaque.
+2. **Define body extraction breaks on multi-line bodies** — extraction slices from
+  `f.location.line` (`interpreter.kz:1299-1317`), but `Flow.location` is captured
+  *after* continuations are consumed (`parser.zig:6305,6310` pattern:
+  `.location = self.getCurrentLocation()` post-`parseContinuations`), so for any body
+  with arms on following lines the slice starts past the `=`, finds no `=`, and refuses
+  with "Definition body is empty". Multi-line armed bodies can never install.
+Armed define has NEVER worked end-to-end (all witnessed live defines are
+single-invocation). Per repo rule the fix lives in `~/src/koru`, not here: (a) capture
+the impl head line for extraction, (b) teach `flow_parser` inline continuations (parser
+parity), (c) surface the re-parse message instead of bare `ValidationFailed`.
+**Landed 2026-09-07 (koru `wip-armed-define` c4bd1094, unpushed):** both
+halves fixed — flow_parser takes inline arms (3 new unit tests, 24/24),
+define locates the `<name> = ...` head by name (multi-line installs),
+dispatch re-parse failure names flow + rejection + body. `define` moves to
+`koru_std/interpreter.define.kz` (~part split, wall pin). Verified live:
+single-arm, two-arm (both branches fire), multi-line — all dispatch.
+Belief gardened as koru `frag-a-defined-body-must-parse-at-dispatch`.
+Sequencing (multi-line RUN, partial-result branch) still open — the next
+and larger half. Note: output builds link flow_parser from the installed
+tree, so this lands for harness use on install, not on merge.
 
-## Repair shape (not started)
+## Repair shape (armed-define landed c4bd1094; sequencing not started)
 
 Sequencing goes in `run`: accept line-separated invocations, execute in
 order, report per step. Demands a new branch shape for partial results
