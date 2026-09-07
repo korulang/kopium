@@ -134,18 +134,37 @@ Sequencing (multi-line RUN, partial-result branch) still open — the next
 and larger half. Note: output builds link flow_parser from the installed
 tree, so this lands for harness use on install, not on merge.
 
-## Repair shape (armed-define landed c4bd1094; sequencing not started)
+## Repair shape (armed-define c4bd1094 + sequencing 51139241 landed; experiment open)
 
-Sequencing goes in `run`: accept line-separated invocations, execute in
-order, report per step. Demands a new branch shape for partial results
-(step N ran, step N+1 refused) — the missing type from site 6. Then the
-prompt sentences (including tonight's strip) flip to describe sequencing,
-`clean` keeps whole replies, the probe contrast inverts, and the wall
-guards the new shape. Direction derived in the stab below (continue,
-per-step, from frag-partial-programs) — rank against the other open
-moves is the remaining ruling and is yours.
+Sequencing is BUILT (koru `wip-armed-define` 51139241, unpushed):
+bridge:run segments items, routes each through the existing single
+paths sharing pool + defined table, reports `?partial` (optional —
+no caller changes; 440_008/012 match). Witnessed: PARTIAL 2/2,
+mid-turn refusal continues, open→append→close chains note_0 in one
+turn with the file holding the bytes. What remains: merge + install
+(output builds link the installed tree), the fragment's experiment
+(identical goals multi- vs single-line, cost-per-task votes), then
+the kopium wall flips (live.k will owe a `partial` arm — KORU022
+forces it loud at install).
 
 ## Sequencing stab (2026-09-07, probes throwaway in /tmp)
+
+CORRECTION — the above stab worked from hearsay. The ruled text
+(`concepts/frag-partial-programs.md`, banked 7250105, correction same
+night) is explicit and this report now defers to it:
+
+- Composition IS the product: "several invocations in one turn, chained
+  through handles the interpreter just issued." Not handle-less notes —
+  the experiment must chain FRESH HANDLES across steps in one turn.
+- Guilty until measured innocent, with the experiment NAMED:
+  multi-invocation turns vs the one-line law, cost-per-task and
+  reliability vote. No rulings-by-taste owed on stop/continue or
+  observations — the fragment prescribes measurement, and chaining
+  implies continue-and-report (later steps consume earlier steps'
+  outputs; stop-first would rig the experiment toward single-line).
+- Rank is ruled too: composition is "load-bearing, not a luxury."
+  Nothing here awaits a decision except execution and the experiment's
+  outcome (which can correct the fragment itself).
 
 Refusal, verbatim (`/tmp/probe_seq.k`): two invocations in one `bridge:run`
 turn die as `parse-error: one invocation per turn: a second line is a
@@ -184,12 +203,16 @@ partial is a different axis (WHICH step refused) than branch-level
 surfaces through their outcome shape, and the sequence wrapper reports
 the step. Compose, don't fork.
 
-Rulings owed, reduced: (a) and (b) are answered by derivation above
-(continue, per-step) — overrule me if the derivation is wrong; (c) rank
-against slot-leak/corpus/unpause remains genuinely open and is yours.
-
-## What would correct this report
-
+Execution order (no further rulings owed): build sequencing in
+`bridge:run` (segment items textually — a non-`|` line at depth zero
+opens an item, `tor ` opens a define item; each slice still routes
+through the EXISTING single paths so mis-segmentation fails loud
+through today's validators, never silent), continue past refusal,
+report one structured line per step under a new `partial` branch,
+compose with koru-ub's outcome shape (no parallel partial type).
+Then the fragment's experiment: identical goals, multi- vs single-line,
+cost-per-task votes. Handle-chained (open→append→close), or it tests
+nothing ruled.
 A journaled ruling for the gate predating 08-17 (searched: none); or the
 sequencing implementation landing with the wall green on the new shape —
 at which point this file is history, not inventory.
