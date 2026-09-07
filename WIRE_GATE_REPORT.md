@@ -134,18 +134,22 @@ Sequencing (multi-line RUN, partial-result branch) still open — the next
 and larger half. Note: output builds link flow_parser from the installed
 tree, so this lands for harness use on install, not on merge.
 
-## Repair shape (armed-define c4bd1094 + sequencing 51139241 landed; experiment open)
-
-Sequencing is BUILT (koru `wip-armed-define` 51139241, unpushed):
-bridge:run segments items, routes each through the existing single
-paths sharing pool + defined table, reports `?partial` (optional —
-no caller changes; 440_008/012 match). Witnessed: PARTIAL 2/2,
-mid-turn refusal continues, open→append→close chains note_0 in one
-turn with the file holding the bytes. What remains: merge + install
-(output builds link the installed tree), the fragment's experiment
-(identical goals multi- vs single-line, cost-per-task votes), then
-the kopium wall flips (live.k will owe a `partial` arm — KORU022
-forces it loud at install).
+## Repair shape (chains 70aeb093 + sequencing 51139241 + armed-define c4bd1094; experiment open)
+Three commits on koru `wip-armed-define` (unpushed), each witnessed live:
+armed-define `c4bd1094` (define stores arms, dispatch re-parses them);
+sequencing `51139241` (multi-FLOW turns share pool + table, `?partial`
+reports per step — for independent invocations, NOT chains); chains
+`70aeb093` (THE ruled shape: parse.wire accepts arms, wire shapes only
+the head, plain returns match `ok` interpreted). Witnessed: `open |
+ok h |> append(handle: h) | ok h2 |> close` runs end to end, file holds
+the bytes, handles release — no predicted names, all bound.
+Correction to the orisha note above a second time: orisha's chained demo
+was always the ruled shape (bind `s`, reuse it); my line-sequencer
+serves the other composition (independent invocations). Both now run.
+Remaining: merge + install (output builds link the installed tree),
+the fragment's experiment (identical goals, chained vs one-line law,
+cost-per-task votes), kopium prompt flip (wire.kz clean/extra-lines
+still drop arms — KORU022 forces the `partial` arm loud at install).
 
 ## Sequencing stab (2026-09-07, probes throwaway in /tmp)
 
