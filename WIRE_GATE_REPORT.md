@@ -141,9 +141,9 @@ order, report per step. Demands a new branch shape for partial results
 (step N ran, step N+1 refused) — the missing type from site 6. Then the
 prompt sentences (including tonight's strip) flip to describe sequencing,
 `clean` keeps whole replies, the probe contrast inverts, and the wall
-guards the new shape. Two rulings owed by Lars before implementation:
-stop vs continue at first failure; one observation per step vs a single
-combined report.
+guards the new shape. Direction derived in the stab below (continue,
+per-step, from frag-partial-programs) — rank against the other open
+moves is the remaining ruling and is yours.
 
 ## Sequencing stab (2026-09-07, probes throwaway in /tmp)
 
@@ -158,18 +158,24 @@ not multi-invocation sequencing. `runtime:run` always accepted multi-line
 single flows; the gate is bridge-level and item-shaped, not line-shaped.
 
 (`DEFINED late` turn 2, `late(text:)` dispatches turn 3 — the session table
-persists). One-turn sequencing is therefore latency/atomicity, not
-enablement — the product gap it closes is turns-per-task, not
-can-vs-cannot. That ordering matters against the other open moves.
+persists). That cross-turn path working does NOT demote one-turn
+sequencing: the product is sending partial programs — one body, one
+evaluation, every step run and reported. Cross-turn is the workaround;
+one-turn is the purpose. Retract the latency framing above outright.
 
 Sketch (no code until ruled): segment the turn into items with the full
 parser (locations give `[head_i, head_{i+1})` slices — no new grammar, no
 divergent splitter), move the `tor ` discrimination inside the loop so
 mixed turns (invoke + define + invoke) route per item, thread session
 state the loop already threads across turns (defined table, pool,
-budget). Defaults with precedent: stop-at-first-refusal (`fail_fast`
-rides `run` already), one observation per step (the harness renders
-per-turn observations today; combining invents a format).
+budget). Direction is derived, not open: CONTINUE past refusal and report
+per step. Stop-first rebuilds the gate in miniature — one failure per
+turn is N turns to discover N problems, the exact token burn the
+partial-programs fragment exists to kill. `fail_fast` is parser plumbing,
+not doctrine; doctrine is `frag-partial-programs`: run the body, report
+every step, same as the orisha endpoint evaluates the whole chained body.
+Per-step observations (the harness renders per-turn today; one entry per
+step, no invented combined format).
 
 Constraint, not a second design: do NOT invent a parallel partial-result
 type beside koru-ub's in-flight `unhandled-branch` outcome. Sequence-level
@@ -178,10 +184,9 @@ partial is a different axis (WHICH step refused) than branch-level
 surfaces through their outcome shape, and the sequence wrapper reports
 the step. Compose, don't fork.
 
-Rulings owed, sharpened: (a) stop vs continue — recommend stop-first;
-(b) per-step vs combined observations — recommend per-step; (c) is
-one-turn sequencing an enabler for a needed capability, or
-latency/atomicity — and does it outrank slot-leak/corpus/unpause?
+Rulings owed, reduced: (a) and (b) are answered by derivation above
+(continue, per-step) — overrule me if the derivation is wrong; (c) rank
+against slot-leak/corpus/unpause remains genuinely open and is yours.
 
 ## What would correct this report
 
