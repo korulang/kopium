@@ -1,0 +1,24 @@
+--- notes read, canned: the bridge opens what it could never see ---
+--- 1. attempt py-expr-eval: read the task file ---
+# Probe fixture, authored for this replay — not VulcanBench task code.
+# Stands in for the file a py-expr-eval attempt must open before it can do
+# anything: one arithmetic expression, the bridge's first honest step.
+2 + 3 * 4
+
+      [read] ok: 'probe_task_expr.txt'
+read ran — bridge holds 0 resource(s), nothing minted
+--- 2. missing file is not-found, not a crash ---
+      [read] not-found: 'no-such-file.txt'
+missing ran — bridge holds 0 resource(s), nothing minted
+--- 3. the session outlives the miss ---
+      still here after not-found
+say ran — bridge holds 0 resource(s)
+--- 4. derived vocabulary (register, now with read) ---
+open(path: string)
+append(handle: string<!open>, text: string)
+close(handle: string<!open>)
+say(text: string)
+read(path: string)
+--- 5. contrast: delete was never declared ---
+DENIED delete — the wall held, smallest wall kept
+--- done ---

@@ -1,6 +1,6 @@
 // PROBE, not a deliverable. A headed kopium needs the bridge reachable from a
 // vaxis arm, and arms cannot see flow bindings — the store is the only channel.
-// So: can a store column hold `*std/bridge:Bridge<std/bridge:session!>`?
+// So: can a store column hold `*std/bridge:Bridge<session!>`?
 //
 // 690_055's header says owned-resource columns past std/string are "currently
 // RED". Its marker and the board both say SUCCESS. This settles which.
@@ -9,7 +9,7 @@ import std/store
 import std/bridge
 import app/notes
 
-std/store:new(session, capacity: 2) { *std/bridge:Bridge<std/bridge:session!> }
+std/store:new(session, capacity: 2) { *std/bridge:Bridge<session!> }
 
 // A tor with NO parameters reaching the bridge purely through the store — the
 // shape a `! tick` or `! key` arm is restricted to.

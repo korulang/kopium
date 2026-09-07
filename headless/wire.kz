@@ -62,7 +62,9 @@ var auth_len: usize = 0;
 // ============================================================================
 
 // The accumulated reply, with surrounding whitespace and any markdown fence
-// stripped, reduced to its first line. A chat model wraps code in ``` about
+// stripped, reduced to its head: one invocation — or, when the reply opens
+// with `tor `, the two lines of a declaration, which the run loop installs
+// as a verb rather than dispatching. A chat model wraps code in ``` about
 // half the time, and the interpreter is owed source, not a transcript of one.
 //
 // COPY AT THE BOUNDARY (610_007 stage 2). This used to be `{ raw: string } ->
@@ -80,7 +82,7 @@ var auth_len: usize = 0;
 // and frees it inside one visible flow. One memcpy of a chat line, once per
 // turn, on a network boundary — the cost 610_007 priced as noise.
 ~pub tor clean { raw: string }
-| ok *std/string:String<std/string:view!>
+| ok *std/string:String<view!>
 | err string
 
 ~clean = clean-span(raw): span |> std/string:from-page(text: span)
@@ -101,31 +103,54 @@ var auth_len: usize = 0;
         s = std.mem.trim(u8, s, " \t\r\n");
     }
 
-    // One invocation per turn: if the model volunteered prose after it, keep
-    // the first line. A tool call is a line, and this is the cheapest way to
-    // be strict about that without pretending to parse Koru here.
+    // A declaration is two lines, not one: `tor name { ... }` plus its body.
+    // The run loop discriminates declaration from invocation, so the head of
+    // a `tor `-led reply is both lines. Anything else is one invocation per
+    // turn: if the model volunteered prose after it, keep the first line. A
+    // tool call is a line, and this is the cheapest way to be strict about
+    // that without pretending to parse Koru here.
+    if (std.mem.startsWith(u8, s, "tor ")) {
+        if (std.mem.indexOfScalar(u8, s, '\n')) |nl| {
+            const rest = s[nl + 1 ..];
+            const end = std.mem.indexOfScalar(u8, rest, '\n') orelse rest.len;
+            return std.mem.trim(u8, s[0 .. nl + 1 + end], " \t\r");
+        }
+        return s;
+    }
     if (std.mem.indexOfScalar(u8, s, '\n')) |nl| s = std.mem.trim(u8, s[0..nl], " \t\r");
 
     return s;
 }
 
-// How many lines the reply held. The wire is one invocation per turn by law
-// (R2: chains refuse at parse time), and `clean` above enforces it by keeping
-// the first line — but a drop the agent never hears about is a drop it will
-// repeat. The `many` arm lets the caller say so; `one` covers the happy path
-// and the empty reply alike.
+// How many lines of the reply did NOT run. The wire is one invocation per
+// turn by law (R2: chains refuse at parse time) — with the one exception
+// `clean` keeps: a `tor `-led declaration, whose two lines run as one
+// install. `clean` enforces the head either way, but a drop the agent never
+// hears about is a drop it will repeat. The `many` arm lets the caller say
+// so; `one` covers the happy path, the whole-declaration path, and the
+// empty reply alike. Fences are stripped before counting, the same way
+// `clean-span` strips them before keeping: fence lines never ran, but they
+// were never wire either.
 ~pub tor extra-lines { raw: string }
 | one
 | many u64
 
 ~proc extra-lines|zig {
-    const s = std.mem.trim(u8, raw, " \t\r\n");
+    var s = std.mem.trim(u8, raw, " \t\r\n");
+    if (s.len == 0) return .{ .one = .{} };
+    if (std.mem.startsWith(u8, s, "```")) {
+        const nl = std.mem.indexOfScalar(u8, s, '\n') orelse s.len;
+        s = s[@min(nl + 1, s.len)..];
+        if (std.mem.lastIndexOf(u8, s, "```")) |end| s = s[0..end];
+        s = std.mem.trim(u8, s, " \t\r\n");
+    }
     if (s.len == 0) return .{ .one = .{} };
     var n: u64 = 1;
     for (s) |ch| {
         if (ch == '\n') n += 1;
     }
     if (n <= 1) return .{ .one = .{} };
+    if (n == 2 and std.mem.startsWith(u8, s, "tor ")) return .{ .one = .{} };
     return .{ .many = n };
 }
 
@@ -205,9 +230,10 @@ var grammar_len: usize = 0;
 
     const rules =
         \\You are driving a Koru interpreter. Every reply you make is exactly one wire
-        \\line — including when you are just talking. There is no prose channel:
-        \\to say something, call say(). What you may call and how a line is written
-        \\are both derived from the session's own declaration:
+        \\line — including when you are just talking — with one exception: a
+        \\definition, which is two lines and is declared below. There is no prose
+        \\channel: to say something, call say(). What you may call and how a line
+        \\is written are both derived from the session's own declaration:
         \\
     ;
 
@@ -231,6 +257,14 @@ var grammar_len: usize = 0;
         \\open(path: "notes.txt")
         \\append(handle: "note_0", text: "hello")
         \\close(handle: "note_0")
+        \\
+        \\Growth — teaching the session a new verb. A definition is the one reply
+        \\that is TWO lines: the first line starts with `tor ` and declares the
+        \\verb and its params, the second line is its body over verbs you already
+        \\hold. The run loop installs it instead of dispatching it, and the next
+        \\turn's vocabulary lists it beside the compiled verbs. Example:
+        \\tor greet { msg: string }
+        \\greet = say(text: msg)
     ;
 
     var out = std.ArrayListUnmanaged(u8){};

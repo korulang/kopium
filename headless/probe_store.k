@@ -8,7 +8,7 @@ import std/fmt
 import std/bridge
 import app/notes
 
-std/store:new(reply, capacity: 2) { *std/string:String<std/string:instance!> }
+std/store:new(reply, capacity: 2) { *std/string:String<instance!> }
 
 tor drive { br: *std/bridge:Bridge }
 drive = std/store:query(reply)

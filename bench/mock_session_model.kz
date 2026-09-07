@@ -1,0 +1,28 @@
+// Canned turns for the mock register on the session.k machine.
+// Network out; the thing under test is the Bridge + mock vocabulary.
+
+~pub tor say { turn: u32 } -> string
+
+~proc say|zig {
+    return switch (turn) {
+        1 => "say(text: \"hi\")",
+        2 => "get-users()",
+        3 => "tor greet { msg: string }\ngreet = say(text: msg)",
+        4 => "greet(msg: \"hello from mock session\")",
+        5 => "sync()",
+        else => "say(text: \"done\")",
+    };
+}
+
+~pub tor intent { turn: u32 } -> string
+
+~proc intent|zig {
+    return switch (turn) {
+        1 => "speak a line from the mock register",
+        2 => "call a second compiled verb",
+        3 => "teach the session a new verb",
+        4 => "use the verb it just defined",
+        5 => "name a verb nobody declared",
+        else => "speak again",
+    };
+}

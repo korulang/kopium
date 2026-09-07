@@ -1,0 +1,71 @@
+// A definition is two statements in one run() source (session.k).
+// readln's buffer dies on the next read, so we copy before the body line.
+
+const std = @import("std");
+
+var intake_buf: [8192]u8 = undefined;
+
+~pub tor intake { first: string }
+| ready string
+| incomplete
+| failed string
+
+~proc intake|zig {
+    const t = std.mem.trim(u8, first, " \t\r");
+    if (!std.mem.startsWith(u8, t, "tor ")) {
+        return .{ .ready = first };
+    }
+    if (first.len + 1 >= $mod.intake_buf.len) {
+        return .{ .failed = "definition too long" };
+    }
+    @memcpy($mod.intake_buf[0..first.len], first);
+    var i: usize = first.len;
+    $mod.intake_buf[i] = '\n';
+    i += 1;
+    const stdin = std.fs.File.stdin();
+    const start = i;
+    while (i < $mod.intake_buf.len) {
+        var b: [1]u8 = undefined;
+        const n = stdin.read(b[0..]) catch return .{ .failed = "Failed to read stdin" };
+        if (n == 0) {
+            if (i == start) return .{ .incomplete = .{} };
+            break;
+        }
+        if (b[0] == '\n') {
+            if (i > start and $mod.intake_buf[i - 1] == '\r') i -= 1;
+            break;
+        }
+        $mod.intake_buf[i] = b[0];
+        i += 1;
+    }
+    if (i == $mod.intake_buf.len) return .{ .failed = "line too long" };
+    return .{ .ready = $mod.intake_buf[0..i] };
+}
+
+// Host control plane — not a Koru invocation. The same Bridge that
+// `run`s also renders `vocabulary` (register + inventions).
+~pub tor kind { source: string }
+| vocabulary
+| grammar
+| run string
+
+~proc kind|zig {
+    const t = std.mem.trim(u8, source, " \t\r");
+    if (std.mem.eql(u8, t, ".vocabulary")) return .{ .vocabulary = .{} };
+    if (std.mem.eql(u8, t, ".grammar")) return .{ .grammar = .{} };
+    return .{ .run = source };
+}
+
+~pub tor emit-framed { tag: string, text: string }
+
+~proc emit-framed|zig {
+    const stdout = std.fs.File.stdout();
+    stdout.writeAll(tag) catch return;
+    stdout.writeAll("-BEGIN\n") catch return;
+    stdout.writeAll(text) catch return;
+    if (text.len == 0 or text[text.len - 1] != '\n') {
+        stdout.writeAll("\n") catch return;
+    }
+    stdout.writeAll(tag) catch return;
+    stdout.writeAll("-END\n") catch return;
+}

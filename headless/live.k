@@ -43,10 +43,10 @@ import koru/yyjson
 
 // The conversation so far: escaped, comma-prefixed chat messages, spliced
 // between the system message and the current goal.
-std/store:new(transcript, capacity: 2) { *std/string:String<std/string:instance!> }
+std/store:new(transcript, capacity: 2) { *std/string:String<instance!> }
 
 // This turn's streamed reply, cleared before each ask.
-std/store:new(reply, capacity: 2) { *std/string:String<std/string:instance!> }
+std/store:new(reply, capacity: 2) { *std/string:String<instance!> }
 
 // One SSE delta -> the reply String. Called from inside the arm that still
 // owns `doc`, which is the whole difference between this and `d_turns.k`'s
@@ -69,7 +69,7 @@ tor handle-delta { payload: string }
 // NOTHING for content chunks and bare terminals, exactly one summary line
 // for the usage-bearing event. A bare terminal whose usage twin never
 // arrives prints nothing; that stream is broken anyway (empty reply).
-tor note-usage { doc: *koru/yyjson:Doc<koru/yyjson:open>, r: *koru/yyjson:Value }
+tor note-usage { doc: *koru/yyjson:Doc<open>, r: *koru/yyjson:Value }
 note-usage = koru/yyjson:object.get(doc, v: r, key: "usage")
 | found u |> koru/yyjson:object.get(doc, v: u, key: "prompt_tokens")
     | found pv |> koru/yyjson:as.int(doc, v: pv)
@@ -92,7 +92,7 @@ note-usage = koru/yyjson:object.get(doc, v: r, key: "usage")
 // down as tor params; finish_reason is a borrow printed inside the owning
 // arm (never escapes — hole 3's rule). The descent repeats per printer:
 // shared would need returning the borrow, which is the banned shape.
-tor report-full { doc: *koru/yyjson:Doc<koru/yyjson:open>, r: *koru/yyjson:Value, p: i64, c: i64, rt: i64 }
+tor report-full { doc: *koru/yyjson:Doc<open>, r: *koru/yyjson:Value, p: i64, c: i64, rt: i64 }
 report-full = koru/yyjson:object.get(doc, v: r, key: "choices")
 | found cs |> koru/yyjson:array.get(doc, v: cs, index: 0)
     | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "finish_reason")
@@ -103,7 +103,7 @@ report-full = koru/yyjson:object.get(doc, v: r, key: "choices")
     | out-of-range |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} reasoning {{ rt:d }} finish: ?")
 | not-found |> std/io:print.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} reasoning {{ rt:d }} finish: ?")
 
-tor report-part { doc: *koru/yyjson:Doc<koru/yyjson:open>, r: *koru/yyjson:Value, p: i64, c: i64, why: string }
+tor report-part { doc: *koru/yyjson:Doc<open>, r: *koru/yyjson:Value, p: i64, c: i64, why: string }
 report-part = koru/yyjson:object.get(doc, v: r, key: "choices")
 | found cs |> koru/yyjson:array.get(doc, v: cs, index: 0)
     | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "finish_reason")
@@ -193,7 +193,7 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
     |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run. HandleNotHeld means you named a handle this session never issued — check which handles you actually opened."): mb
     |> observe(mb.text)
 | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
-    |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only open, append, close."): mc
+    |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only the verbs in Your vocabulary above — open, append, close, read, edit, say, and every verb you defined this session."): mc
     |> observe(mc.text)
 | parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
     |> std/fmt:ln("[tool result] That was not a Koru invocation: {{ p.message:s }}. Reply with exactly one invocation and no prose."): md
@@ -231,7 +231,7 @@ drive = std/store:query(reply)
         |> act(br, goal, source: src.text)
         |> app/wire:extra-lines(raw: raw.text)
         | one |> std/string:free(s: cs)
-        | many n |> std/fmt:ln("[tool result] note: your reply held {{ n:d }} lines — one invocation per turn, so only the first ran."): mq
+        | many n |> std/fmt:ln("[tool result] note: your reply held {{ n:d }} lines — one invocation, or one two-line definition, per turn, so only the head ran."): mq
             |> observe(mq.text)
             |> std/string:free(s: cs)
     | err e |> std/io:print.ln("  could not snapshot the reply: {{ e:s }}")

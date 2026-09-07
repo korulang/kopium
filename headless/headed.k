@@ -52,7 +52,7 @@
 //
 // 1. The bridge lives in a STORE. A vaxis arm is a handler, not a continuation
 //    — it cannot see a flow binding — so the store is the only channel to it.
-//    A store column holding `*std/bridge:Bridge<std/bridge:session!>` is an
+//    A store column holding `*std/bridge:Bridge<session!>` is an
 //    owned-resource column, which `690_055`'s own header still calls "currently
 //    RED". It is green, and `probe_bridge_store.k` in this directory is the
 //    twenty-line check that settled it.
@@ -84,16 +84,16 @@ std/store:new(ui) { live: 0[i64], retire: 0[i64] }
 
 // The bridge itself. An owned-resource column; teardown closes it, and with it
 // every note the agent still holds.
-std/store:new(session, capacity: 2) { *std/bridge:Bridge<std/bridge:session!> }
+std/store:new(session, capacity: 2) { *std/bridge:Bridge<session!> }
 
 // What you see.
-std/store:new(transcript, capacity: 2) { *std/string:String<std/string:instance!> }
+std/store:new(transcript, capacity: 2) { *std/string:String<instance!> }
 // What the model sees: escaped, comma-prefixed chat messages.
-std/store:new(history, capacity: 2) { *std/string:String<std/string:instance!> }
+std/store:new(history, capacity: 2) { *std/string:String<instance!> }
 // This turn's streamed reply, cleared before each send.
-std/store:new(reply, capacity: 2) { *std/string:String<std/string:instance!> }
+std/store:new(reply, capacity: 2) { *std/string:String<instance!> }
 // The line you are typing.
-std/store:new(draft, capacity: 2) { *std/string:String<std/string:instance!> }
+std/store:new(draft, capacity: 2) { *std/string:String<instance!> }
 
 std/store:new(batch, capacity: 2) { *koru/curl:Pending<open!> }
 ! discharge p |> koru/curl:cancel(p) |> koru/curl:multi.close()
@@ -175,7 +175,7 @@ act = std/store:query(session)
         |> announce(mi.text)
     | dispatch-error e |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run — you named a handle this session never issued.\n\n"): mb
         |> announce(mb.text)
-    | event-denied ev |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only open, append, close.\n\n"): mc
+    | event-denied ev |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only the verbs in Your vocabulary above — open, append, close, say, and every verb you defined this session.\n\n"): mc
         |> announce(mc.text)
     | parse-error p |> std/fmt:ln("[tool result] that was not a Koru invocation: {{ p.message:s }}. Reply with exactly one invocation and no prose.\n\n"): md
         |> announce(md.text)

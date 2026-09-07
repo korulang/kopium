@@ -16,21 +16,21 @@ import koru/curl
 import koru/yyjson
 import app/wire
 
-tor has-usage { doc: *koru/yyjson:Doc<koru/yyjson:open>, r: *koru/yyjson:Value }
+tor has-usage { doc: *koru/yyjson:Doc<open>, r: *koru/yyjson:Value }
 has-usage = koru/yyjson:object.get(doc, v: r, key: "usage")
 | found u |> koru/yyjson:object.get(doc, v: u, key: "prompt_tokens")
     | found _ |> std/io:print.ln("U:1")
     | not-found |> std/io:print.ln("U:0-null")
 | not-found |> std/io:print.ln("U:0")
 
-tor has-finish { doc: *koru/yyjson:Doc<koru/yyjson:open>, c0: *koru/yyjson:Value }
+tor has-finish { doc: *koru/yyjson:Doc<open>, c0: *koru/yyjson:Value }
 has-finish = koru/yyjson:object.get(doc, v: c0, key: "finish_reason")
 | found fv |> koru/yyjson:as.string(doc, v: fv)
     | ok fr |> std/io:print.ln("F:{{ fr:s }}") |> std/io:free(content: fr)
     | wrong-type |> std/io:print.ln("F:null")
 | not-found |> std/io:print.ln("F:none")
 
-tor has-content { doc: *koru/yyjson:Doc<koru/yyjson:open>, c0: *koru/yyjson:Value }
+tor has-content { doc: *koru/yyjson:Doc<open>, c0: *koru/yyjson:Value }
 has-content = koru/yyjson:object.get(doc, v: c0, key: "delta")
 | found dv |> koru/yyjson:object.get(doc, v: dv, key: "content")
     | found _ |> std/io:print.ln("C:1")

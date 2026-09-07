@@ -78,6 +78,136 @@ fn slotOf(handle: []const u8) ?usize {
     }
 }
 
+// ============================================================================
+// READ — the bridge's eyes, and the smallest wall that fits them
+// ============================================================================
+//
+// Forced by the py-expr-eval family (vulcan-forcing 2026-09-07): file tasks
+// need file-read — the bridge cannot see code it cannot open. Before this
+// verb the agent could create and truncate (`open`) but never look at what
+// was already on disk; every file-task attempt died at the first step.
+//
+// Scope rules (read-only, nothing minted):
+//   - `openFile(path, .{})`: no create, no truncate, no write. `open` above
+//     is the destructive verb; this one cannot modify the disk by
+//     construction, only witness it.
+//   - `-> void`: no handle minted, no obligation issued. Contrast koru
+//     335_042 (`std/io:read-file`'s buffer carries `allocated!` and MUST
+//     reach `std/io:free`): no Koru-visible buffer ever exists here, so
+//     there is nothing to discharge — the bytes travel the `say` channel
+//     (stderr transcript, quiet-gated) and die there.
+//   - A missing file is a printed `not-found`, not a panic: the verb runs,
+//     reports, and the bridge survives for the next turn — the same shape
+//     as `std/io:read-file`'s `not-found` arm (live.k leans on it).
+// Read opens. It does not run: evaluation is a later verb.
+
+~pub tor read { path: string }
+
+~proc read|zig {
+    const f = std.fs.cwd().openFile(path, .{}) catch {
+        if (!$mod.quiet) std.debug.print("      [read] not-found: '{s}'\n", .{path});
+        return;
+    };
+    defer f.close();
+    var buf: [4096]u8 = undefined;
+    while (true) {
+        const n = f.read(&buf) catch @panic("notes: read failed");
+        if (n == 0) break;
+        if (!$mod.quiet) std.debug.print("{s}", .{buf[0..n]});
+    }
+    if (!$mod.quiet) std.debug.print("\n      [read] ok: '{s}'\n", .{path});
+}
+
+// ============================================================================
+// EDIT — the bridge's hands, and the smallest wall that fits them
+// ============================================================================
+//
+// Forced by the go-stack-pop-bug family (vulcan-forcing 2026-09-07): mutation
+// tasks need file-edit — the bridge can open a file's eyes (read) but not
+// its hands. Before this verb the attempt ended at reading; the patch landed
+// by hand because no declared verb could change the disk.
+//
+// Scope rules (existing-only, exactly-once — both can be wrong, both refuse):
+//   - Phase 1 is read-only: `openFile(path, .{})`, never `createFile`. A
+//     missing file is a printed `not-found` and nothing is written —
+//     `open` above is the creating verb; this one cannot mint a file by
+//     construction. Same shape as `read` and `std/io:read-file`'s
+//     `not-found` arm.
+//   - The needle must match EXACTLY ONCE. Zero matches is a printed
+//     `mismatch`, more than one is a printed `ambiguous` refusal — either
+//     way nothing is written. An empty needle never matches.
+//   - Phase 2 writes only after phase 1 accepted: single splice,
+//     truncate-write, printed `ok`. Read-only-then-write pairing — the
+//     write has no path that skips the match check.
+//   - `-> void`: no handle minted, no obligation issued. The bytes never
+//     enter Koru values (transcript channel only, quiet-gated), so there is
+//     nothing to discharge — same possession shape as `read`.
+//   - Bounded honesty: files past 64KiB are refused LOUD (`too-large`),
+//     never silently truncated. No allocator is touched, so the cap is the
+//     price of staying allocation-free.
+// Pun-dodge: the invocation lives inside a bridge `source:` string, parsed
+// at runtime — never as a Koru callee the compiler binds — so the KORU080
+// bare-identifier pun class has no site here by construction.
+
+~pub tor edit { path: string, old_text: string, new_text: string }
+
+~proc edit|zig {
+    if (old_text.len == 0) {
+        if (!$mod.quiet) std.debug.print("      [edit] mismatch: empty needle never matches\n", .{});
+        return;
+    }
+    const f = std.fs.cwd().openFile(path, .{}) catch {
+        if (!$mod.quiet) std.debug.print("      [edit] not-found: '{s}'\n", .{path});
+        return;
+    };
+    var buf: [65536]u8 = undefined;
+    var len: usize = 0;
+    while (true) {
+        const n = f.read(buf[len..]) catch {
+            f.close();
+            @panic("notes: edit read failed");
+        };
+        if (n == 0) break;
+        len += n;
+        if (len == buf.len) {
+            const more = f.read(buf[0..1]) catch {
+                f.close();
+                @panic("notes: edit read failed");
+            };
+            f.close();
+            if (more != 0) {
+                if (!$mod.quiet) std.debug.print("      [edit] too-large: '{s}' exceeds 64KiB — refusing\n", .{path});
+                return;
+            }
+            break;
+        }
+    }
+    f.close();
+    const content = buf[0..len];
+    var count: usize = 0;
+    var from: usize = 0;
+    while (std.mem.indexOf(u8, content[from..], old_text)) |rel| {
+        count += 1;
+        if (count > 1) break;
+        from += rel + old_text.len;
+    }
+    if (count == 0) {
+        if (!$mod.quiet) std.debug.print("      [edit] mismatch: needle not found in '{s}'\n", .{path});
+        return;
+    }
+    if (count > 1) {
+        if (!$mod.quiet) std.debug.print("      [edit] ambiguous: needle matches more than once in '{s}' — refusing\n", .{path});
+        return;
+    }
+    const at = std.mem.indexOf(u8, content, old_text) orelse @panic("notes: edit splice failed");
+    const out = std.fs.cwd().createFile(path, .{}) catch @panic("notes: edit write failed");
+    defer out.close();
+    out.writeAll(content[0..at]) catch @panic("notes: edit write failed");
+    out.writeAll(new_text) catch @panic("notes: edit write failed");
+    out.writeAll(content[at + old_text.len ..]) catch @panic("notes: edit write failed");
+    if (!$mod.quiet) std.debug.print("\n      [edit] ok: '{s}'\n", .{path});
+}
+
 
 
 // ============================================================================
@@ -138,4 +268,6 @@ var quiet: bool = false;
     append(1)
     close(1)
     say(1)
+    read(1)
+    edit(1)
 }

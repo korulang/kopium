@@ -1,0 +1,4 @@
+# Probe fixture, authored for this replay — not VulcanBench task code.
+# Stands in for the file a py-expr-eval attempt must open before it can do
+# anything: one arithmetic expression, the bridge's first honest step.
+2 + 3 * 4
