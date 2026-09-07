@@ -129,12 +129,13 @@ RUN_DIRS = (ROOT / "headless", ROOT / "bench")
 
 TURN_RE = re.compile(r"^turn (\d+)\s+(?:model wants to:\s?|goal:\s?)?(.*)$")
 SECTION_RE = re.compile(r"^---\s*(\d+)\.\s*(.*?)\s*---\s*$")
-MARKER_RE = re.compile(r"^---\s*(.*?)\s*---\s*$")
+MARKER_RE = re.compile(r"^---\s*(.*?)\s*$")
 TOOL_RE = re.compile(r"^\s+(?:tool|model)>\s?(.*)$")
 CLEANED_RE = re.compile(r"^cleaned>\s?(.*)$")
 RAW_RE = re.compile(r"^\s*raw\s+>\s?\[.*\]\s*$")
 HOLDS_RE = re.compile(r"holds (\d+) resource")
-DEFINED_RE = re.compile(r"^[Dd]efined\s+(\S+)")
+DEFINED_RE = re.compile(r"^defined\s+(\S+)", re.IGNORECASE)
+VOCAB_HEAD_RE = re.compile(r"^---\s*the derived vocabulary", re.IGNORECASE)
 USAGE_RE = re.compile(r"\[usage\]\s?(.*)")
 
 RUN_LABEL = ".transcript"
@@ -187,12 +188,12 @@ def parse_run(text: str) -> tuple[list[dict], list[str], list[str]]:
                             m.group(1), m.group(2))
             mode = "steps"
             continue
+        if VOCAB_HEAD_RE.match(s):
+            flush()
+            mode = "vocab"
+            continue
         if MARKER_RE.match(s):
             label = s.strip("- ").lower()
-            if "derived vocabulary" in label:
-                flush()
-                mode = "vocab"
-                continue
             flush()
             mode = "steps"
             if "session open" in label or "canned" in label:

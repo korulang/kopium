@@ -1,4 +1,4 @@
-// PROBE, not a deliverable. The one-invocation law: a two-line reply runs
+// PROBE, not a deliverable. Current wire mechanics: a two-line reply runs
 // its first line, and the drop is feedback rather than silence.
 // `extra-lines` discriminates, `clean` keeps the head — both pure text,
 // no bridge, no network.

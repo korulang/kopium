@@ -172,11 +172,18 @@ syscall. Flows are the common path; native modules are the exception.
 
 ## Roadmap
 
-- **R1 — the REPL define.** `run` discriminates declaration vs invocation;
-  a defined-flows table in the session; definition-time obligation analysis and
-  scope filtering. The interpreter-side change, at the `runtime.kz:1396`
-  registry seam. This is the experiment: the agent defines a flow, sees it in
-  its derived vocabulary, and dispatches it under the same possession rules.
+- **R1 — the REPL define.** LANDED 2026-09-05 (measured, `headless/session.k`):
+  `run` discriminates `tor …` as declaration vs invocation; a defined-flows
+  table lives on the session; turn 4 `defined greet`, turn 5 dispatches it
+  while the note from turn 1 stays held, `vocabulary()` renders
+  `greet(msg: string)` beside the compiled scope. `std/bridge:grammar` walks
+  the same table (`live.k` re-warms it every turn). Floor is call-time
+  possession — a defined body cannot reach past what the session holds.
+  Scope filter LANDED on `wip-define-scope-filter` (440_018): a body that
+  names an event outside the session refuses at install (`event 'sync' is
+  not in this session's scope`); previously-defined flows are in the
+  allowed set. Still open: definition-time obligation honesty (declared
+  phantoms must match the body's real creates/discharges).
 - **R2 — grammar derivation.** LANDED 2026-08-17 (koru `wire-grammar`
   branch): `std/runtime:parse.wire` is the restricted grammar — one
   invocation, quoted string values, nothing after the closing paren; prose,
@@ -186,6 +193,11 @@ syscall. Flows are the common path; native modules are the exception.
   prompt: the lesson and the law are one declaration read twice. Deferred,
   not rejected: per-field parse-time checking (the comptime scope table has
   the data).
+  SUPERSEDED 2026-09-07 (pending sequencing): the one-invocation
+  restriction was never ruled and contradicts the 08-10 partial-programs
+  ruling — see `concepts/frag-partial-programs.md` and
+  `WIRE_GATE_REPORT.md`. What landed above stays true of the enforcement
+  until sequencing ships; the law-language around it is revoked.
 - **R3 — the flow-compiler.** Defined flows lower to native handlers at
   definition time, bounded by the vocabulary. The summonable recompile.
 - **R4 — native primitive modules.** The rare escape hatch for genuinely new

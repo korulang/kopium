@@ -175,9 +175,10 @@ and demonstrated red against the unfixed compiler before the pin was written.
   tor for `d_turns.k`'s streaming path is the whole difference, and it is gated
   on kopium's hole 3 (`as.string` returns a borrow into a doc the caller closes,
   so live replies come back as NUL bytes today).
-- **Not multi-step.** The model emits one invocation per turn, which is what a
-  tool call already is. `open(…) |> append(…) |> close(…)` in a single turn is
-  available and untested here.
+- **Not multi-step — yet.** The demo feeds one invocation per turn, which is
+  what a tool call already is; the wire gate refuses the rest.
+  `open(…) |> append(…) |> close(…)` in a single turn is the sequencing move,
+  open and untested here (frag-partial-programs, WIRE_GATE_REPORT.md).
 - **Not adversarial in the security sense.** Handles are `note_0`, guessable,
   and everything is in one process. What the refusal buys today is protection
   from a *wrong* agent, not a hostile one. That is the right first bar: the
