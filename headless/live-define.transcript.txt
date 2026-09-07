@@ -1,0 +1,40 @@
+--- live define, canned: scripted reply through wire:clean + bridge:run ---
+--- 1. prompt (what the model is shown) ---
+{"model":"canned","stream":true,"max_tokens":100,"temperature":0,"stream_options":{"include_usage":true},"messages":[{"role":"system","content":"You are driving a Koru interpreter. Every reply you make is exactly one wire\nline — including when you are just talking — with one exception: a\ndefinition, which is two lines and is declared below. There is no prose\nchannel: to say something, call say(). What you may call and how a line\nis written are both derived from the session's own declaration:\nA wire line is exactly one invocation: verb(field: \"value\", field: \"value\")\n- One invocation per turn. Nothing after the closing ')': no chains (|>), no second line, no trailing text.\n- The verb is a bare name from your vocabulary — letters, digits, '-', '_' — immediately followed by '('.\n- Every value is a double-quoted string; escape quotes and backslashes inside (\\\", \\\\). No bare values.\n- A field whose type carries <!name> is a handle: issued by an earlier call, still held. Never invent one.\n- Prose is not wire. To speak, call the vocabulary's voice verb; to act, call its verb. Nothing else parses.\n\nYour vocabulary:\nopen(path: string)\nappend(handle: string<!open>, text: string)\nclose(handle: string<!open>)\nsay(text: string)\nread(path: string)\nedit(path: string, old_text: string, new_text: string)\nSession rules:\n- If the human is chatting, asking a question, or you are unsure what they\n  want, use say(). Do NOT touch a file to fill a conversational turn.\n- Only open/append/close when the human actually asked for something to\n  happen to a note.\n- Handles are issued by open(). Handles you opened in earlier turns are\n  STILL OPEN — this session outlives each turn, so never reopen something\n  you already opened.\n- If the action is impossible — wrong handle, missing handle, out-of-vocabulary\n  action, or you are stuck — call say(text: \"...\") and explain why. Never\n  emit an empty reply, prose, or \"...\".\n\nExamples of well-formed replies:\nsay(text: \"Not much — tell me a note to open.\")\nsay(text: \"I opened chat.txt as note_0.\")\nopen(path: \"notes.txt\")\nappend(handle: \"note_0\", text: \"hello\")\nclose(handle: \"note_0\")\n\nGrowth — teaching the session a new verb. A definition is the one reply\nthat is TWO lines: the first line starts with `tor ` and declares the\nverb and its params, the second line is its body over verbs you already\nhold. The run loop installs it instead of dispatching it, and the next\nturn's vocabulary lists it beside the compiled verbs. Example:\ntor greet { msg: string }\ngreet = say(text: msg)"},{"role":"user","content":"teach the session a new verb"}]}
+--- 2. live intake keeps the declaration whole ---
+cleaned> tor greet { msg: string }
+greet = say(text: msg)
+extra-lines: one — the declaration ran whole, no warning owed
+--- 3. run on the cleaned source ---
+DEFINED greet — installed into this session
+--- 4. next turn calls the invention ---
+      hello from a defined flow
+greet ran — bridge holds 0 resource(s)
+--- 5. derived vocabulary (register + inventions) ---
+open(path: string)
+append(handle: string<!open>, text: string)
+close(handle: string<!open>)
+say(text: string)
+read(path: string)
+edit(path: string, old_text: string, new_text: string)
+greet(msg: string)
+--- 6. derived grammar (rules + inventions) ---
+A wire line is exactly one invocation: verb(field: "value", field: "value")
+- One invocation per turn. Nothing after the closing ')': no chains (|>), no second line, no trailing text.
+- The verb is a bare name from your vocabulary — letters, digits, '-', '_' — immediately followed by '('.
+- Every value is a double-quoted string; escape quotes and backslashes inside (\", \\). No bare values.
+- A field whose type carries <!name> is a handle: issued by an earlier call, still held. Never invent one.
+- Prose is not wire. To speak, call the vocabulary's voice verb; to act, call its verb. Nothing else parses.
+
+Your vocabulary:
+open(path: string)
+append(handle: string<!open>, text: string)
+close(handle: string<!open>)
+say(text: string)
+read(path: string)
+edit(path: string, old_text: string, new_text: string)
+greet(msg: string)
+--- 7. contrast: two invocations still keep only the head ---
+head runs: [open(path: "a")]
+extra-lines: many(2) — the dropped line is feedback, not silence
+--- done ---

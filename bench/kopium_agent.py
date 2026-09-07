@@ -5,10 +5,10 @@ KOPIUM agent for tau3-bench — the agent uses ONLY Koru as its tool surface.
 Every decision the model makes is ONE line of Koru. Nothing about what may or
 may not be called is typed in this file:
 
-  - The VOCABULARY given to the model is rendered by the interpreter from the
-    register block (mock-vocab-binary / airline-vocab-binary, which call
-    std/runtime:scope-vocabulary). The prompt is built from that output at
-    construction. There is no duplicate tool list here to drift.
+  - The KORU SURFACE given to the model is `std/bridge:grammar` on the
+    same GateSession Bridge that runs invocations — wire rules, register,
+    inventions (440_017). The lesson and the law are the same render.
+    Domain policy stays host-side (τ³ scoring), not a second Koru grammar.
   - The ARGUMENTS are the interpreter's own parse: the host-side tor stubs
     serialize the fields they received, the gate prints them as JSON on the
     OK line, and this file consumes that JSON verbatim. There is no re-parse
@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -47,20 +46,15 @@ from tau2.environment.toolkit import Tool
 from tau2.utils.llm_utils import generate
 
 
-def _run_bin(bin_path: Path, stdin: str) -> str:
-    proc = subprocess.run(
-        [str(bin_path)], input=stdin.encode(), capture_output=True, timeout=15
-    )
-    return proc.stdout.decode(errors="replace").strip()
+from gate_session import GateSession
 
 
 @dataclass(frozen=True)
 class DomainConfig:
-    """One benchmark domain: gate + vocab binaries, name map, policy rules."""
+    """One benchmark domain: gate binary, name map, policy rules."""
 
     name: str
     gate_binary: Path
-    vocab_binary: Path
     # Koru tor name -> tau3 tool name. `say` stays a Koru word.
     koru_to_tau: dict[str, str] = field(default_factory=dict)
     # Extra policy rules for the system prompt (domain-specific, prose).
@@ -75,7 +69,6 @@ class DomainConfig:
 MOCK_CONFIG = DomainConfig(
     name="mock",
     gate_binary=Path(__file__).parent / "mock-gate-binary",
-    vocab_binary=Path(__file__).parent / "mock-vocab-binary",
     koru_to_tau={
         "create-task": "create_task",
         "get-users": "get_users",
@@ -96,7 +89,6 @@ MOCK_CONFIG = DomainConfig(
 AIRLINE_CONFIG = DomainConfig(
     name="airline",
     gate_binary=Path(__file__).parent / "airline-gate-binary",
-    vocab_binary=Path(__file__).parent / "airline-vocab-binary",
     koru_to_tau={
         "get-user-details": "get_user_details",
         "get-reservation-details": "get_reservation_details",
@@ -165,49 +157,45 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             self.cfg = DomainConfig(
                 name=self.cfg.name,
                 gate_binary=gate_binary,
-                vocab_binary=self.cfg.vocab_binary,
                 koru_to_tau=self.cfg.koru_to_tau,
                 extra_rules=self.cfg.extra_rules,
             )
         self.llm = llm
         self.llm_args = llm_args or {}
         self.call_count = 0
+        self._session: Optional[GateSession] = None
 
     # ------------------------------------------------------- the vocabulary
-    def _vocabulary(self) -> str:
-        """The register block's own render — the ONLY source of what the model
-        may call. Empty/error => empty list; the gate still enforces reality,
-        so a broken vocab render can only make the model guess, never let an
-        illegal call through."""
-        out = _run_bin(self.cfg.vocab_binary, "x\n")
-        if out.startswith("ERROR"):
-            return ""
-        return out
+    def _ensure_session(self) -> GateSession:
+        if self._session is None or not self._session.alive:
+            if self._session is not None:
+                self._session.close()
+            self._session = GateSession(self.cfg.gate_binary)
+        return self._session
 
-    def get_init_state(
-        self, message_history: Optional[list[Message]] = None
-    ) -> KopiumAgentState:
-        vocab = self._vocabulary()
-        vocab_lines = "\n".join(f"- {v}" for v in vocab.splitlines() if v)
+    def _grammar(self) -> str:
+        """`std/bridge:grammar` on the live Bridge — 440_017's derived prompt."""
+        return self._ensure_session().grammar()
+
+    def _system_prompt(self) -> str:
+        grammar = self._grammar()
+        if "A wire line is exactly one invocation" not in grammar:
+            raise RuntimeError("bridge grammar missing wire rules (440_017)")
+        if "Your vocabulary:" not in grammar:
+            raise RuntimeError("bridge grammar missing vocabulary (440_017)")
         rules = "\n".join(f"- {r}" for r in self.cfg.extra_rules)
         literal_rules = (
             "- If you cannot or must not do what the user asks, call "
             "say(text: ...) with the honest reason, and call NO tool."
         )
-        system_prompt = (
+        return (
             f"You are a customer service agent speaking the Koru wire language. "
-            f"Koru is a small invocation language you were not trained on, so "
-            f"follow the grammar exactly. This is a STATE LOOP: each of your "
-            f"turns emits EXACTLY ONE Koru invocation, the system runs it, and "
-            f"the outcome comes back to you as `[tool result] ...`. You work "
-            f"step by step — read the last result, decide the next single verb, "
-            f"and repeat until the task is done.\n\n"
-            f"## Koru grammar (one invocation per line, nothing else)\n"
-            f"A line is: `verb(arg1: \"value1\", arg2: \"value2\")`. "
-            f"No prose, no explanations, no markdown fences, no leading "
-            f"~, no trailing period, no `|>` chains, no semicolons. "
-            f"String values are double-quoted. `say(text: ...)` is your "
-            f"spoken channel — the only line the user sees.\n\n"
+            f"This is a STATE LOOP: each of your turns emits EXACTLY ONE Koru "
+            f"invocation, the system runs it, and the outcome comes back as "
+            f"`[tool result] ...`. Read the last result, decide the next single "
+            f"verb, and repeat until the task is done.\n\n"
+            f"## Koru (derived from this session's Bridge — 440_017)\n"
+            f"{grammar}\n\n"
             f"## Happy path — chain reads first, then act\n"
             f"Multi-step tasks are done as a sequence of single-verb turns, "
             f"using each `[tool result]` to pick the next verb. Example "
@@ -230,33 +218,41 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             f"insurance: \"false\")\n"
             f"The reads give you the ids to fill the write. Structured args are "
             f"JSON-as-string; use escaped quotes inside.\n\n"
+            f"## Growth — teaching the session a new verb\n"
+            f"A definition is the one reply that is TWO lines: the first "
+            f"line starts with `tor ` and declares the verb and its params, "
+            f"the second line is its body over verbs you already hold. The "
+            f"gate installs it instead of dispatching it, and the next "
+            f"turn's vocabulary lists it beside the compiled verbs. Example:\n"
+            f"  tor greet {{ msg: string }}\n"
+            f"  greet = say(text: msg)\n\n"
             f"## Domain policy\n{self.domain_policy}\n\n"
-            f"## Your vocabulary (exactly these lines, rendered from the "
-            f"register block)\n{vocab_lines}\n\n"
             f"## Rules\n{rules}\n{literal_rules}"
         )
+
+    def _refresh_vocab(self, state: KopiumAgentState) -> None:
+        state.system_messages = [SystemMessage(role="system", content=self._system_prompt())]
+
+    def get_init_state(
+        self, message_history: Optional[list[Message]] = None
+    ) -> KopiumAgentState:
         return KopiumAgentState(
-            system_messages=[SystemMessage(role="system", content=system_prompt)],
+            system_messages=[SystemMessage(role="system", content=self._system_prompt())],
             messages=list(message_history) if message_history else [],
         )
 
     # -------------------------------------------------------------- the gate
     def _gate(self, source: str) -> tuple[str, str]:
-        """Run one Koru line through the gate. Returns (status, detail)."""
-        try:
-            proc = subprocess.run(
-                [str(self.cfg.gate_binary)],
-                input=source.encode(),
-                capture_output=True,
-                timeout=15,
-            )
-        except subprocess.TimeoutExpired:
-            return "ERROR", "gate timed out"
-        stdout = proc.stdout.decode(errors="replace").strip()
-        if not stdout:
-            return "ERROR", "gate produced no output"
-        status, _, detail = stdout.partition(" ")
-        return status, detail.strip()
+        """Run one Koru line through the long-lived gate. Same Bridge."""
+        return self._ensure_session().send(source)
+
+    def close_gate(self) -> None:
+        if self._session is not None:
+            self._session.close()
+            self._session = None
+
+    def __del__(self) -> None:
+        self.close_gate()
 
     @staticmethod
     def _args_from_value(value_json: str) -> dict:
@@ -319,6 +315,11 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         #    instruction, because in-vocabulary drift is the one failure mode
         #    the register block can only detect, not prevent.
         status, detail = self._gate(reply)
+        if status == "DEFINED":
+            self._refresh_vocab(state)
+            out = AssistantMessage.text(f"defined {detail}")
+            state.messages.append(out)
+            return out, state
         if status != "OK":
             state.messages.append(
                 UserMessage.text(
@@ -336,6 +337,11 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 reply = re.sub(r"```(?:[a-z]*)\n?", "", reply).strip()
                 reply = reply.split("```")[0].strip()
             status, detail = self._gate(reply)
+            if status == "DEFINED":
+                self._refresh_vocab(state)
+                out = AssistantMessage.text(f"defined {detail}")
+                state.messages.append(out)
+                return out, state
 
         if status == "OK":
             event_name, _, value_json = detail.partition(" ")

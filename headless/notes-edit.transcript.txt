@@ -1,0 +1,51 @@
+--- notes edit, canned: the bridge moves what it could only see ---
+--- 0. fixture via open/append/close ---
+      [disk] note closed, fd released
+fixture ready — filled and closed
+--- 1. before: read the fixture ---
+the quick brown fox
+jumps over the lazy dog
+the end
+
+      [read] ok: 'probe_edit_fixture.txt'
+read ran — bridge holds 0 resource(s), nothing minted
+--- 2. single-match edit rewrites the disk ---
+
+      [edit] ok: 'probe_edit_fixture.txt'
+edit ran — bridge holds 0 resource(s), nothing minted
+--- 3. after: read the rewritten fixture ---
+the slow green frog
+jumps over the lazy dog
+the end
+
+      [read] ok: 'probe_edit_fixture.txt'
+read ran — bridge holds 0 resource(s)
+--- 4. missing file is not-found, never created ---
+      [edit] not-found: 'no-such-file.txt'
+missing ran — bridge holds 0 resource(s), nothing written
+--- 5. zero matches is mismatch, not a write ---
+      [edit] mismatch: needle not found in 'probe_edit_fixture.txt'
+miss ran — bridge holds 0 resource(s), nothing written
+--- 6. two matches is ambiguous, not a write ---
+      [edit] ambiguous: needle matches more than once in 'probe_edit_fixture.txt' — refusing
+multi ran — bridge holds 0 resource(s), nothing written
+--- 7. refusals wrote nothing: read the fixture ---
+the slow green frog
+jumps over the lazy dog
+the end
+
+      [read] ok: 'probe_edit_fixture.txt'
+refusals confirmed — fixture still reads with the single replacement
+--- 8. derived vocabulary (register, now with edit) ---
+open(path: string)
+append(handle: string<!open>, text: string)
+close(handle: string<!open>)
+say(text: string)
+read(path: string)
+edit(path: string, old_text: string, new_text: string)
+--- 9. contrast: replace was never declared ---
+DENIED replace — the wall held, smallest wall kept
+--- 10. the session outlives every refusal ---
+      still here after every refusal
+say ran — bridge holds 0 resource(s)
+--- done ---

@@ -29,6 +29,7 @@ tor attempt { br: *std/bridge:Bridge }
 attempt = std/io:print.ln("--- 1. attempt py-expr-eval: read the task file ---")
     |> std/bridge:run(br, source: "read(path: \"probe_task_expr.txt\")")
     | result r |> std/io:print.ln("read ran — bridge holds {{ r.handles:d }} resource(s), nothing minted")
+    | unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG, read should dispatch, not install")
     | dispatch-error e |> std/io:print.ln("REFUSED: {{ e.message:s }} — WRONG, the file exists")
     | event-denied ev |> std/io:print.ln("DENIED {{ ev:s }} — WRONG, read is in this scope's register")
@@ -86,3 +87,4 @@ show-contrast = std/io:print.ln("--- 5. contrast: delete was never declared ---"
     | validation-error v |> std/io:print.ln("invalid: {{ v:s }} — WRONG")
     | shape-error sh |> std/io:print.ln("shape-error: {{ sh.message:s }} — WRONG")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
+

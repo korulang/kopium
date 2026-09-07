@@ -32,6 +32,7 @@ tor setup { br: *std/bridge:Bridge }
 setup = std/io:print.ln("--- 0. fixture via open/append/close ---")
     |> std/bridge:run(br, source: "open(path: \"probe_edit_fixture.txt\")")
     | result r |> std/bridge:run(br, source: "append(handle: \"note_0\", text: \"the quick brown fox\")")
+    | unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
         | result r2 |> std/bridge:run(br, source: "append(handle: \"note_0\", text: \"jumps over the lazy dog\")")
             | result r3 |> std/bridge:run(br, source: "append(handle: \"note_0\", text: \"the end\")")
                 | result r4 |> std/bridge:run(br, source: "close(handle: \"note_0\")")
@@ -209,3 +210,4 @@ survives = std/io:print.ln("--- 10. the session outlives every refusal ---")
     | validation-error v |> std/io:print.ln("invalid: {{ v:s }} — WRONG")
     | shape-error sh |> std/io:print.ln("shape-error: {{ sh.message:s }} — WRONG")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
+

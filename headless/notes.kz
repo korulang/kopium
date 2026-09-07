@@ -43,9 +43,19 @@ fn slotOf(handle: []const u8) ?usize {
 ~pub tor open { path: string } -> string<open!>
 
 ~proc open|zig {
-    const slot = $mod.opened;
-    if (slot >= MAX_NOTES) @panic("notes: too many open notes");
-    $mod.opened += 1;
+    // Slots recycle: close frees the fd but not the name, and `opened` only
+    // ever grew — the ninth open in a process panicked. A closed slot is
+    // reusable: the pool tells discharged obligations from live ones, so a
+    // re-minted `note_N` names the new file, never the old. Lowest free
+    // slot first, keeping names dense and deterministic.
+    var slot: usize = 0;
+    while (slot < $mod.opened) : (slot += 1) {
+        if ($mod.files[slot] == null) break;
+    } else {
+        slot = $mod.opened;
+        if (slot >= MAX_NOTES) @panic("notes: too many open notes");
+        $mod.opened += 1;
+    }
 
     const f = std.fs.cwd().createFile(path, .{ .truncate = true }) catch |e| {
         std.debug.panic("notes: could not create '{s}': {s}", .{ path, @errorName(e) });

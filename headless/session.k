@@ -59,6 +59,7 @@ turn = app/model:intent(turn: n): why
         | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
         | defined d |> std/io:print.ln("  defined {{ d:s }} — the session's vocabulary now includes it")
         | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
+        | unhandled-branch ub |> std/io:print.ln("  UNHANDLED: '{{ ub.branch:s }}' fired, held {{ ub.handles:s }} — carry it to the next turn")
         | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
         | parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
         | exhausted _ |> std/io:print.ln("  budget exhausted")

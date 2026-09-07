@@ -31,6 +31,7 @@ proc event-name|zig {
 tor handle { br: *std/bridge:Bridge, source: string }
 handle = std/bridge:run(br, source)
 | result r |> std/interpreter:value.stringify(r.value): j |> event-name(source): n |> std/io:print.ln("OK {{ n:s }} {{ j:s }}")
+| unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
 | event-denied ev |> std/io:print.ln("REJECT {{ ev:s }}")
 | parse-error p |> std/io:print.ln("REJECT {{ p.message:s }}")
 | validation-error v |> std/io:print.ln("ERROR {{ v:s }}")
@@ -64,3 +65,4 @@ serve = std/io:readln()
 
 [with]std/bridge:create(id: "mock-gate", scope: "mock"): br
 |> serve(br)
+

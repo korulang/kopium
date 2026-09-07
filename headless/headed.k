@@ -170,6 +170,7 @@ tor act { src: string }
 act = std/store:query(session)
 ! query br |> app/wire:warm-grammar(br) |> std/bridge:run(br, source: src)
     | result r |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s).\n\n"): ma
+    | unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
         |> announce(ma.text)
     | defined d |> std/fmt:ln("[tool result] defined: '{{ d:s }}' is now a verb in this session's vocabulary — callable on later turns.\n\n"): mi
         |> announce(mi.text)
@@ -336,3 +337,4 @@ koru/vaxis(kopium)
     ! query d |> std/string:append-char(s: d, k.ch)
         | ok |> _
         | err _ |> _
+

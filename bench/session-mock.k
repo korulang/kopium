@@ -33,6 +33,7 @@ turn = app/mock_session_model:intent(turn: n): why
     |> std/io:print.ln("  tool> {{ src:s }}")
     |> std/bridge:run(br, source: src)
         | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
+        | unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
         | defined d |> std/io:print.ln("  defined {{ d:s }} — the session's vocabulary now includes it")
         | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
         | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
@@ -41,3 +42,4 @@ turn = app/mock_session_model:intent(turn: n): why
         | validation-error v |> std/io:print.ln("  invalid: {{ v:s }}")
         | shape-error s |> std/io:print.ln("  wrong shape: {{ s.message:s }}")
         | scope-not-found s2 |> std/io:print.ln("  no such scope: {{ s2:s }}")
+

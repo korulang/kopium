@@ -17,6 +17,7 @@ tor act { src: string }
 act = std/store:query(session)
 ! query br |> std/bridge:run(br, source: src)
     | result r |> std/io:print.ln("  ok — holds {{ r.handles:d }}")
+    | unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
     | defined d |> std/io:print.ln("  defined {{ d:s }}")
     | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }}")
     | event-denied ev |> std/io:print.ln("  DENIED {{ ev:s }}")
@@ -33,3 +34,4 @@ std/bridge:create(id: "probe-headed", scope: "notes"): br |> std/store:insert(se
 act(src: "open(path: \"probe-headed.txt\")")
 act(src: "append(handle: \"note_0\", text: \"reached through the store\")")
 act(src: "close(handle: \"note_9\")")
+
