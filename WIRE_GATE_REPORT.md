@@ -145,6 +145,44 @@ guards the new shape. Two rulings owed by Lars before implementation:
 stop vs continue at first failure; one observation per step vs a single
 combined report.
 
+## Sequencing stab (2026-09-07, probes throwaway in /tmp)
+
+Refusal, verbatim (`/tmp/probe_seq.k`): two invocations in one `bridge:run`
+turn die as `parse-error: one invocation per turn: a second line is a
+second turn`. Same for invocation-then-define. The refusal is honest and
+precisely located (bridge.kz run discrimination + parse.wire gate).
+
+Correction to this file's orisha note: the chained `/api/eval` demo
+(`add(a: 1, b: 2)` + `| sum s |> add(a: s, b: 100)`) is ONE flow with arms,
+not multi-invocation sequencing. `runtime:run` always accepted multi-line
+single flows; the gate is bridge-level and item-shaped, not line-shaped.
+
+(`DEFINED late` turn 2, `late(text:)` dispatches turn 3 — the session table
+persists). One-turn sequencing is therefore latency/atomicity, not
+enablement — the product gap it closes is turns-per-task, not
+can-vs-cannot. That ordering matters against the other open moves.
+
+Sketch (no code until ruled): segment the turn into items with the full
+parser (locations give `[head_i, head_{i+1})` slices — no new grammar, no
+divergent splitter), move the `tor ` discrimination inside the loop so
+mixed turns (invoke + define + invoke) route per item, thread session
+state the loop already threads across turns (defined table, pool,
+budget). Defaults with precedent: stop-at-first-refusal (`fail_fast`
+rides `run` already), one observation per step (the harness renders
+per-turn observations today; combining invents a format).
+
+Constraint, not a second design: do NOT invent a parallel partial-result
+type beside koru-ub's in-flight `unhandled-branch` outcome. Sequence-level
+partial is a different axis (WHICH step refused) than branch-level
+(WHICH arm fired); a step ending in an unhandled arm under lenient mode
+surfaces through their outcome shape, and the sequence wrapper reports
+the step. Compose, don't fork.
+
+Rulings owed, sharpened: (a) stop vs continue — recommend stop-first;
+(b) per-step vs combined observations — recommend per-step; (c) is
+one-turn sequencing an enabler for a needed capability, or
+latency/atomicity — and does it outrank slot-leak/corpus/unpause?
+
 ## What would correct this report
 
 A journaled ruling for the gate predating 08-17 (searched: none); or the
