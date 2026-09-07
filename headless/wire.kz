@@ -105,10 +105,9 @@ var auth_len: usize = 0;
 
     // A declaration is two lines, not one: `tor name { ... }` plus its body.
     // The run loop discriminates declaration from invocation, so the head of
-    // a `tor `-led reply is both lines. Anything else is one invocation per
-    // turn: if the model volunteered prose after it, keep the first line. A
-    // tool call is a line, and this is the cheapest way to be strict about
-    // that without pretending to parse Koru here.
+    // a `tor `-led reply is both lines. Anything else, the head is the first
+    // line. A tool call is a line, and this is the cheapest way to be strict
+    // about that without pretending to parse Koru here.
     if (std.mem.startsWith(u8, s, "tor ")) {
         if (std.mem.indexOfScalar(u8, s, '\n')) |nl| {
             const rest = s[nl + 1 ..];
@@ -122,10 +121,10 @@ var auth_len: usize = 0;
     return s;
 }
 
-// How many lines of the reply did NOT run. The wire is one invocation per
-// turn by law (R2: chains refuse at parse time) — with the one exception
-// `clean` keeps: a `tor `-led declaration, whose two lines run as one
-// install. `clean` enforces the head either way, but a drop the agent never
+// How many lines of the reply did NOT run. The run loop executes the first
+// invocation it is given (R2's wire gate refuses the rest at parse time) —
+// with the one exception `clean` keeps: a `tor `-led declaration, whose two
+// lines run as one install. `clean` enforces the head either way, but a drop the agent never
 // hears about is a drop it will repeat. The `many` arm lets the caller say
 // so; `one` covers the happy path, the whole-declaration path, and the
 // empty reply alike. Fences are stripped before counting, the same way
@@ -229,27 +228,25 @@ var grammar_len: usize = 0;
     const grammar = $mod.grammar_buf[0..$mod.grammar_len];
 
     const rules =
-        \\You are driving a Koru interpreter. Every reply you make is exactly one wire
-        \\line — including when you are just talking — with one exception: a
-        \\definition, which is two lines and is declared below. There is no prose
-        \\channel: to say something, call say(). What you may call and how a line
-        \\is written are both derived from the session's own declaration:
+        \\You are driving a Koru interpreter. Your reply is Koru: one invocation
+        \\per line. The run loop executes the first invocation it is given (a
+        \\definition is two lines and is declared below) and drops the rest —
+        \\lead with what matters. There is no prose channel: to say something,
+        \\call say(). What you may call is your vocabulary below, derived from
+        \\the session's own declaration:
         \\
     ;
 
     const rules2 =
         \\
-        \\Session rules:
-        \\- If the human is chatting, asking a question, or you are unsure what they
-        \\  want, use say(). Do NOT touch a file to fill a conversational turn.
-        \\- Only open/append/close when the human actually asked for something to
-        \\  happen to a note.
-        \\- Handles are issued by open(). Handles you opened in earlier turns are
-        \\  STILL OPEN — this session outlives each turn, so never reopen something
-        \\  you already opened.
-        \\- If the action is impossible — wrong handle, missing handle, out-of-vocabulary
-        \\  action, or you are stuck — call say(text: "...") and explain why. Never
-        \\  emit an empty reply, prose, or "...".
+        \\Session facts:
+        \\- If the human is chatting, asking a question, or you are unsure what
+        \\  they want, use say().
+        \\- Handles are issued by open() and STILL OPEN — this session outlives
+        \\  each turn.
+        \\- If the action is impossible — wrong handle, missing handle,
+        \\  out-of-vocabulary action, or you are stuck — call say(text: "...")
+        \\  and explain why: the transcript is how the next turn learns.
         \\
         \\Examples of well-formed replies:
         \\say(text: "Not much — tell me a note to open.")

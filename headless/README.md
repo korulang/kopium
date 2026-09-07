@@ -407,11 +407,13 @@ back as a message is the honest next increment.
   the prose left in `wire.kz` is guidance, not vocabulary.
 - **The transcript is a blob, not rows.** One growable String, so nothing can
   count turns, replay the last N, or compact the middle. See above for why.
-- **One invocation per turn.** `wire:clean` keeps the first line — and since
-  slice 2, `extra-lines` counts the reply and the drop is fed back:
-  `[tool result] note: your reply held N lines — only the first ran.` A
-  model that wants `open(…) |> append(…)` in one turn still cannot say so,
-  but it is now told that instead of silently half-obeyed.
+- **One invocation per turn — stated as mechanics, under experiment.**
+  `wire:clean` keeps the first line, `extra-lines` feeds the drop back,
+  and the prompt now says exactly that instead of legislating obedience
+  (frag-partial-programs). The prohibitions are gone. The sequencing
+  experiment — multi-invocation turns with explicit partial-failure
+  semantics — is the open move; until it lands, a model that wants
+  `open(…) |> append(…)` in one turn still cannot say so.
 - **Hardcoded URL.** Model, budget, and temperature are tor parameters;
   the OpenRouter endpoint is still a literal in the request builders. It
   is a demo.

@@ -24,6 +24,10 @@ card as facts on disk; it does not replay them. The full 26/26 chase, when
 the catalog can plausibly attempt tasks, is a gauntlet (`arbiters-gauntlet`),
 never a replay of this brief.*
 
+***PAUSED 2026-09-07 — pending wire sequencing.** Same reason as
+`live-define`: verbs landed now would target a wire about to change shape.
+Do not replay until the wire accepts partial programs.*
+
 ---
 
 ## The brief (sealed — you are the contestant)

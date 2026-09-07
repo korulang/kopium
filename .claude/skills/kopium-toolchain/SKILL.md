@@ -8,7 +8,10 @@ read `/SCENE.md`.*
 
 KOPIUM — an agent whose only tool is a Koru interpreter. Vocabulary-parametric
 runtime: a `register` block derives prompt, wire grammar, enforcement, growth.
-Governing stance: `KOPIUM_RUNTIME.md`. Current goal: **R3 flow-compiler**.
+Governing stance: `KOPIUM_RUNTIME.md`. R1 experiment measured 2026-09-05
+(`session.k`: define → vocabulary → dispatch under possession). Define-time
+scope filter pinned at 440_018 on `wip-define-scope-filter`. Current goal:
+**R3 flow-compiler**; remaining R1 rung is define-time obligation honesty.
 
 ## Build / run
 
@@ -29,10 +32,12 @@ Governing stance: `KOPIUM_RUNTIME.md`. Current goal: **R3 flow-compiler**.
   `world.signal.kopium.*`, warn-and-drop). `wm run --occupied`, `wm tree`,
   `wm faucets`. Nothing is declared in `signals/` without a bus faucet.
 - Challenges: `challenges/<slug>/CHALLENGE.md` + catalog beside it
-  (fleet registry finds them by frontmatter). First: model-sweep.
+  (fleet registry finds them by frontmatter). Standing: `model-sweep`
+  (wire transcripts), `harness-join` (grows `bench/harness-check.py`).
 - Mock/airline bench (spends model tokens — ask first):
   `python3 bench/run_mock.py`, `run_airline.py`, `run_mock_traj.py`
   (per-task trajectories under `bench/results/trajectories/`).
+  Gate is a long-lived process (`GateSession`).
 
 ## Gates (walls — run, don't argue)
 
@@ -40,6 +45,9 @@ Governing stance: `KOPIUM_RUNTIME.md`. Current goal: **R3 flow-compiler**.
   holds accepted. Exit code IS the verdict.
 - `./refusal-check.sh` — canned turn 3 REFUSED, turn 6 DENIED, hang-up
   discharges. Falsified before trusted.
+- `python3 bench/harness-check.py` — joins that make the τ³ path and
+  the long-running bridge the same machine. Rebuilds from source;
+  exit code IS the verdict.
 - Pre-push (`.githooks/pre-push`, runs both gates).
 - Commit-msg membrane gate (`.githooks/commit-msg`): every commit message
   carries a `## World Model` section or it is rejected. Acknowledge
@@ -83,6 +91,7 @@ scaffolding — prune the moment running code carries them.
   `[usage]`/`[wire-note]` lines in `live.k` output show the split.
 - SSE terminal usage is observed twice (hole 4)   — don't treat counts as exact until settled.
 - `wire:clean` keeps the first line; `extra-lines` counts the drop and
-  the turn feeds it back. One invocation per turn is law (R2).
+  the turn feeds it back. One-invocation is mechanics, not law
+  (frag-partial-programs) — sequencing experiment open.
 - `say()` killed the live forgeries: `HandleNotHeld`/`event-denied`
   have no live witness — only canned `session.k` (+ refusal gate).
