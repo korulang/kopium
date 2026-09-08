@@ -20,3 +20,10 @@ compiler_env.zig
 build.zig
 build_output.zig
 agent-notes.txt
+
+# abandoned agent worktrees (full checkouts; reclaim-disk owns these)
+.claude/worktrees/
+
+# python artifacts
+__pycache__/
+*.pyc
