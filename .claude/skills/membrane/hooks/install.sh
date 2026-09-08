@@ -20,6 +20,18 @@ TARGET="$(cd "${1:-$CORPUS_ROOT}" && pwd)"
 STORE="$(cd "${2:-$TARGET}" && pwd)"     # default: self-contained (store = repo)
 
 HOOKS="$(git -C "$TARGET" rev-parse --absolute-git-dir)/hooks"
+# Respect core.hooksPath: when it is set, git NEVER looks at .git/hooks, so a
+# gate installed there is silent — the repo reads well-formed while nothing
+# fires. Install into the effective hooks dir instead (kopium, 2026-09-04:
+# hooksPath=.githooks swallowed the gate whole). Absolute stays absolute;
+# relative resolves against the repo top-level.
+CONFIGURED_HOOKS="$(git -C "$TARGET" config core.hooksPath || true)"
+if [ -n "$CONFIGURED_HOOKS" ]; then
+  case "$CONFIGURED_HOOKS" in
+    /*) HOOKS="$CONFIGURED_HOOKS" ;;
+    *) HOOKS="$(git -C "$TARGET" rev-parse --show-toplevel)/$CONFIGURED_HOOKS" ;;
+  esac
+fi
 mkdir -p "$HOOKS" "$STORE/concepts"
 [ -e "$STORE/concepts/.gitkeep" ] || : > "$STORE/concepts/.gitkeep"
 for h in commit-msg commit-msg.cjs post-commit post-commit.cjs; do

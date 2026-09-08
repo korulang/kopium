@@ -24,7 +24,8 @@
 // act. The failure messages TEACH the correct shape: they are the pit-of-success
 // walls. A good wall doesn't just block — it guides into the pit.
 //
-// Install:  hooks/install.sh   (or: cp hooks/commit-msg .git/hooks/ && chmod +x)
+// Install:  hooks/install.sh   (or: cp hooks/commit-msg <effective-hooks-dir>/ && chmod +x;
+//           <effective-hooks-dir> is .git/hooks, or core.hooksPath when set)
 
 const fs = require("fs");
 const { execFileSync } = require("child_process");

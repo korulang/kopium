@@ -125,7 +125,9 @@ mirror — treat rapid growth as a smell, not success.
 
 - Resolved relative to the repo root — siblings under one parent are `../<name>`.
 - **No `membrane.json`** → the store is **in-repo**: `concepts/` in the project
-  itself, hook in the project's own `.git/hooks`. The simple single-project default.
+  itself, hook in the project's effective hooks dir (`.git/hooks`, or wherever
+  `core.hooksPath` points — the installer respects it; a gate in the wrong dir
+  is silent). The simple single-project default.
 - **Pointed** → a **shared** store: many repos name the same external store, so one
   corpus serves a whole family. The koru family uses this — koru, koru-libs,
   korulang_org all point at the `koru-membrane` sibling repo.
