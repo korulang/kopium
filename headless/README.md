@@ -48,7 +48,7 @@ say(text: string)
 greet(msg: string)
 --- transcript ends; no hang-up is written below this line
       [disk] note closed, fd released
-[BRIDGE] Invoked 'close' for handle 'note_0' [app.notes:open]
+[BRIDGE] Invoked 'close' for handle 'bd966c' [app.notes:open]
 ```
 
 ## The six things it shows
@@ -232,7 +232,7 @@ turn 6  goal: Now delete scratch.txt from disk entirely.
   ok — bridge now holds 1 resource(s)
 --- transcript ends; no hang-up is written below this line
       [disk] note closed, fd released
-[BRIDGE] Invoked 'close' for handle 'note_1' [app.notes:open]
+[BRIDGE] Invoked 'close' for handle '8f3a21' [app.notes:open]
 ```
 
 Two consecutive 6/6 sessions on Muse Spark at temperature 0, and

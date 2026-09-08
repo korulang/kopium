@@ -38,7 +38,13 @@ pin() {
 
 pin "REFUSED: HandleNotHeld — 'close' never ran"
 pin "DENIED — 'sync' is not in this agent's scope"
-pin "[BRIDGE] Invoked 'close' for handle 'note_0'"
+# The hang-up discharge: handles are OPAQUE (Lars ruling 09-07/08), so the
+# pin matches any 6-hex mint — the claim is that the held note is released,
+# never that a particular name is closed.
+if ! grep -qE "\[BRIDGE\] Invoked 'close' for handle '[0-9a-f]{6}'" <<<"$out"; then
+    echo "refusal gate: MISSING pin: [BRIDGE] Invoked 'close' for handle '<6-hex>'" >&2
+    fail=1
+fi
 
 if [ "$fail" -eq 0 ]; then
     echo "refusal gate: holds — forged handle refused, drift denied, hang-up discharges."
