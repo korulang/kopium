@@ -42,7 +42,7 @@ V2 = (
     "greet = transfer-to-human-agents(summary: msg)"
 )
 CALL = 'greet(msg: "hi")'
-RULE = "A wire line is exactly one invocation"
+RULE = "one invocation per line"
 PIN = "frontier_002_fresh_restore"
 
 

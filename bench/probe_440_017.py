@@ -13,7 +13,7 @@ from gate_session import GateSession
 GATE = Path(__file__).parent / "mock-gate-binary"
 DECL = "tor greet { msg: string }\ngreet = say(text: msg)"
 PIN = "440_017_bridge_grammar_renders_rules_and_inventions"
-RULE = "A wire line is exactly one invocation"
+RULE = "one invocation per line"
 VOCAB_HDR = "Your vocabulary:"
 
 

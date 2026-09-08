@@ -41,7 +41,7 @@ FAREWELL = (
 )
 CALL_GREET = 'greet(msg: "hi")'
 CALL_FAREWELL = 'farewell(msg: "bye")'
-RULE = "A wire line is exactly one invocation"
+RULE = "one invocation per line"
 PIN = "frontier_003_inventions_accumulate"
 
 
