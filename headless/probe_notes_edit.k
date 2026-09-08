@@ -9,6 +9,7 @@
 //
 //   koruc probe_notes_edit.k && ./a.out
 import std/io
+import std/fmt
 import std/bridge
 import app/notes
 
@@ -45,7 +46,9 @@ s-open = std/io:print.ln("--- 0. fixture via open/append/close ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 tor s-append-1 { br: *std/bridge:Bridge }
-s-append-1 = std/bridge:run(br, source: "append(handle: \"note_0\", text: \"the quick brown fox\")")
+s-append-1 = app/notes:last-minted(): h
+    |> std/fmt:ln("append(handle: \"{{ h:s }}\", text: \"the quick brown fox\")"): src
+    |> std/bridge:run(br, source: src.text)
     | result r |> std/io:print.ln("append 1 — bridge holds {{ r.handles:d }} resource(s)")
     | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — WRONG in setup")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG")
@@ -58,7 +61,9 @@ s-append-1 = std/bridge:run(br, source: "append(handle: \"note_0\", text: \"the 
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 tor s-append-2 { br: *std/bridge:Bridge }
-s-append-2 = std/bridge:run(br, source: "append(handle: \"note_0\", text: \"jumps over the lazy dog\")")
+s-append-2 = app/notes:last-minted(): h
+    |> std/fmt:ln("append(handle: \"{{ h:s }}\", text: \"jumps over the lazy dog\")"): src
+    |> std/bridge:run(br, source: src.text)
     | result r |> std/io:print.ln("append 2 — bridge holds {{ r.handles:d }} resource(s)")
     | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — WRONG in setup")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG")
@@ -71,7 +76,9 @@ s-append-2 = std/bridge:run(br, source: "append(handle: \"note_0\", text: \"jump
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 tor s-append-3 { br: *std/bridge:Bridge }
-s-append-3 = std/bridge:run(br, source: "append(handle: \"note_0\", text: \"the end\")")
+s-append-3 = app/notes:last-minted(): h
+    |> std/fmt:ln("append(handle: \"{{ h:s }}\", text: \"the end\")"): src
+    |> std/bridge:run(br, source: src.text)
     | result r |> std/io:print.ln("append 3 — bridge holds {{ r.handles:d }} resource(s)")
     | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — WRONG in setup")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG")
@@ -84,7 +91,9 @@ s-append-3 = std/bridge:run(br, source: "append(handle: \"note_0\", text: \"the 
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 tor s-close { br: *std/bridge:Bridge }
-s-close = std/bridge:run(br, source: "close(handle: \"note_0\")")
+s-close = app/notes:last-minted(): h
+    |> std/fmt:ln("close(handle: \"{{ h:s }}\")"): src
+    |> std/bridge:run(br, source: src.text)
     | result r |> std/io:print.ln("close — fixture ready, filled and closed (holds {{ r.handles:d }})")
     | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — WRONG in setup")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG")

@@ -37,6 +37,7 @@ CASES: list[tuple[str, str, str]] = [
     ("notes-edit", "edit rewrites disk files through the bridge, canned", "probe_notes_edit.py"),
     ("notes-unhandled", "named-branch read hands back under the lenient bridge", "probe_unhandled_read.py"),
     ("affordances", "callable surface is possession-shaped (HATEOAS rooms)", "probe_affordances.py"),
+    ("opaque-handles", "THE RULING: handles are opaque, binding-only (Lars 09-07/08)", "probe_opaque_handles.py"),
 ]
 
 BUILDS = (

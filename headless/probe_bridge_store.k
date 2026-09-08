@@ -7,6 +7,7 @@
 import std/io
 import std/store
 import std/bridge
+import std/fmt
 import app/notes
 
 std/store:new(session, capacity: 2) { *std/bridge:Bridge<session!> }
@@ -32,6 +33,23 @@ std/bridge:create(id: "probe-headed", scope: "notes"): br |> std/store:insert(se
 | full f |> std/bridge:close(br: f)
 
 act(src: "open(path: \"probe-headed.txt\")")
-act(src: "append(handle: \"note_0\", text: \"reached through the store\")")
-act(src: "close(handle: \"note_9\")")
+act-append()
+act(src: "close(handle: \"b0b0b0\")")
+
+// The store-held bridge appends by BINDING the handle the open just minted —
+// nothing to predict, and the name is opaque (Lars ruling 2026-09-07/08).
+tor act-append {}
+act-append = std/store:query(session)
+! query br |> app/notes:last-minted(): h |> std/fmt:ln("append(handle: \"{{ h:s }}\", text: \"reached through the store\")"): src
+    |> std/bridge:run(br, source: src.text)
+    | result r |> std/io:print.ln("  ok — holds {{ r.handles:d }}")
+    | unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
+    | defined d |> std/io:print.ln("  defined {{ d:s }}")
+    | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }}")
+    | event-denied ev |> std/io:print.ln("  DENIED {{ ev:s }}")
+    | parse-error p |> std/io:print.ln("  not koru: {{ p.message:s }}")
+    | exhausted _ |> _
+    | validation-error _ |> _
+    | shape-error _ |> _
+    | scope-not-found _ |> _
 

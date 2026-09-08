@@ -29,8 +29,8 @@ NEEDLES = [
     ("A names the empty state", "you hold: nothing"),
     ("A lists always-callable open", "open(path: string)"),
     ("A lists say", "say(text: string)"),
-    # B: possession grows the surface
-    ("B names the held handle", "you hold: note_0(open)"),
+    # B: possession grows the surface (opaque handle, never domain-named)
+    ("B names the held handle", "you hold:"),
     ("B gates append in", "append(handle: string<!open>, text: string)"),
     ("B gates close in", "close(handle: string<!open>)"),
     # C: release shrinks it back
@@ -71,6 +71,12 @@ def main() -> int:
         failed += 1
     else:
         print("PASS  append gated to possession (1 render only)")
+    # The ruling: the surface never names a domain handle (opaque mint).
+    if "note_" in out:
+        print("FAIL  a domain-named handle leaked into the surface")
+        failed += 1
+    else:
+        print("PASS  no domain-named handle anywhere in the surface")
     if "WRONG" in out:
         print("FAIL  probe printed a WRONG arm")
         failed += 1

@@ -250,10 +250,9 @@ var grammar_len: usize = 0;
         \\
         \\Examples of well-formed replies:
         \\say(text: "Not much — tell me a note to open.")
-        \\say(text: "I opened chat.txt as note_0.")
-        \\open(path: "notes.txt")
-        \\append(handle: "note_0", text: "hello")
-        \\close(handle: "note_0")
+        \\say(text: "I opened notes.txt.")
+        \\open(path: "notes.txt") | ok h |> append(handle: h, text: "hello")
+        \\open(path: "notes.txt") | ok h |> close(handle: h)
         \\
         \\Growth — teaching the session a new verb. A definition is the one reply
         \\that is TWO lines: the first line starts with `tor ` and declares the

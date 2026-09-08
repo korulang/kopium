@@ -34,3 +34,6 @@ session-mock-binary
 
 # probe-generated scratch files
 probe_affordances.txt
+probe_opaque_1.txt
+probe_opaque_2.txt
+probe-headed.txt

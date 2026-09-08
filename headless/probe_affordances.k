@@ -14,6 +14,7 @@
 
 import std/io
 import std/bridge
+import std/fmt
 import app/notes
 
 tor empty { br: *std/bridge:Bridge }
@@ -40,7 +41,9 @@ aff-open = std/io:print.ln("--- B: after open, the surface grows ---")
 
 tor aff-close { br: *std/bridge:Bridge }
 aff-close = std/io:print.ln("--- C: after close, the surface shrinks ---")
-    |> std/bridge:run(br, source: "close(handle: \"note_0\")")
+    |> app/notes:last-minted(): h
+    |> std/fmt:ln("close(handle: \"{{ h:s }}\")"): src
+    |> std/bridge:run(br, source: src.text)
     | result r |> std/bridge:affordances(br)
         | ok v |> std/io:print.ln("{{ v:s }}")
         | not-found s |> std/io:print.ln("!! scope {{ s:s }} vanished")

@@ -88,10 +88,10 @@ show-renders = std/io:print.ln("--- 5. derived vocabulary (register + inventions
 // 7. The wall did not move: two invocations still keep only the head.
 tor show-contrast {}
 show-contrast = std/io:print.ln("--- 7. contrast: two invocations still keep only the head ---")
-    |> app/wire:clean(raw: "open(path: \"a\")\nclose(handle: \"note_0\")")
+    |> app/wire:clean(raw: "open(path: \"a\")\nclose(handle: \"deadbe\")")
     | ok first |> std/fmt:ln("{{ first:S }}"): head
         |> std/io:print.ln("head runs: [{{ head.text:s }}]")
-        |> app/wire:extra-lines(raw: "open(path: \"a\")\nclose(handle: \"note_0\")")
+        |> app/wire:extra-lines(raw: "open(path: \"a\")\nclose(handle: \"deadbe\")")
         | one |> std/io:print.ln("extra-lines: one — WRONG, one line dropped")
             |> std/string:free(s: first)
         | many n |> std/io:print.ln("extra-lines: many({{ n:d }}) — the dropped line is feedback, not silence")

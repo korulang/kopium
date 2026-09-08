@@ -29,13 +29,41 @@ var opened: usize = 0;
 var handle_buf: [MAX_NOTES][16]u8 = undefined;
 var handle_len: [MAX_NOTES]usize = .{0} ** MAX_NOTES;
 
-fn slotOf(handle: []const u8) ?usize {
-    // Handles are minted as "note_<slot>"; the interpreter has already refused
-    // any handle this pool never issued before we are reached.
-    if (!std.mem.startsWith(u8, handle, "note_")) return null;
-    const n = std.fmt.parseInt(usize, handle["note_".len..], 10) catch return null;
-    if (n >= MAX_NOTES) return null;
-    return n;
+// The most recently minted handle, kept for the inspection seam below.
+// `last-minted` is how a session or probe reads what the module just minted
+// — the live agent never needs it (it reads observations); canned sessions
+// and probes use it to BIND rather than predict.
+var last_minted_buf: [16]u8 = undefined;
+var last_minted_len: usize = 0;
+
+// OPAQUE MINT (Lars ruling 2026-09-07/08): a handle is 6 lowercase hex,
+// mixed from a per-process seed — nothing to predict across sessions, and
+// consecutive mints within a session differ. The only legal access is
+// binding what an observation returned; a fabricated name dies at the pool.
+var mint_seed: u64 = 0;
+var mint_count: u32 = 0;
+
+fn slotOf(
+    handle: []const u8,
+    mod_files: [MAX_NOTES]?std.fs.File,
+    mod_opened: usize,
+    mod_handle_buf: [MAX_NOTES][16]u8,
+    mod_handle_len: [MAX_NOTES]usize,
+) ?usize {
+    // Handles are opaque 6-hex, so the name encodes nothing — possession is
+    // proven by matching the live slot's stored mint. The interpreter has
+    // already refused any handle this pool never issued, so a match here is
+    // the module's own proof the caller holds it. (Plain `fn`s cannot see
+    // `$mod`; callers pass the module state in, where `$mod` rewrites.)
+    var s: usize = 0;
+    while (s < mod_opened) : (s += 1) {
+        if (mod_files[s] != null and
+            std.mem.eql(u8, mod_handle_buf[s][0..mod_handle_len[s]], handle))
+        {
+            return s;
+        }
+    }
+    return null;
 }
 
 // ============================================================================
@@ -62,15 +90,53 @@ fn slotOf(handle: []const u8) ?usize {
     };
     $mod.files[slot] = f;
 
-    const minted = std.fmt.bufPrint(&$mod.handle_buf[slot], "note_{d}", .{slot}) catch @panic("notes: handle too long");
-    $mod.handle_len[slot] = minted.len;
+    if ($mod.mint_seed == 0) {
+        $mod.mint_seed = std.crypto.random.int(u64);
+    }
+    // Splitmix-style avalanche over (seed, count): two opens in one session
+    // differ, and a fresh process starts from a fresh seed.
+    var mix = $mod.mint_seed;
+    mix ^= mix >> 33;
+    mix *%= 0xff51afd7ed558ccd;
+    mix ^= mix >> 33;
+    mix +%= @as(u64, $mod.mint_count + 1) *% 0x9e3779b97f4a7c15;
+    mix ^= mix >> 33;
+    $mod.mint_count += 1;
+
+    // Uniqueness among LIVE handles: re-mix on collision (24-bit space, at
+    // most MAX_NOTES live — a retry loop is the honest guard, not a panic).
+    var candidate: [8]u8 = undefined;
+    var attempts: u32 = 0;
+    while (true) : (attempts += 1) {
+        const c = std.fmt.bufPrint(&candidate, "{x:0>6}", .{@as(u24, @truncate(mix))}) catch @panic("notes: handle too long");
+        var collides = false;
+        for (0..$mod.opened) |s| {
+            if ($mod.files[s] != null and
+                std.mem.eql(u8, $mod.handle_buf[s][0..$mod.handle_len[s]], c))
+            {
+                collides = true;
+                break;
+            }
+        }
+        if (!collides) {
+            @memcpy($mod.handle_buf[slot][0..c.len], c);
+            $mod.handle_len[slot] = c.len;
+            break;
+        }
+        if (attempts > 32) @panic("notes: handle collision after retries");
+        mix ^= mix >> 33;
+        mix *%= 0xbf58476d1ce4e5b9;
+        mix ^= mix >> 29;
+    }
+    $mod.last_minted_len = $mod.handle_len[slot];
+    @memcpy($mod.last_minted_buf[0..$mod.handle_len[slot]], $mod.handle_buf[slot][0..$mod.handle_len[slot]]);
     return $mod.handle_buf[slot][0..$mod.handle_len[slot]];
 }
 
 ~pub tor append { handle: string<!open>, text: string } -> string<open!>
 
 ~proc append|zig {
-    const slot = slotOf(handle) orelse @panic("notes: append on a handle this module never minted");
+    const slot = slotOf(handle, $mod.files, $mod.opened, $mod.handle_buf, $mod.handle_len) orelse @panic("notes: append on a handle this module never minted");
     const f = $mod.files[slot] orelse @panic("notes: append on a closed note");
     f.writeAll(text) catch @panic("notes: write failed");
     f.writeAll("\n") catch @panic("notes: write failed");
@@ -80,12 +146,29 @@ fn slotOf(handle: []const u8) ?usize {
 ~pub tor close { handle: string<!open> }
 
 ~proc close|zig {
-    const slot = slotOf(handle) orelse @panic("notes: close on a handle this module never minted");
+    const slot = slotOf(handle, $mod.files, $mod.opened, $mod.handle_buf, $mod.handle_len) orelse @panic("notes: close on a handle this module never minted");
     if ($mod.files[slot]) |f| {
         f.close();
         $mod.files[slot] = null;
         if (!$mod.quiet) std.debug.print("      [disk] note closed, fd released\n", .{});
     }
+}
+
+// ============================================================================
+// LAST-MINTED — the inspection seam (NOT in the register)
+// ============================================================================
+//
+// What the module just minted. The live agent never calls this — it reads
+// the observation (the result carries the handle) — but canned sessions and
+// probes must BIND, and binding needs the actual mint. This tor is how a
+// session reads the resource world it just changed. Deliberately absent from
+// the register below: the agent's vocabulary stays the six verbs, and a
+// handle is never something to ask for — it is something you were given.
+
+~[retain]pub tor last-minted {} -> string
+
+~proc last-minted|zig {
+    return $mod.last_minted_buf[0..$mod.last_minted_len];
 }
 
 // ============================================================================

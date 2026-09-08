@@ -48,7 +48,9 @@ import app/model
 
 // One turn: ask the model, show what it said, run it against the bridge, show
 // what the bridge did. The `br` parameter carries no phantom — a turn USES the
-// session, it does not end it.
+// session, it does not end it. The canned model binds the observed handle
+// itself (handles are opaque; nothing is predictable, so a cooperative model
+// never guesses — it reads what the observation returned).
 tor turn { br: *std/bridge:Bridge, n: u32 }
 turn = app/model:intent(turn: n): why
     |> std/io:print.ln("")

@@ -9,10 +9,13 @@
 // distinguishing is. This version holds TWO real handles concurrently and
 // forges a third, so the concurrency of the claim is under test too:
 //
-//   0. open(path_a), open(path_b)   -> mint real "note_0" AND "note_1"
-//   1. loop N: close(forged)        -> MUST refuse HandleNotHeld (never minted)
-//   2. close("note_0"), close("note_1") -> BOTH MUST accept: pool holds them
+//   0. open(path_a), open(path_b)   -> mint TWO real opaque handles
+//   1. loop N: close(forged)        -> MUST refuse HandleNotHeld (never minted;
+//      the forged names are 6-hex, guaranteed distinct from the live ids)
+//   2. close(<real a>), close(<real b>) -> BOTH MUST accept: pool holds them
 // If any forged accept, or either real close refuses, possession is broken.
+// The real handles are READ from the pool — the only legal way to know an
+// opaque handle (Lars ruling 2026-09-07/08).
 //
 // Uses the bridge's OWN pool (br.pool — exactly what std/bridge:run guards
 // against). The loop lives in a |zig proc body (the dialect's loop
@@ -78,14 +81,39 @@ proc hammer|zig {
         .auto_discharge = false, .defined = null,
     });
 
-    // ---- ARM 1: N forged closes, while note_0 AND note_1 are held ----------
+    // The two real handles, READ from the pool — the only legal way to know
+    // an opaque handle. Nothing is predictable; possession is observation.
+    var held_ids: [2][]const u8 = undefined;
+    var held_count: usize = 0;
+    for (pool.handles.items) |hh| {
+        if (!hh.discharged and held_count < 2) {
+            held_ids[held_count] = hh.handle_id;
+            held_count += 1;
+        }
+    }
+    if (held_count != 2) @panic("stress: expected 2 live handles after ARM 0");
+
+    // ---- ARM 1: N forged closes, while both real handles are held ----------
     var forged_refused: u32 = 0;
     var i: u32 = 0;
     while (i < count) : (i += 1) {
-        // A never-minted but PLAUSIBLE slot (2..6): a model would guess a
-        // small slot number, not an impossible one. Must refuse every time.
+        // A fabricated opaque name, guaranteed to differ from BOTH live ids
+        // by construction — a model that cannot predict must still be refused.
+        var forged_hex: [7]u8 = undefined;
+        var fv: u32 = i *% 2654435761;
+        var collides = true;
+        while (collides) : (fv +%= 1) {
+            _ = std.fmt.bufPrint(&forged_hex, "{x:0>6}", .{fv % 0x1000000}) catch unreachable;
+            collides = false;
+            for (held_ids[0..held_count]) |hid| {
+                if (std.mem.eql(u8, hid, &forged_hex)) {
+                    collides = true;
+                    break;
+                }
+            }
+        }
         var src2: [256]u8 = undefined;
-        const s2 = std.fmt.bufPrint(&src2, "close(handle: \"note_{d}\")", .{i % 5 + 2}) catch unreachable;
+        const s2 = std.fmt.bufPrint(&src2, "close(handle: \"{s}\")", .{&forged_hex}) catch unreachable;
         const r2 = interp.run_event.handler(.{
             .source = s2, .dispatcher = scope.dispatcher, .cost_fn = scope.cost_fn,
             .creates_obligations_fn = scope.creates_obligations_fn, .discharges_obligations_fn = scope.discharges_obligations_fn,
@@ -102,7 +130,8 @@ proc hammer|zig {
     }
 
     // ---- ARM 2: BOTH real handles must ACCEPT (pool holds them, procs run).
-    const s3a = "close(handle: \"note_0\")";
+    var src3a: [256]u8 = undefined;
+    const s3a = std.fmt.bufPrint(&src3a, "close(handle: \"{s}\")", .{held_ids[0]}) catch unreachable;
     const r3a = interp.run_event.handler(.{
         .source = s3a, .dispatcher = scope.dispatcher, .cost_fn = scope.cost_fn,
         .creates_obligations_fn = scope.creates_obligations_fn, .discharges_obligations_fn = scope.discharges_obligations_fn,
@@ -112,7 +141,8 @@ proc hammer|zig {
     });
     const held_a_accepted = switch (r3a) { .result => true, else => false };
 
-    const s3b = "close(handle: \"note_1\")";
+    var src3b: [256]u8 = undefined;
+    const s3b = std.fmt.bufPrint(&src3b, "close(handle: \"{s}\")", .{held_ids[1]}) catch unreachable;
     const r3b = interp.run_event.handler(.{
         .source = s3b, .dispatcher = scope.dispatcher, .cost_fn = scope.cost_fn,
         .creates_obligations_fn = scope.creates_obligations_fn, .discharges_obligations_fn = scope.discharges_obligations_fn,
@@ -124,8 +154,8 @@ proc hammer|zig {
 
     std.debug.print("--- possession DISTINCTION: {d} forged closes while TWO real handles are held\n", .{count});
     std.debug.print("    forged close REFUSED pre-proc   : {d}/{d}\n", .{ forged_refused, count });
-    std.debug.print("    held note_0 close ACCEPTED       : {s}\n", .{if (held_a_accepted) "yes — proc ran" else "NO — BROKEN" });
-    std.debug.print("    held note_1 close ACCEPTED       : {s}\n", .{ if (held_b_accepted) "yes — proc ran" else "NO — BROKEN" });
+    std.debug.print("    held {s} close ACCEPTED       : {s}\n", .{ held_ids[0], if (held_a_accepted) "yes — proc ran" else "NO — BROKEN" });
+    std.debug.print("    held {s} close ACCEPTED       : {s}\n", .{ held_ids[1], if (held_b_accepted) "yes — proc ran" else "NO — BROKEN" });
     if (forged_refused == count and held_a_accepted and held_b_accepted) {
         std.debug.print("    RESULT: POSSESSION DISTINGUISHES — {d}/{d} forged refused, both held accepted\n", .{ count, count });
     } else {
