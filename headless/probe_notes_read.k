@@ -27,9 +27,9 @@ import app/notes
 // run's own, quoted as given.
 tor attempt { br: *std/bridge:Bridge }
 attempt = std/io:print.ln("--- 1. attempt py-expr-eval: read the task file ---")
-    |> std/bridge:run(br, source: "read(path: \"probe_task_expr.txt\")")
+    |> std/bridge:run(br, source: "read(path: \"probe_task_expr.txt\")\n| ok |> _")
     | result r |> std/io:print.ln("read ran — bridge holds {{ r.handles:d }} resource(s), nothing minted")
-    | unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
+    | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — WRONG, ok was handled")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG, read should dispatch, not install")
     | dispatch-error e |> std/io:print.ln("REFUSED: {{ e.message:s }} — WRONG, the file exists")
     | event-denied ev |> std/io:print.ln("DENIED {{ ev:s }} — WRONG, read is in this scope's register")
@@ -39,11 +39,15 @@ attempt = std/io:print.ln("--- 1. attempt py-expr-eval: read the task file ---")
     | shape-error sh |> std/io:print.ln("shape-error: {{ sh.message:s }} — WRONG")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
-// 2. A missing file reports, it does not kill.
+// 2. A missing file hands back: the fragment handled only `| ok`, `missing`
+// fired, and the bridge returned it as `unhandled-branch` (430_056) — the
+// long-running bridge handing what nobody handled to the host. It does not
+// refuse, it does not crash, and the session survives.
 tor missing { br: *std/bridge:Bridge }
-missing = std/io:print.ln("--- 2. missing file is not-found, not a crash ---")
-    |> std/bridge:run(br, source: "read(path: \"no-such-file.txt\")")
-    | result r |> std/io:print.ln("missing ran — bridge holds {{ r.handles:d }} resource(s), nothing minted")
+missing = std/io:print.ln("--- 2. missing file hands back, not a crash ---")
+    |> std/bridge:run(br, source: "read(path: \"no-such-file.txt\")\n| ok |> say(text: \"found\")")
+    | result r |> std/io:print.ln("result — WRONG, ok was handled but the file is missing (holds {{ r.handles:d }})")
+    | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — the hand-back, absence is not a refusal")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG")
     | dispatch-error e |> std/io:print.ln("REFUSED: {{ e.message:s }} — WRONG, absence is not a refusal")
     | event-denied ev |> std/io:print.ln("DENIED {{ ev:s }} — WRONG")
@@ -58,6 +62,7 @@ tor survives { br: *std/bridge:Bridge }
 survives = std/io:print.ln("--- 3. the session outlives the miss ---")
     |> std/bridge:run(br, source: "say(text: \"still here after not-found\")")
     | result r |> std/io:print.ln("say ran — bridge holds {{ r.handles:d }} resource(s)")
+    | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — unexpected for say")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG")
     | dispatch-error e |> std/io:print.ln("REFUSED: {{ e.message:s }} — WRONG")
     | event-denied ev |> std/io:print.ln("DENIED {{ ev:s }} — WRONG")
@@ -79,6 +84,7 @@ tor show-contrast { br: *std/bridge:Bridge }
 show-contrast = std/io:print.ln("--- 5. contrast: delete was never declared ---")
     |> std/bridge:run(br, source: "delete(path: \"probe_task_expr.txt\")")
     | result r |> std/io:print.ln("result — WRONG, delete is not a verb (holds {{ r.handles:d }})")
+    | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — unexpected for delete")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG, a declaration is not an invocation")
     | dispatch-error e |> std/io:print.ln("REFUSED: {{ e.message:s }} — WRONG, nothing to refuse")
     | event-denied ev |> std/io:print.ln("DENIED {{ ev:s }} — the wall held, smallest wall kept")

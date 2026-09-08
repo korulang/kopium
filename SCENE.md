@@ -64,6 +64,12 @@ it acts.
 
 ## Tending log
 
+- 2026-09-08: the hand-back fires live — notes `read` gains `| ok | missing`;
+  `notes-unhandled` joins the harness wall; live turn 5 witnessed
+  `UNHANDLED branch=[missing]` and turn 6 the model explained it back.
+  Consequence banked in frag-partial-programs: branch-returning verbs are
+  two-turn under the one-invocation law (a bare `ok` hands back too) until
+  continuation arms survive `clean`.
 - 2026-09-05: resource world as successor-inspectable place (record,
   not live fd; history may be a sibling). Walk agreed; written here.
 - 2026-09-05: first replay under the wall brief — 440_009

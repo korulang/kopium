@@ -50,3 +50,31 @@ What would correct this: a measured replay where multi-invocation turns
 produce mush, refusal churn, or worse cost-per-task than single-invocation
 turns under identical goals. Until that measurement exists, composition
 stays legal and the prompt stays minimal.
+
+IMPLEMENTED 2026-09-08 — the hand-back fires live, and the vocab-shaped
+consequence is now measured:
+
+- `notes read` returns `| ok | missing path` — the scope's first named-branch
+  verb. `probe_unhandled_read.k` pins all four shapes through the same
+  `std/bridge:run` (lenient) that `live.k` calls: a bare read of an absent
+  path hands back `UNHANDLED branch=[missing]` (A), a partial fragment that
+  handles only `| ok` hands back when `missing` fires (B), a bare read of an
+  EXISTING file also hands back `UNHANDLED branch=[ok]` (C — a named branch
+  nobody handled is unhandled even on success), and a handled `| ok` completes
+  as `result` (D).
+- Live witness: turn 5 of the 8-turn scenario (`read(path: "field-journal.txt")`)
+  fired the hand-back; turn 6 the model explained the semantics back — "my
+  fragment had no arm for missing, so it went unhandled and the session still
+  holds nothing open" — then continued. The teaching message works.
+- DESIGN CONSEQUENCE (the belief this section owns): under the one-invocation
+  law (clean truncates to one line), a bare call to a branch-returning verb
+  ALWAYS hands back — success (`ok`) included — so such verbs are inherently
+  two-turn in the live flow unless the fragment handles the outcome. Design
+  notes vocabulary knowing a named-branch verb's happy path also returns to
+  the host. The alternative — teach the model the arm shape, or let `clean`
+  preserve continuation arms — is an open knob, not yet ruled.
+
+What would correct this: `clean` starts preserving continuation arms (making
+handled reads single-turn), or a ruling that bare `ok` should complete by
+convention — either flips the two-turn consequence while the probes stay the
+record of the current semantics.

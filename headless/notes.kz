@@ -101,22 +101,29 @@ fn slotOf(handle: []const u8) ?usize {
 //   - `openFile(path, .{})`: no create, no truncate, no write. `open` above
 //     is the destructive verb; this one cannot modify the disk by
 //     construction, only witness it.
-//   - `-> void`: no handle minted, no obligation issued. Contrast koru
+//   - Named branches, no handle minted, no obligation issued: `| ok` and
+//     `| missing path` are outcomes, not resources. Contrast koru
 //     335_042 (`std/io:read-file`'s buffer carries `allocated!` and MUST
 //     reach `std/io:free`): no Koru-visible buffer ever exists here, so
 //     there is nothing to discharge — the bytes travel the `say` channel
 //     (stderr transcript, quiet-gated) and die there.
-//   - A missing file is a printed `not-found`, not a panic: the verb runs,
+//   - A missing file is `| missing path`, not a panic: the verb runs,
 //     reports, and the bridge survives for the next turn — the same shape
-//     as `std/io:read-file`'s `not-found` arm (live.k leans on it).
+//     as `std/io:read-file`'s `not-found` arm (live.k leans on it). The
+//     named outcome is also the live trigger for the ruling's hand-back
+//     (430_056): a fragment that does not handle `missing` hands it back as
+//     `unhandled-branch`, and the host (live.k's `act`) feeds the model what
+//     it left on the bridge.
 // Read opens. It does not run: evaluation is a later verb.
 
 ~pub tor read { path: string }
+| ok
+| missing string
 
 ~proc read|zig {
     const f = std.fs.cwd().openFile(path, .{}) catch {
         if (!$mod.quiet) std.debug.print("      [read] not-found: '{s}'\n", .{path});
-        return;
+        return .{ .missing = path };
     };
     defer f.close();
     var buf: [4096]u8 = undefined;
@@ -126,6 +133,7 @@ fn slotOf(handle: []const u8) ?usize {
         if (!$mod.quiet) std.debug.print("{s}", .{buf[0..n]});
     }
     if (!$mod.quiet) std.debug.print("\n      [read] ok: '{s}'\n", .{path});
+    return .ok;
 }
 
 // ============================================================================

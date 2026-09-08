@@ -28,9 +28,10 @@ NEEDLES = [
     ("attempt shows the task file", "2 + 3 * 4"),
     ("run reports ok", "[read] ok: 'probe_task_expr.txt'"),
     ("result arm, nothing minted", "read ran \u2014 bridge holds 0 resource(s), nothing minted"),
-    # 2. absence reports, it does not refuse or crash
+    # 2. absence hands back (430_056): ok handled, missing fired, the bridge
+    # returned it as unhandled-branch — it does not refuse or crash
     ("missing reports not-found", "[read] not-found: 'no-such-file.txt'"),
-    ("miss still runs the verb", "missing ran \u2014 bridge holds 0 resource(s), nothing minted"),
+    ("miss hands back", "UNHANDLED branch=[missing]"),
     # 3. the session outlives the miss
     ("bridge survives", "still here after not-found"),
     # 4. the derived vocabulary includes read

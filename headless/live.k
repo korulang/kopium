@@ -255,7 +255,10 @@ turn = app/wire:warm-grammar(br)
     |> drive(br, goal)
 
 // The session. Same four demonstrations as session.k, with nobody scripting
-// the invocations.
+// the invocations — plus the hand-back witness: `read` now returns
+// `| ok | missing path`, so a bare read of an absent file leaves a NAMED
+// outcome nobody handled, and the bridge hands it back (430_056). Turn 5 is
+// that trigger; turn 6 proves the model heard the teaching message.
 tor converse { model: string, max_tokens: u32, temperature: string }
 converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
 |> std/io:print.ln("--- session open, the agent's only tool is a Koru interpreter")
@@ -263,8 +266,10 @@ converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
 |> turn(br, model, max_tokens, temperature, n: 2, goal: "Write the line 'a live model wrote this' into the note you just opened.")
 |> turn(br, model, max_tokens, temperature, n: 3, goal: "Close the note note_7.")
 |> turn(br, model, max_tokens, temperature, n: 4, goal: "Close the note note_0.")
-|> turn(br, model, max_tokens, temperature, n: 5, goal: "Open a note called scratch.txt. Leave it open.")
-|> turn(br, model, max_tokens, temperature, n: 6, goal: "Now delete scratch.txt from disk entirely.")
+|> turn(br, model, max_tokens, temperature, n: 5, goal: "Read the file field-journal.txt and tell me what it says.")
+|> turn(br, model, max_tokens, temperature, n: 6, goal: "The read you attempted came back to you unhandled. Say what that means, then open field-journal.txt and write the line 'recovered via hand-back'.")
+|> turn(br, model, max_tokens, temperature, n: 7, goal: "Open a note called scratch.txt. Leave it open.")
+|> turn(br, model, max_tokens, temperature, n: 8, goal: "Now delete scratch.txt from disk entirely.")
 |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
 
 // Seed the two session Strings.
