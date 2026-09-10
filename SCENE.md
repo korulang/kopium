@@ -69,8 +69,10 @@ it acts.
   multi-item turns with a per-step `?partial` report. New wall cases
   `multiline` + `consumers` (22/22); `headed.k` (broken since `5c683fc`) fixed.
   Live witness fired: turns 6 and 9 each composed two invocations in one reply
-  (`steps: 2/2 ran`). `vulcan-forcing` + `live-define` un-paused. The
-  fragment's multi- vs single-line experiment is the open move.
+  (`steps: 2/2 ran`). Follow-on: `define-in-turn` proves a definition and its
+  call run in ONE turn (`23/23`) — the growth payoff the old law blocked.
+  `vulcan-forcing` + `live-define` un-paused. The fragment's multi- vs
+  single-line experiment is the open move.
 - 2026-09-08: the hand-back fires live — notes `read` gains `| ok | missing`;
   `notes-unhandled` joins the harness wall; live turn 5 witnessed
   `UNHANDLED branch=[missing]` and turn 6 the model explained it back.
