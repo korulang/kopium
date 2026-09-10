@@ -38,3 +38,5 @@ probe_affordances.txt
 probe_opaque_1.txt
 probe_opaque_2.txt
 probe-headed.txt
+# the frag experiment runner
+bench/experiment-logs/

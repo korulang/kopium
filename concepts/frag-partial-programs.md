@@ -46,10 +46,20 @@ progressive disclosure by the tools themselves, minimal seed, never a
 longer system prompt. A rule that costs turns is guilty until measured
 innocent (multi-invocation experiment vs the one-line law).
 
+MEASURED 2026-09-10 — the experiment ran (`bench/experiment.py`, n=3/arm;
+`bench/EXPERIMENT_2026-09-10.md`). Outcome: the RELIABILITY half holds —
+composition completed 3/3 vs one-line 1/3, whose misses re-appended on a
+continuation turn and corrupted the file (`alpha\nalpha`). The COST half is NOT
+supported: medians were within ~4% (12,630 vs 13,173 tokens), noise at n=3.
+Composition prevents the re-append failure, but "a full reasoning pass per
+turn" is not a measured saving on this task. The cost claim drops from asserted
+benefit to open question; the reliability claim stands.
+
 What would correct this: a measured replay where multi-invocation turns
 produce mush, refusal churn, or worse cost-per-task than single-invocation
-turns under identical goals. Until that measurement exists, composition
-stays legal and the prompt stays minimal.
+turns under identical goals. The 2026-09-10 measurement did NOT produce that
+(more reliable, cost-neutral); a sharper instrument — early stopping on task
+completion, larger n, a single-turn arm — would settle the cost question.
 
 IMPLEMENTED 2026-09-08 — the hand-back fires live, and the vocab-shaped
 consequence is now measured:
