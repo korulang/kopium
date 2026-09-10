@@ -29,12 +29,27 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 BENCH = Path(__file__).resolve().parent
 HEADLESS = REPO / "headless"
-PREFLIP = Path.home() / "src" / "kopium-preflip" / "headless"
+PREFLIP = Path.home() / "src" / "kopium-preflip"
+PREFLIP_HEADLESS = PREFLIP / "headless"
+PREFLIP_REF = "3d035e2"  # the pre-flip kopium commit (2f500f3~1)
 
 USAGE_RE = re.compile(r"\[usage\] prompt (\d+) completion (\d+)")
 TURN_RE = re.compile(r"^turn \d+", re.MULTILINE)
 HOLDS_RE = re.compile(r"bridge now holds (\d+) resource")
 STEP_RE = re.compile(r"steps: (\d+)/(\d+) ran")
+
+
+def ensure_preflip() -> bool:
+    """The control arm is the pre-flip intake: a worktree at PREFLIP_REF with
+    the current experiment.k dropped in beside its (old) wire.kz."""
+    if not PREFLIP_HEADLESS.exists():
+        r = subprocess.run(["git", "worktree", "add", str(PREFLIP), PREFLIP_REF],
+                           cwd=REPO, capture_output=True, text=True)
+        if r.returncode != 0:
+            print(r.stdout + r.stderr)
+            return False
+    (PREFLIP_HEADLESS / "experiment.k").write_bytes((HEADLESS / "experiment.k").read_bytes())
+    return True
 
 
 def compile_arm(directory: Path) -> Path | None:
@@ -86,6 +101,9 @@ def run_once(binary: Path, directory: Path, logdir: Path, arm: str, n: int) -> d
 
 
 def summarise(name: str, runs: list[dict]) -> None:
+    if not runs:
+        print(f"\n{name}: (no runs)")
+        return
     n = len(runs)
     ok = sum(1 for r in runs if r["ok"])
     toks = [r["tokens"] for r in runs]
@@ -108,12 +126,15 @@ def main() -> int:
     args = ap.parse_args()
 
     composed_bin = compile_arm(HEADLESS)
-    oneline_bin = compile_arm(PREFLIP)
+    if not ensure_preflip():
+        print("FAIL: could not provision the pre-flip control worktree")
+        return 1
+    oneline_bin = compile_arm(PREFLIP_HEADLESS)
     if composed_bin is None or oneline_bin is None:
-        print("FAIL: could not build both arms (is the preflip worktree at HEAD~2?)")
+        print("FAIL: could not build both arms")
         return 1
 
-    arms = [("composed", composed_bin, HEADLESS), ("one-line", oneline_bin, PREFLIP)]
+    arms = [("composed", composed_bin, HEADLESS), ("one-line", oneline_bin, PREFLIP_HEADLESS)]
     logdir = BENCH / "experiment-logs"
     results: dict[str, list[dict]] = {name: [] for name, _, _ in arms}
     for i in range(args.n):
@@ -128,11 +149,12 @@ def main() -> int:
         summarise(name, results[name])
 
     c, o = results["composed"], results["one-line"]
-    print("\nverdict")
-    print(f"  composed median tokens {statistics.median([r['tokens'] for r in c]):.0f}"
-          f"  vs one-line {statistics.median([r['tokens'] for r in o]):.0f}")
-    print(f"  composed completed {sum(r['ok'] for r in c)}/{len(c)}"
-          f"  vs one-line {sum(r['ok'] for r in o)}/{len(o)}")
+    if c and o:
+        print("\nverdict")
+        print(f"  composed median tokens {statistics.median([r['tokens'] for r in c]):.0f}"
+              f"  vs one-line {statistics.median([r['tokens'] for r in o]):.0f}")
+        print(f"  composed completed {sum(r['ok'] for r in c)}/{len(c)}"
+              f"  vs one-line {sum(r['ok'] for r in o)}/{len(o)}")
     return 0
 
 
