@@ -170,16 +170,18 @@ tor act { src: string }
 act = std/store:query(session)
 ! query br |> app/wire:warm-grammar(br) |> std/bridge:run(br, source: src)
     | result r |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s).\n\n"): ma
-    | unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
         |> announce(ma.text)
+    | unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
     | defined d |> std/fmt:ln("[tool result] defined: '{{ d:s }}' is now a verb in this session's vocabulary — callable on later turns.\n\n"): mi
         |> announce(mi.text)
     | dispatch-error e |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run — you named a handle this session never issued.\n\n"): mb
         |> announce(mb.text)
     | event-denied ev |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only the verbs in Your vocabulary above — open, append, close, say, and every verb you defined this session.\n\n"): mc
         |> announce(mc.text)
-    | parse-error p |> std/fmt:ln("[tool result] that was not a Koru invocation: {{ p.message:s }}. Reply with exactly one invocation and no prose.\n\n"): md
+    | parse-error p |> std/fmt:ln("[tool result] that was not Koru: {{ p.message:s }}. Each line is one invocation; a definition is two lines, the first starting with `tor `.\n\n"): md
         |> announce(md.text)
+    | partial p |> std/fmt:ln("[tool result] your turn ran as {{ p.total:d }} step(s); {{ p.ran:d }} completed. Step report:\n{{ p.report:s }}open resources: {{ p.handles:d }}.\n\n"): mpp
+        |> announce(mpp.text)
     | exhausted _ |> announce(text: "[tool result] budget exhausted; nothing ran.\n\n")
     | validation-error v |> std/fmt:ln("[tool result] invalid: {{ v:s }}\n\n"): mf
         |> announce(mf.text)

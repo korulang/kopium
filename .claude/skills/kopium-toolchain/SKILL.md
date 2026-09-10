@@ -90,8 +90,8 @@ scaffolding — prune the moment running code carries them.
   empty delta, zero content. Budget = worst-case thought + utterance.
   `[usage]`/`[wire-note]` lines in `live.k` output show the split.
 - SSE terminal usage is observed twice (hole 4)   — don't treat counts as exact until settled.
-- `wire:clean` keeps the first line; `extra-lines` counts the drop and
-  the turn feeds it back. One-invocation is mechanics, not law
-  (frag-partial-programs) — sequencing experiment open.
+- `wire:clean` keeps the WHOLE turn; `std/bridge:run` sequences multi-item
+  turns and reports one line per step under `?partial` (frag-partial-programs,
+  landed 2026-09-10). `extra-lines` is retired.
 - `say()` killed the live forgeries: `HandleNotHeld`/`event-denied`
   have no live witness — only canned `session.k` (+ refusal gate).

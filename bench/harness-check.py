@@ -21,6 +21,8 @@ CASES: list[tuple[str, str, str]] = [
     ("persist", "one Bridge, many lines", "probe_persist.py"),
     ("define", "session table survives the line", "probe_define.py"),
     ("live-define", "define completes on the live drive path, canned", "probe_live_define.py"),
+    ("multiline", "a multi-item turn sequences and reports per step", "probe_multiline.py"),
+    ("consumers", "every bridge:run caller compiles (exhaustive arms)", "probe_consumers.py"),
     ("mock-on-session", "mock register on session.k shape", "probe_session_mock.py"),
     ("live-vocab", "vocabulary is this Bridge, including inventions", "probe_vocab_live.py"),
     ("440_012", "redefine replaces the body", "probe_440_012.py"),

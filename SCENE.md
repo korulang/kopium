@@ -64,6 +64,13 @@ it acts.
 
 ## Tending log
 
+- 2026-09-10: the wire flip landed — `wire:clean` keeps the whole turn,
+  `extra-lines` is retired, and `std/bridge:run` (koru `e2c9bfc9a`) sequences
+  multi-item turns with a per-step `?partial` report. New wall cases
+  `multiline` + `consumers` (22/22); `headed.k` (broken since `5c683fc`) fixed.
+  Live witness fired: turns 6 and 9 each composed two invocations in one reply
+  (`steps: 2/2 ran`). `vulcan-forcing` + `live-define` un-paused. The
+  fragment's multi- vs single-line experiment is the open move.
 - 2026-09-08: the hand-back fires live — notes `read` gains `| ok | missing`;
   `notes-unhandled` joins the harness wall; live turn 5 witnessed
   `UNHANDLED branch=[missing]` and turn 6 the model explained it back.

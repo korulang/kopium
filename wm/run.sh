@@ -19,8 +19,8 @@ else
   fail=1
 fi
 
-if koruc probe_multiline.k >/dev/null 2>&1 && ./a.out 2>&1 | grep -q "^many 2"; then
-  echo "wire law: witnessed (many 2, head runs)"
+if koruc probe_multiline.k >/dev/null 2>&1 && ./a.out 2>&1 | grep -q "^partial 2/2"; then
+  echo "wire law: witnessed (partial 2/2, turn sequenced)"
   echo "signal kopium.wire.law_witnessed 1 flag"
 else
   echo "wire law: NOT witnessed"

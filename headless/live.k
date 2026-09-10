@@ -199,8 +199,11 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
     |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only the verbs in Your vocabulary above — open, append, close, read, edit, say, and every verb you defined this session."): mc
     |> observe(mc.text)
 | parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
-    |> std/fmt:ln("[tool result] That was not a Koru invocation: {{ p.message:s }}. Reply with exactly one invocation and no prose."): md
+    |> std/fmt:ln("[tool result] That was not Koru: {{ p.message:s }}. Each line is one invocation; a definition is two lines, the first starting with `tor `."): md
     |> observe(md.text)
+| partial p |> std/io:print.ln("  steps: {{ p.ran:d }}/{{ p.total:d }} ran, bridge holds {{ p.handles:d }}")
+    |> std/fmt:ln("[tool result] Your turn ran as {{ p.total:d }} step(s); {{ p.ran:d }} completed. Step report:\n{{ p.report:s }}Open resources: {{ p.handles:d }}."): mp
+    |> observe(mp.text)
 | exhausted _ |> std/io:print.ln("  budget exhausted")
     |> observe(text: "[tool result] budget exhausted; nothing ran.")
 | validation-error v |> std/io:print.ln("  invalid: {{ v:s }}")
@@ -220,23 +223,23 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
 // THE COPY IS AT `clean` (610_007 stage 2). `raw` is a borrow of the
 // store-held `reply` String and it is consumed on the very next step, which is
 // the safe shape. What used to travel was `clean`'s SUB-SLICE of that borrow —
-// it went into `record`, into `std/bridge:run`, and out through eight arms,
+// it went into `record`, into `std/bridge:run`, and out through the arms,
 // each of which can run arbitrary model-chosen `notes` events. Nothing stopped
 // one of those from appending to `reply` and reallocating the bytes `src`
 // points at, with the owner alive the whole time and no free anywhere
 // (610_008). `clean` now returns an owned String: `cs` is a local nothing
 // downstream can reach, and it dies on one visible line after the last use.
+//
+// The whole turn travels now (frag-partial-programs): a reply may hold several
+// invocations, a two-line declaration, or a chain, and `std/bridge:run`
+// sequences it. There is no drop to warn about — `extra-lines` is retired.
 tor drive { br: *std/bridge:Bridge, goal: string }
 drive = std/store:query(reply)
 ! query buf |> std/fmt:ln("{{ buf:S }}"): raw |> std/io:print.ln("  raw  > [{{ raw.text:s }}]") |> app/wire:clean(raw: raw.text)
     | ok cs |> std/fmt:ln("{{ cs:S }}"): src
         |> std/io:print.ln("  model> {{ src.text:s }}")
         |> act(br, goal, source: src.text)
-        |> app/wire:extra-lines(raw: raw.text)
-        | one |> std/string:free(s: cs)
-        | many n |> std/fmt:ln("[tool result] note: your reply held {{ n:d }} lines — one invocation, or one two-line definition, per turn, so only the head ran."): mq
-            |> observe(mq.text)
-            |> std/string:free(s: cs)
+        |> std/string:free(s: cs)
     | err e |> std/io:print.ln("  could not snapshot the reply: {{ e:s }}")
 
 // Clear the in-flight reply before the next ask.
@@ -255,10 +258,12 @@ turn = app/wire:warm-grammar(br)
     |> drive(br, goal)
 
 // The session. Same four demonstrations as session.k, with nobody scripting
-// the invocations — plus the hand-back witness: `read` now returns
-// `| ok | missing path`, so a bare read of an absent file leaves a NAMED
-// outcome nobody handled, and the bridge hands it back (430_056). Turn 5 is
-// that trigger; turn 6 proves the model heard the teaching message.
+// the invocations — plus two witnesses. Turns 5–6 are the hand-back: `read`
+// returns `| ok | missing path`, so a bare read of an absent file leaves a
+// NAMED outcome nobody handled, and the bridge hands it back (430_056).
+// Turn 9 is the sequencing witness (frag-partial-programs): a goal that asks
+// for two invocations in one reply, which the bridge runs as steps and reports
+// under `?partial`.
 tor converse { model: string, max_tokens: u32, temperature: string }
 converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
 |> std/io:print.ln("--- session open, the agent's only tool is a Koru interpreter")
@@ -270,6 +275,7 @@ converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
 |> turn(br, model, max_tokens, temperature, n: 6, goal: "The read you attempted came back to you unhandled. Say what that means, then open field-journal.txt and write the line 'recovered via hand-back'.")
 |> turn(br, model, max_tokens, temperature, n: 7, goal: "Open a note called scratch.txt. Leave it open.")
 |> turn(br, model, max_tokens, temperature, n: 8, goal: "Now delete scratch.txt from disk entirely.")
+|> turn(br, model, max_tokens, temperature, n: 9, goal: "In this one reply, emit TWO invocations: first open a note called turn-nine.txt and write the line 'sequenced in one turn' into it (chain the handle the open returns), then call say(text: \"both steps ran\"). Two invocations, one turn.")
 |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
 
 // Seed the two session Strings.

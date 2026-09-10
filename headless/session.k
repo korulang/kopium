@@ -59,6 +59,7 @@ turn = app/model:intent(turn: n): why
     |> std/io:print.ln("  tool> {{ src:s }}")
     |> std/bridge:run(br, source: src)
         | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
+        | partial p |> std/io:print.ln("  {{ p.ran:d }}/{{ p.total:d }} steps ran — bridge holds {{ p.handles:d }}")
         | defined d |> std/io:print.ln("  defined {{ d:s }} — the session's vocabulary now includes it")
         | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
         | unhandled-branch ub |> std/io:print.ln("  UNHANDLED: '{{ ub.branch:s }}' fired, held {{ ub.handles:s }} — carry it to the next turn")

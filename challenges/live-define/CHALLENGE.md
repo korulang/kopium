@@ -23,10 +23,10 @@ cases, canned and keyless; this brief spends (small) and lands transcripts,
 never wall cases. It drinks those catalogs as facts on disk; it does not
 replay them.*
 
-***PAUSED 2026-09-07 — pending wire sequencing.** The wire gate contradicts
-the partial-programs ruling (frag-partial-programs, WIRE_GATE_REPORT.md).
-Replays now would land scenarios for a wire about to change shape. Do not
-replay until the wire accepts partial programs.*
+***UN-PAUSED 2026-09-10 — the wire accepts partial programs.** Sequencing
+landed (koru `e2c9bfc9a`) and the kopium flip followed (`wire:clean` keeps the
+whole turn; `std/bridge:run` reports per step under `?partial`). Hostile
+define scenarios now land on the wire they will live on.*
 
 ---
 

@@ -74,6 +74,17 @@ consequence is now measured:
   the host. The alternative — teach the model the arm shape, or let `clean`
   preserve continuation arms — is an open knob, not yet ruled.
 
+LANDED 2026-09-10 — the wire flip and its live witness. koru merged the
+sequencing (`e2c9bfc9a`: chains, multi-item sequencing, armed define); kopium's
+intake followed — `wire:clean` keeps the whole turn, `extra-lines` is retired,
+and the run loops report the `?partial` branch. Canned wall cases `multiline`
++ `consumers` (22/22). Live witness (muse-spark, 9 turns, 32,996 tokens;
+`challenges/harness-join/catalog/2026-09-10-multiline-turn.transcript.txt`):
+turns 6 and 9 each composed TWO invocations in one reply and the bridge reported
+`steps: 2/2 ran` — the composition this fragment exists to protect, running
+from where it is actually used. The one-invocation law is gone from prompt,
+intake, and enforcement.
+
 What would correct this: `clean` starts preserving continuation arms (making
 handled reads single-turn), or a ruling that bare `ok` should complete by
 convention — either flips the two-turn consequence while the probes stay the

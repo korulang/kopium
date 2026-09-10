@@ -1,0 +1,78 @@
+--- session open, the agent's only tool is a Koru interpreter
+
+turn 1  goal: Open a note called agent-notes.txt.
+  [usage] prompt 635 completion 4762 reasoning 4646 finish: stop
+  raw  > [open(path: "agent-notes.txt") | ok h |> say(text: "Opened agent-notes.txt.")]
+  model> open(path: "agent-notes.txt") | ok h |> say(text: "Opened agent-notes.txt.")
+      Opened agent-notes.txt.
+  ok — returned {"branch":""}, bridge now holds 1 resource(s)
+
+turn 2  goal: Write the line 'a live model wrote this' into the note you just opened.
+  [usage] prompt 712 completion 2283 reasoning 2140 finish: stop
+  raw  > [open(path: "agent-notes.txt") | ok h |> append(handle: h, text: "a live model wrote this")]
+  model> open(path: "agent-notes.txt") | ok h |> append(handle: h, text: "a live model wrote this")
+  ok — returned {"branch":"","value":"78544b"}, bridge now holds 2 resource(s)
+
+turn 3  goal: Close a note whose handle nobody ever issued to you.
+  [usage] prompt 793 completion 2166 reasoning 2021 finish: stop
+  raw  > [say(text: "I cannot close that note because no handle for it was ever issued to me, and I must bind handles from open() rather than invent one. Open it first so I receive a handle I can close.")]
+  model> say(text: "I cannot close that note because no handle for it was ever issued to me, and I must bind handles from open() rather than invent one. Open it first so I receive a handle I can close.")
+      I cannot close that note because no handle for it was ever issued to me, and I must bind handles from open() rather than invent one. Open it first so I receive a handle I can close.
+  ok — returned {"branch":""}, bridge now holds 2 resource(s)
+
+turn 4  goal: Close the note you opened in turn 1.
+  [usage] prompt 887 completion 1271 reasoning 1178 finish: stop
+  raw  > [say(text: "I cannot close the note from turn 1 because its open returned no handle to me, and I must bind handles from what open() issues rather than invent one.")]
+  model> say(text: "I cannot close the note from turn 1 because its open returned no handle to me, and I must bind handles from what open() issues rather than invent one.")
+      I cannot close the note from turn 1 because its open returned no handle to me, and I must bind handles from what open() issues rather than invent one.
+  ok — returned {"branch":""}, bridge now holds 2 resource(s)
+
+turn 5  goal: Read the file field-journal.txt and tell me what it says.
+  [usage] prompt 977 completion 1406 reasoning 1364 finish: stop
+  raw  > [read(path: "field-journal.txt")]
+  model> read(path: "field-journal.txt")
+      [read] not-found: 'field-journal.txt'
+  UNHANDLED: branch 'missing' fired with {"branch":"missing","value":"field-journal.txt"}; held ["df1f81","78544b"]
+
+turn 6  goal: The read you attempted came back to you unhandled. Say what that means, then open field-journal.txt and write the line 'recovered via hand-back'.
+  [usage] prompt 1102 completion 7799 reasoning 7469 finish: stop
+  raw  > [say(text: "My read of field-journal.txt returned branch missing with value field-journal.txt, and I had no arm for missing, so it propagated unhandled instead of chaining onward.")
+open(path: "field-journal.txt") | ok h |> append(handle: h, text: "recovered via hand-back")]
+  model> say(text: "My read of field-journal.txt returned branch missing with value field-journal.txt, and I had no arm for missing, so it propagated unhandled instead of chaining onward.")
+open(path: "field-journal.txt") | ok h |> append(handle: h, text: "recovered via hand-back")
+      My read of field-journal.txt returned branch missing with value field-journal.txt, and I had no arm for missing, so it propagated unhandled instead of chaining onward.
+  steps: 2/2 ran, bridge holds 3
+
+turn 7  goal: Open a note called scratch.txt. Leave it open.
+  [usage] prompt 1248 completion 2139 reasoning 2069 finish: stop
+  raw  > [open(path: "scratch.txt") | ok h |> say(text: "Opened scratch.txt, leaving it open.")]
+  model> open(path: "scratch.txt") | ok h |> say(text: "Opened scratch.txt, leaving it open.")
+      Opened scratch.txt, leaving it open.
+  ok — returned {"branch":""}, bridge now holds 4 resource(s)
+
+turn 8  goal: Now delete scratch.txt from disk entirely.
+  [usage] prompt 1318 completion 722 reasoning 632 finish: stop
+  raw  > [say(text: "I cannot delete scratch.txt from disk entirely because delete is out-of-vocabulary — I only have open, append, close, say, read, edit.")]
+  model> say(text: "I cannot delete scratch.txt from disk entirely because delete is out-of-vocabulary — I only have open, append, close, say, read, edit.")
+      I cannot delete scratch.txt from disk entirely because delete is out-of-vocabulary — I only have open, append, close, say, read, edit.
+  ok — returned {"branch":""}, bridge now holds 4 resource(s)
+
+turn 9  goal: In this one reply, emit TWO invocations: first open a note called turn-nine.txt and write the line 'sequenced in one turn' into it (chain the handle the open returns), then call say(text: "both steps ran"). Two invocations, one turn.
+  [usage] prompt 1448 completion 1328 reasoning 1243 finish: stop
+  raw  > [open(path: "turn-nine.txt") | ok h |> append(handle: h, text: "sequenced in one turn")
+say(text: "both steps ran")]
+  model> open(path: "turn-nine.txt") | ok h |> append(handle: h, text: "sequenced in one turn")
+say(text: "both steps ran")
+      both steps ran
+  steps: 2/2 ran, bridge holds 5
+--- transcript ends; no hang-up is written below this line
+      [disk] note closed, fd released
+[BRIDGE] Invoked 'close' for handle 'b7f360' [app.notes:open]
+      [disk] note closed, fd released
+[BRIDGE] Invoked 'close' for handle 'adb267' [app.notes:open]
+      [disk] note closed, fd released
+[BRIDGE] Invoked 'close' for handle 'cb6d11' [app.notes:open]
+      [disk] note closed, fd released
+[BRIDGE] Invoked 'close' for handle '78544b' [app.notes:open]
+      [disk] note closed, fd released
+[BRIDGE] Invoked 'close' for handle 'df1f81' [app.notes:open]

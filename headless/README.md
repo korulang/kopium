@@ -175,10 +175,11 @@ and demonstrated red against the unfixed compiler before the pin was written.
   tor for `d_turns.k`'s streaming path is the whole difference, and it is gated
   on kopium's hole 3 (`as.string` returns a borrow into a doc the caller closes,
   so live replies come back as NUL bytes today).
-- **Not multi-step — yet.** The demo feeds one invocation per turn, which is
-  what a tool call already is; the wire gate refuses the rest.
-  `open(…) |> append(…) |> close(…)` in a single turn is the sequencing move,
-  open and untested here (frag-partial-programs, WIRE_GATE_REPORT.md).
+- **Multi-step now — in a chain or across items.** A turn may hold several
+  invocations (`std/bridge:run` sequences them and reports one line per step
+  under `?partial`) or one flow chaining fresh handles —
+  `open(…) |> append(handle: h, …) |> close(…)`. Landed 2026-09-10
+  (frag-partial-programs, WIRE_GATE_REPORT.md).
 - **Not adversarial in the security sense.** Handles are `note_0`, guessable,
   and everything is in one process. What the refusal buys today is protection
   from a *wrong* agent, not a hostile one. That is the right first bar: the
@@ -408,13 +409,13 @@ back as a message is the honest next increment.
   the prose left in `wire.kz` is guidance, not vocabulary.
 - **The transcript is a blob, not rows.** One growable String, so nothing can
   count turns, replay the last N, or compact the middle. See above for why.
-- **One invocation per turn — stated as mechanics, under experiment.**
-  `wire:clean` keeps the first line, `extra-lines` feeds the drop back,
-  and the prompt now says exactly that instead of legislating obedience
-  (frag-partial-programs). The prohibitions are gone. The sequencing
-  experiment — multi-invocation turns with explicit partial-failure
-  semantics — is the open move; until it lands, a model that wants
-  `open(…) |> append(…)` in one turn still cannot say so.
+- **Partial programs — landed, experiment open.** `wire:clean` keeps the
+  whole turn and `std/bridge:run` sequences it: a turn may hold several
+  invocations, each run in order and reported per step under `?partial`, or
+  one flow chaining fresh handles. The old head-truncation and its
+  `extra-lines` warning are gone (frag-partial-programs, 2026-09-10). The
+  fragment's own experiment — identical goals, multi-line vs one-line,
+  cost-per-task — is the open move and can correct the fragment.
 - **Hardcoded URL.** Model, budget, and temperature are tor parameters;
   the OpenRouter endpoint is still a literal in the request builders. It
   is a demo.

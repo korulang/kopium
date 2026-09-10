@@ -30,19 +30,14 @@ show-prompt = app/wire:warm-grammar(br)
 
 // 2 + 3. Arrival + install: clean keeps both lines, run reports defined.
 // Split like live.k's drive/act: `define` owns the snapshot String and frees
-// it on one visible line after the last use; the eight arms live behind
-// `install` so there is one free, not eight.
+// it on one visible line after the last use.
 tor define { br: *std/bridge:Bridge }
 define = app/wire:clean(raw: "tor greet { msg: string }\ngreet = say(text: msg)")
 | ok cs |> std/fmt:ln("{{ cs:S }}"): src
     |> std/io:print.ln("--- 2. live intake keeps the declaration whole ---")
     |> std/io:print.ln("cleaned> {{ src.text:s }}")
-    |> app/wire:extra-lines(raw: "tor greet { msg: string }\ngreet = say(text: msg)")
-    | one |> std/io:print.ln("extra-lines: one — the declaration ran whole, no warning owed")
-        |> install(br, source: src.text)
-        |> std/string:free(s: cs)
-    | many n |> std/io:print.ln("extra-lines: many({{ n:d }}) — WRONG, a two-line define drops nothing")
-        |> std/string:free(s: cs)
+    |> install(br, source: src.text)
+    |> std/string:free(s: cs)
 | err e |> std/io:print.ln("clean failed: {{ e:s }}")
 
 tor install { br: *std/bridge:Bridge, source: string }
@@ -85,15 +80,11 @@ show-renders = std/io:print.ln("--- 5. derived vocabulary (register + inventions
         | not-found s |> std/io:print.ln("!! scope {{ s:s }} vanished")
     | not-found s |> std/io:print.ln("!! scope {{ s:s }} vanished")
 
-// 7. The wall did not move: two invocations still keep only the head.
+// 7. The flip: a two-invocation reply is no longer truncated to its head.
 tor show-contrast {}
-show-contrast = std/io:print.ln("--- 7. contrast: two invocations still keep only the head ---")
+show-contrast = std/io:print.ln("--- 7. contrast: clean keeps the whole turn, both invocations ---")
     |> app/wire:clean(raw: "open(path: \"a\")\nclose(handle: \"deadbe\")")
-    | ok first |> std/fmt:ln("{{ first:S }}"): head
-        |> std/io:print.ln("head runs: [{{ head.text:s }}]")
-        |> app/wire:extra-lines(raw: "open(path: \"a\")\nclose(handle: \"deadbe\")")
-        | one |> std/io:print.ln("extra-lines: one — WRONG, one line dropped")
-            |> std/string:free(s: first)
-        | many n |> std/io:print.ln("extra-lines: many({{ n:d }}) — the dropped line is feedback, not silence")
-            |> std/string:free(s: first)
+    | ok first |> std/fmt:ln("{{ first:S }}"): whole
+        |> std/io:print.ln("kept: [{{ whole.text:s }}]")
+        |> std/string:free(s: first)
     | err e |> std/io:print.ln("clean failed: {{ e:s }}")

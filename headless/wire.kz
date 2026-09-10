@@ -62,10 +62,11 @@ var auth_len: usize = 0;
 // ============================================================================
 
 // The accumulated reply, with surrounding whitespace and any markdown fence
-// stripped, reduced to its head: one invocation — or, when the reply opens
-// with `tor `, the two lines of a declaration, which the run loop installs
-// as a verb rather than dispatching. A chat model wraps code in ``` about
-// half the time, and the interpreter is owed source, not a transcript of one.
+// stripped — the WHOLE turn, not its head. The turn may hold several
+// invocations, a two-line `tor ` declaration, or a chain of `|` arms; the
+// bridge sequences it and reports one line per step (frag-partial-programs).
+// A chat model wraps code in ``` about half the time, and the interpreter is
+// owed source, not a transcript of one.
 //
 // COPY AT THE BOUNDARY (610_007 stage 2). This used to be `{ raw: string } ->
 // string`, returning a SUB-SLICE of its input — a borrow travelling upward out
@@ -103,55 +104,18 @@ var auth_len: usize = 0;
         s = std.mem.trim(u8, s, " \t\r\n");
     }
 
-    // A declaration is two lines, not one: `tor name { ... }` plus its body.
-    // The run loop discriminates declaration from invocation, so the head of
-    // a `tor `-led reply is both lines. Anything else, the head is the first
-    // line. A tool call is a line, and this is the cheapest way to be strict
-    // about that without pretending to parse Koru here.
-    if (std.mem.startsWith(u8, s, "tor ")) {
-        if (std.mem.indexOfScalar(u8, s, '\n')) |nl| {
-            const rest = s[nl + 1 ..];
-            const end = std.mem.indexOfScalar(u8, rest, '\n') orelse rest.len;
-            return std.mem.trim(u8, s[0 .. nl + 1 + end], " \t\r");
-        }
-        return s;
-    }
-    if (std.mem.indexOfScalar(u8, s, '\n')) |nl| s = std.mem.trim(u8, s[0..nl], " \t\r");
-
+    // The whole turn travels. Segmenting it into items — a `tor ` declaration
+    // is two lines, anything else opens at a non-`|` line at depth zero — is
+    // the bridge's job now (`std/bridge:run`), and it can only fail loud:
+    // every slice still passes the single paths' validators. Truncating here
+    // was the old wire gate wearing the intake's clothes.
     return s;
 }
 
-// How many lines of the reply did NOT run. The run loop executes the first
-// invocation it is given (R2's wire gate refuses the rest at parse time) —
-// with the one exception `clean` keeps: a `tor `-led declaration, whose two
-// lines run as one install. `clean` enforces the head either way, but a drop the agent never
-// hears about is a drop it will repeat. The `many` arm lets the caller say
-// so; `one` covers the happy path, the whole-declaration path, and the
-// empty reply alike. Fences are stripped before counting, the same way
-// `clean-span` strips them before keeping: fence lines never ran, but they
-// were never wire either.
-~pub tor extra-lines { raw: string }
-| one
-| many u64
-
-~proc extra-lines|zig {
-    var s = std.mem.trim(u8, raw, " \t\r\n");
-    if (s.len == 0) return .{ .one = .{} };
-    if (std.mem.startsWith(u8, s, "```")) {
-        const nl = std.mem.indexOfScalar(u8, s, '\n') orelse s.len;
-        s = s[@min(nl + 1, s.len)..];
-        if (std.mem.lastIndexOf(u8, s, "```")) |end| s = s[0..end];
-        s = std.mem.trim(u8, s, " \t\r\n");
-    }
-    if (s.len == 0) return .{ .one = .{} };
-    var n: u64 = 1;
-    for (s) |ch| {
-        if (ch == '\n') n += 1;
-    }
-    if (n <= 1) return .{ .one = .{} };
-    if (n == 2 and std.mem.startsWith(u8, s, "tor ")) return .{ .one = .{} };
-    return .{ .many = n };
-}
+// `extra-lines` lived here. It counted the reply lines the old wire gate
+// dropped, so the run loop could tell the model "only the head ran". The
+// bridge sequences multi-item turns now (frag-partial-programs): nothing is
+// dropped, so there is no drop to count. Removed 2026-09-10 with the flip.
 
 // ============================================================================
 // MESSAGE BUILDING — the transcript is bytes the store holds, built here
@@ -229,11 +193,13 @@ var grammar_len: usize = 0;
 
     const rules =
         \\You are driving a Koru interpreter. Your reply is Koru: one invocation
-        \\per line. The run loop executes the first invocation it is given (a
-        \\definition is two lines and is declared below) and drops the rest —
-        \\lead with what matters. There is no prose channel: to say something,
-        \\call say(). What you may call is your vocabulary below, derived from
-        \\the session's own declaration:
+        \\per line, and a turn may hold several — each line runs in order and is
+        \\reported back to you step by step. A definition is two lines, the
+        \\first starting with `tor `; it installs instead of running. To
+        \\compose, chain through the handles calls return: open(...) | ok h |>
+        \\append(handle: h, ...) — bind what was issued, never predict it. There
+        \\is no prose channel: to say something, call say(). What you may call
+        \\is your vocabulary below, derived from the session's own declaration:
         \\
     ;
 

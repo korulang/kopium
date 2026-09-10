@@ -220,3 +220,16 @@ nothing ruled.
 A journaled ruling for the gate predating 08-17 (searched: none); or the
 sequencing implementation landing with the wall green on the new shape —
 at which point this file is history, not inventory.
+
+## RESOLVED 2026-09-10
+
+Sequencing shipped in koru (`e2c9bfc9a` — chains, multi-item sequencing,
+armed define, merged to main) and the kopium flip followed: `wire:clean` keeps
+the whole turn, `extra-lines` is retired, the run loop handles `?partial` and
+reports per step, and both hand-typed "one invocation / only the head ran"
+strings are gone. New wall cases `multiline` + `consumers` (22/22); the
+consumer case caught and fixed `headed.k`, which `5c683fc` had broken.
+`vulcan-forcing` and `live-define` were paused pending exactly this and are
+un-paused. This file is now history — the open move is the fragment's own
+experiment (identical goals, multi-line vs one-line, cost-per-task), which can
+correct the fragment.

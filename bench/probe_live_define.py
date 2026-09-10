@@ -28,16 +28,14 @@ NEEDLES = [
     ("prompt shows the example", "tor greet { msg: string }"),
     # 2. arrives whole through wire:clean (not first-line-truncated)
     ("intake keeps both lines", "cleaned> tor greet { msg: string }\ngreet = say(text: msg)"),
-    ("no drop reported", "extra-lines: one"),
     # 3. installs
     ("run installs", "DEFINED greet"),
     # 4. redispatches next turn
     ("invention dispatches", "greet ran"),
     # 5+6. derived renders include the invention
     ("vocabulary lists greet", "greet(msg: string)"),
-    # 7. the wall did not move — two invocations still head-only
-    ("contrast keeps head", 'head runs: [open(path: "a")]'),
-    ("contrast reports drop", "many(2)"),
+    # 7. the flip — clean keeps the whole turn, no head truncation
+    ("contrast keeps the turn", 'kept: [open(path: "a")\nclose(handle: "deadbe")]'),
 ]
 
 

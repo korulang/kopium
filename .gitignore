@@ -12,6 +12,7 @@ build_backend.zig
 output_emitted.zig
 program.ast.json
 compiler_env.zig
+compiler_env.json
 *.err
 *.out
 !README.md

@@ -198,6 +198,12 @@ syscall. Flows are the common path; native modules are the exception.
   ruling — see `concepts/frag-partial-programs.md` and
   `WIRE_GATE_REPORT.md`. What landed above stays true of the enforcement
   until sequencing ships; the law-language around it is revoked.
+  LANDED 2026-09-10: sequencing shipped (koru `e2c9bfc9a` — chains,
+  multi-item sequencing, armed define) and the kopium flip followed:
+  `wire:clean` keeps the whole turn, `extra-lines` is retired, and
+  `std/bridge:run` reports one line per step under `?partial`. The
+  one-invocation restriction and the "chains … refuse" sentence above are
+  history, not enforcement.
 - **R3 — the flow-compiler.** Defined flows lower to native handlers at
   definition time, bounded by the vocabulary. The summonable recompile.
 - **R4 — native primitive modules.** The rare escape hatch for genuinely new
