@@ -69,3 +69,50 @@ The fragment's **reliability** half is measured and holds — composition
 prevents the re-append corruption. Its **cost** half is not demonstrated; on
 this task composition is roughly cost-neutral. The fragment should lose the
 cost claim as an asserted benefit and keep it as an open question.
+
+---
+
+# Round 2 (same day) — cost-to-completion
+
+Round 1's cost was over a fixed 3-turn window, which inflated the composed
+arm (it finished early and the program kept spending). The sharpening: a
+per-turn file probe (`note-done` in `experiment.k` reads `exp.txt` after each
+turn — `append` writes straight to the fd, so the bytes are visible before any
+close) lets the runner sum `[usage]` **through the first turn the task's bytes
+appeared**. Headroom is 4 turns; `--n 5`.
+
+| arm | completed | median cost-to-completion | full 4-turn window | closed |
+|---|---|---|---|---|
+| composed | **5/5** | **3,192** | 16,817 | 3/5 |
+| one-line | 3/5 | 4,203 | 14,287 | 4/5 |
+
+Cost-to-completion (tokens): composed `[2861, 3076, 3192, 4751, 5926]`,
+one-line `[2860, 4191, 4203, 4632, 5385]`.
+
+## Reading round 2
+
+- **Cost-to-completion modestly favors composition** (~24% median cheaper) and
+  **reliability favors it** (5/5 vs 3/5). Both one-line misses are the same
+  handle-discipline failure: the model emits
+  `open | ok h |> append(handle: h, …) | ok |> close(handle: h)` — closing the
+  **pre-append** handle, which `append` already discharged — so the note never
+  closes and a later continuation turn re-appends, corrupting the file with
+  `alpha\nalpha`. The wire is not at fault; the model's binding is.
+- **4/10 runs hit the 240 s timeout** (2 per arm), all during a turn's stream,
+  not in the harness. The timeouts still yielded valid cost-to-completion where
+  the task had completed by the first turn. This flakiness bounds confidence.
+- **The control is weaker than intended**: a single line may still be a chain
+  (`parse.wire` accepts arms post-`70aeb093a`), so the one-line arm can complete
+  a *chainable* task in one turn — it did, 3/5. The old law's remaining bite is
+  therefore small for exactly the chained task the fragment names. The true
+  pre-chain comparison would need a pre-`70aeb093a` `koruc`.
+
+## Verdict round 2
+
+Still not a clean win for the fragment's cost claim — small n, 4 timeouts, and
+a control that permits chains — but the direction now leans **in** composition's
+favor on both axes rather than against. Net across both rounds: composition is
+**at least cost-neutral and more reliable**; a cost advantage is plausible but
+unproven. The instrument is now good enough to settle it with a pre-chain
+control and a larger n.
+

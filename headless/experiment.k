@@ -254,6 +254,18 @@ clear-reply = std/store:query(reply)
 
 // One turn. `br` carries no phantom — a turn USES the session, it does not
 // end it.
+//
+// After the turn runs, `note-done` reads exp.txt and prints a machine-readable
+// marker. `append` writes straight to the fd, so the bytes are on disk before
+// any close; the runner sums `[usage]` up to the first marker that shows the
+// task's bytes, which is cost-to-completion rather than cost over a fixed cap.
+tor note-done { n: u32 }
+note-done = std/io:read-file(path: "exp.txt")
+| ok content |> std/io:print.ln("turn-check {{ n:d }}: [{{ content:s }}]")
+    |> std/io:free(content)
+| not-found |> std/io:print.ln("turn-check {{ n:d }}: missing")
+| failed e |> std/io:print.ln("turn-check {{ n:d }}: failed {{ e:s }}")
+
 tor turn { br: *std/bridge:Bridge, model: string, max_tokens: u32, temperature: string, n: u32, goal: string }
 turn = app/wire:warm-grammar(br)
     |> clear-reply()
@@ -261,6 +273,7 @@ turn = app/wire:warm-grammar(br)
     |> std/io:print.ln("turn {{ n:d }}  goal: {{ goal:s }}")
     |> ask(model, max_tokens, temperature, goal)
     |> drive(br, goal)
+    |> note-done(n)
 
 // The experiment (frag-partial-programs): ONE chained task, up to three turns.
 // The goals are identical in both arms — only `app/wire` differs (this dir's
@@ -273,6 +286,7 @@ converse = std/bridge:create(id: "kopium-experiment", scope: "notes"): br
 |> turn(br, model, max_tokens, temperature, n: 1, goal: "Open a note called exp.txt, write the line 'alpha' into it, then close it.")
 |> turn(br, model, max_tokens, temperature, n: 2, goal: "Continue the task. If exp.txt does not yet contain exactly 'alpha', make it so; then make sure the note is closed. You are done when exp.txt holds 'alpha' and no note is open.")
 |> turn(br, model, max_tokens, temperature, n: 3, goal: "Continue the task. If exp.txt does not yet contain exactly 'alpha', make it so; then make sure the note is closed. You are done when exp.txt holds 'alpha' and no note is open.")
+|> turn(br, model, max_tokens, temperature, n: 4, goal: "Continue the task. If exp.txt does not yet contain exactly 'alpha', make it so; then make sure the note is closed. You are done when exp.txt holds 'alpha' and no note is open. If it is already done, call say(text: \"already done\").")
 |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
 
 // Seed the two session Strings.

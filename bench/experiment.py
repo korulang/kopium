@@ -37,6 +37,7 @@ USAGE_RE = re.compile(r"\[usage\] prompt (\d+) completion (\d+)")
 TURN_RE = re.compile(r"^turn \d+", re.MULTILINE)
 HOLDS_RE = re.compile(r"bridge now holds (\d+) resource")
 STEP_RE = re.compile(r"steps: (\d+)/(\d+) ran")
+CHECK_RE = re.compile(r"turn-check (\d+): \[(.*?)\]", re.DOTALL)
 
 
 def ensure_preflip() -> bool:
@@ -80,12 +81,20 @@ def run_once(binary: Path, directory: Path, logdir: Path, arm: str, n: int) -> d
         timed_out = True
     logdir.mkdir(exist_ok=True)
     (logdir / f"{arm}-{n}.log").write_text(out)
-    prompt = sum(int(m.group(1)) for m in USAGE_RE.finditer(out))
-    completion = sum(int(m.group(2)) for m in USAGE_RE.finditer(out))
+    usages = [(int(m.group(1)), int(m.group(2))) for m in USAGE_RE.finditer(out)]
+    prompt = sum(p for p, _ in usages)
+    completion = sum(c for _, c in usages)
     turns = len(TURN_RE.findall(out))
     steps = [tuple(map(int, m.groups())) for m in STEP_RE.finditer(out)]
     holds = [int(m.group(1)) for m in HOLDS_RE.finditer(out)]
     content = target.read_text().strip() if target.exists() else None
+
+    # Cost-to-completion: sum usage through the first turn whose file check
+    # shows the task's bytes. `None` (censored) if the task never completed.
+    checks = [(int(m.group(1)), m.group(2)) for m in CHECK_RE.finditer(out)]
+    done_turn = next((t for t, c in checks if "alpha" in c), None)
+    cost_to_complete = sum(p + c for p, c in usages[:done_turn]) if done_turn else None
+
     return {
         "prompt": prompt,
         "completion": completion,
@@ -95,6 +104,8 @@ def run_once(binary: Path, directory: Path, logdir: Path, arm: str, n: int) -> d
         "final_holds": holds[-1] if holds else None,
         "content": content,
         "ok": content == "alpha",
+        "done_turn": done_turn,
+        "cost_to_complete": cost_to_complete,
         "rc": rc,
         "timed_out": timed_out,
     }
@@ -108,16 +119,20 @@ def summarise(name: str, runs: list[dict]) -> None:
     ok = sum(1 for r in runs if r["ok"])
     toks = [r["tokens"] for r in runs]
     turns = [r["turns"] for r in runs]
+    ctc = [r["cost_to_complete"] for r in runs if r["cost_to_complete"] is not None]
     print(f"\n{name}")
     print(f"  runs         {n}")
     print(f"  completed    {ok}/{n}  (exp.txt == 'alpha')")
-    print(f"  tokens       median {statistics.median(toks):.0f}  "
+    print(f"  cost-to-comp {len(ctc)}/{n} reached by file check", end="")
+    if ctc:
+        print(f"  median {statistics.median(ctc):.0f}  all {sorted(ctc)}")
+    else:
+        print()
+    print(f"  full window  median {statistics.median(toks):.0f}  "
           f"mean {statistics.mean(toks):.0f}  all {sorted(toks)}")
     print(f"  turns        median {statistics.median(turns):.0f}  all {sorted(turns)}")
     comp = sum(1 for r in runs if r["final_holds"] == 0)
     print(f"  closed       {comp}/{n}  (bridge held 0 at end)")
-    if any(r["steps"] for r in runs):
-        print(f"  partial      {[r['steps'] for r in runs if r['steps']]}")
 
 
 def main() -> int:
@@ -143,18 +158,23 @@ def main() -> int:
             results[name].append(r)
             flag = "TIMEOUT" if r["timed_out"] else ("ok " if r["ok"] else "MISS")
             print(f"  run {i + 1} {name:9} tokens={r['tokens']:>6} "
-                  f"turns={r['turns']} holds={r['final_holds']} {flag} content={r['content']!r}")
+                  f"ctc={r['cost_to_complete']} done@={r['done_turn']} "
+                  f"holds={r['final_holds']} {flag}")
 
     for name, _, _ in arms:
         summarise(name, results[name])
 
+    def med(vals):
+        vals = [v for v in vals if v is not None]
+        return statistics.median(vals) if vals else None
+
     c, o = results["composed"], results["one-line"]
     if c and o:
-        print("\nverdict")
-        print(f"  composed median tokens {statistics.median([r['tokens'] for r in c]):.0f}"
-              f"  vs one-line {statistics.median([r['tokens'] for r in o]):.0f}")
-        print(f"  composed completed {sum(r['ok'] for r in c)}/{len(c)}"
-              f"  vs one-line {sum(r['ok'] for r in o)}/{len(o)}")
+        print("\nverdict — cost-to-completion (tokens through the first passing file check)")
+        print(f"  composed  ctc {med([r['cost_to_complete'] for r in c])}  "
+              f"completed {sum(r['ok'] for r in c)}/{len(c)}")
+        print(f"  one-line  ctc {med([r['cost_to_complete'] for r in o])}  "
+              f"completed {sum(r['ok'] for r in o)}/{len(o)}")
     return 0
 
 
