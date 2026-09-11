@@ -58,9 +58,13 @@
 //    the escape, not the extraction.
 //
 // KNOWN, and visible while you use it: the transcript soft-wraps at the
-// body width now (koru/vaxis:wrap-lines — the same wrapped bytes feed the
-// viewport and the scroll count), and the thinking strip shows only the
-// latest reasoning chunk — the frontier, not the thought.
+// body width (koru/vaxis:scrollview reflows at win.width; rescroll counts
+// the same reflow via wrap-lines at scroll.w), and the thinking strip
+// shows only the latest reasoning chunk — the frontier, not the thought.
+// Scroll granularity: arrows step one VISUAL row, pgup/pgdn a near-page,
+// the wheel three rows — arrows ride kitty functional codepoints
+// (57350..57355) which koru/vaxis passes with ch=0, and the wheel needs
+// the `! mouse` arm below to exist or capture never turns on.
 
 import std/env
 import std/io
@@ -122,7 +126,7 @@ koru/vaxis:component(statusbar) {
 koru/vaxis:component(frame) {
     <dock>
         <topbar dock="top" h="1" title="== kopium — the agent's only tool is a Koru interpreter =="/>
-        <statusbar dock="bottom" h="1" hint="enter send | esc quit | ^u/^d scroll | ^t/^b ends"/>
+        <statusbar dock="bottom" h="1" hint="enter send | esc quit | arrows/wheel scroll | ^u/^d page | ^t/^b ends"/>
     </dock>
 }
 
@@ -389,7 +393,7 @@ koru/vaxis(kopium)
     |> koru/vaxis:sub-from-bottom(parent: w, up: 2, h: 1): iw
     |> std/store:query(draft)
     ! query d |> std/fmt:ln("> {{ d:S }}_"): line |> koru/vaxis:write-in(win: iw, x: 0, y: 0, line.text) |> std/store:query(transcript)
-        ! query buf |> std/fmt:ln("{{ buf:S }}"): tline |> koru/vaxis:wrap-lines(content: tline.text, width: scroll.w): wl |> koru/vaxis:viewport(win: body, content: wl, offset: scroll.y) |> std/store:query(thinking)
+        ! query buf |> std/fmt:ln("{{ buf:S }}"): tline |> koru/vaxis:scrollview(win: body, content: tline.text, offset: scroll.y) |> std/store:query(thinking)
             ! query tk |> std/fmt:ln("{{ tk:S }}                                                                                                    "): thl
                 |> koru/vaxis:style(bold: false, dim: true, italic: true, strikethrough: false): st
                 |> koru/vaxis:write-styled(x: 0, y: @as(u16, @intCast(scroll.ty)), thl.text, style: st)
@@ -410,6 +414,19 @@ koru/vaxis(kopium)
 ! key k when k.ch == 20 or (k.mods.ctrl and k.ch == 't') |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
 ! key k when (k.ch == 2 or (k.mods.ctrl and k.ch == 'b')) and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
 ! key k when (k.ch == 2 or (k.mods.ctrl and k.ch == 'b')) and scroll.lines <= scroll.h |> std/store:stored { scroll.y: 0, scroll.follow: 1 }
+! key k when k.codepoint == 57352 and scroll.y > 0 |> std/store:stored { scroll.y: scroll.y - 1, scroll.follow: 0 }
+! key k when k.codepoint == 57353 and scroll.lines > scroll.h and scroll.y + 1 >= scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
+! key k when k.codepoint == 57353 and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.y + 1, scroll.follow: 0 }
+! key k when k.codepoint == 57354 and scroll.y > scroll.h - 2 |> std/store:stored { scroll.y: scroll.y - (scroll.h - 2), scroll.follow: 0 }
+! key k when k.codepoint == 57354 |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
+! key k when k.codepoint == 57355 and scroll.lines > scroll.h and scroll.y + scroll.h - 2 < scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.y + (scroll.h - 2), scroll.follow: 0 }
+! key k when k.codepoint == 57355 and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
+! key k when k.codepoint == 57355 |> std/store:stored { scroll.follow: 1 }
+! mouse m when m.kind == 0 and m.button == 64 and scroll.y > 2 |> std/store:stored { scroll.y: scroll.y - 3, scroll.follow: 0 }
+! mouse m when m.kind == 0 and m.button == 64 |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
+! mouse m when m.kind == 0 and m.button == 65 and scroll.lines > scroll.h and scroll.y + 3 >= scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
+! mouse m when m.kind == 0 and m.button == 65 and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.y + 3, scroll.follow: 0 }
+! mouse m when m.kind == 0 and m.button == 65 |> std/store:stored { scroll.follow: 1 }
 ! key k when k.ch == 13 and ui.live == 0 and ui.retire == 0 |> std/store:query(draft)
     ! query d |> std/fmt:ln("{{ d:S }}"): u |> std/store:stored { scroll.follow: 1 } |> show(text: "you: ")
         |> show(u.text)
