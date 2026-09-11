@@ -14,7 +14,12 @@ mechanism all derived from the declaration.
 - **`headless/`** — the headless agent: the network taken out, one tool put in.
   The model emits an invocation per turn; `std/bridge:run` dispatches it under
    the `notes` scope's possession rules. README inside explains the six
-   demonstrations.
+   demonstrations. Also holds the shared `app/` modules (`notes`, `wire`,
+  `model`) that both the headless and headed fronts import.
+- **`tui/`** — the head: `headed.k`, the same agent behind vaxis chrome.
+  Wrapped scrollback (row-grain arrows, wheel), a live reasoning strip, and a
+  `headed.log` written per run recording every dispatched program and its
+  verdict. `KOPIUM_MODEL` picks the model.
 - **`wired/holes/`** — compiler/toolchain gaps kopium tripped, each with a
   repro. When one closes, the pin moves into the koru regression suite and the
   HOLE.md records the verdict.
@@ -40,4 +45,5 @@ this layout).
 cd headless && koruc session.k && ./a.out    # canned model, the bridge demo
 cd headless && koruc live.k && ./a.out       # real model over OpenRouter
 cd wired && koruc d_turns.k && ./a.out       # the terminal agent
+cd tui && koruc headed.k && ./a.out          # the head — same agent, vaxis chrome
 ```

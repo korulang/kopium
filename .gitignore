@@ -15,6 +15,7 @@ compiler_env.zig
 compiler_env.json
 *.err
 *.out
+*.log
 !README.md
 
 # koruc-generated build driver (koru.json is the real manifest; build.zig.zon is source)
