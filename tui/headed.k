@@ -62,9 +62,9 @@
 // the same reflow via wrap-lines at scroll.w), and the thinking strip
 // shows only the latest reasoning chunk — the frontier, not the thought.
 // Scroll granularity: arrows step one VISUAL row, pgup/pgdn a near-page,
-// the wheel three rows — arrows ride kitty functional codepoints
-// (57350..57355) which koru/vaxis passes with ch=0, and the wheel needs
-// the `! mouse` arm below to exist or capture never turns on.
+// the wheel three rows. The `! up`/`! wheel-up` arms below are koru/vaxis's
+// decoded surface — kitty codepoints and SGR button numbers never reach
+// this file; binding a wheel arm is also what turns mouse capture on.
 
 // The program says where it lives: `app` is the shared vocabulary/wire
 // modules, which live in ../headless. In-program alias declaration —
@@ -443,28 +443,28 @@ koru/vaxis(kopium)
 ! tick _ when ui.live == 1 |> pump() |> std/store:stored { ui.stall: ui.stall + 1 }
 ! tick _ when ui.retire == 1 |> retire()
 ! resize s |> std/store:stored { scroll.h: s.height - 5, scroll.ty: s.height - 4, scroll.w: s.width } |> rescroll()
-! key k when k.ch == 27 |> koru/vaxis:quit()
-! key k when (k.ch == 21 or (k.mods.ctrl and k.ch == 'u')) and scroll.y > scroll.h - 2 |> std/store:stored { scroll.y: scroll.y - (scroll.h - 2), scroll.follow: 0 }
-! key k when (k.ch == 21 or (k.mods.ctrl and k.ch == 'u')) and scroll.y <= scroll.h - 2 |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
-! key k when (k.ch == 4 or (k.mods.ctrl and k.ch == 'd')) and scroll.y + scroll.h - 2 < scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.y + (scroll.h - 2) }
-! key k when (k.ch == 4 or (k.mods.ctrl and k.ch == 'd')) and scroll.y + scroll.h - 2 >= scroll.lines - scroll.h and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
-! key k when k.ch == 20 or (k.mods.ctrl and k.ch == 't') |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
-! key k when (k.ch == 2 or (k.mods.ctrl and k.ch == 'b')) and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
-! key k when (k.ch == 2 or (k.mods.ctrl and k.ch == 'b')) and scroll.lines <= scroll.h |> std/store:stored { scroll.y: 0, scroll.follow: 1 }
-! key k when k.codepoint == 57352 and scroll.y > 0 |> std/store:stored { scroll.y: scroll.y - 1, scroll.follow: 0 }
-! key k when k.codepoint == 57353 and scroll.lines > scroll.h and scroll.y + 1 >= scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
-! key k when k.codepoint == 57353 and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.y + 1, scroll.follow: 0 }
-! key k when k.codepoint == 57354 and scroll.y > scroll.h - 2 |> std/store:stored { scroll.y: scroll.y - (scroll.h - 2), scroll.follow: 0 }
-! key k when k.codepoint == 57354 |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
-! key k when k.codepoint == 57355 and scroll.lines > scroll.h and scroll.y + scroll.h - 2 < scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.y + (scroll.h - 2), scroll.follow: 0 }
-! key k when k.codepoint == 57355 and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
-! key k when k.codepoint == 57355 |> std/store:stored { scroll.follow: 1 }
-! mouse m when m.kind == 0 and m.button == 64 and scroll.y > 2 |> std/store:stored { scroll.y: scroll.y - 3, scroll.follow: 0 }
-! mouse m when m.kind == 0 and m.button == 64 |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
-! mouse m when m.kind == 0 and m.button == 65 and scroll.lines > scroll.h and scroll.y + 3 >= scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
-! mouse m when m.kind == 0 and m.button == 65 and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.y + 3, scroll.follow: 0 }
-! mouse m when m.kind == 0 and m.button == 65 |> std/store:stored { scroll.follow: 1 }
-! key k when k.ch == 13 and ui.live == 0 and ui.retire == 0 |> std/store:query(draft)
+! escape _ |> koru/vaxis:quit()
+! ctrl k when k.ch == 'u' and scroll.y > scroll.h - 2 |> std/store:stored { scroll.y: scroll.y - (scroll.h - 2), scroll.follow: 0 }
+! ctrl k when k.ch == 'u' |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
+! ctrl k when k.ch == 'd' and scroll.y + scroll.h - 2 < scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.y + (scroll.h - 2) }
+! ctrl k when k.ch == 'd' and scroll.y + scroll.h - 2 >= scroll.lines - scroll.h and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
+! ctrl k when k.ch == 't' |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
+! ctrl k when k.ch == 'b' and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
+! ctrl k when k.ch == 'b' |> std/store:stored { scroll.y: 0, scroll.follow: 1 }
+! up _ when scroll.y > 0 |> std/store:stored { scroll.y: scroll.y - 1, scroll.follow: 0 }
+! down _ when scroll.lines > scroll.h and scroll.y + 1 >= scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
+! down _ when scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.y + 1, scroll.follow: 0 }
+! page-up _ when scroll.y > scroll.h - 2 |> std/store:stored { scroll.y: scroll.y - (scroll.h - 2), scroll.follow: 0 }
+! page-up _ |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
+! page-down _ when scroll.lines > scroll.h and scroll.y + scroll.h - 2 < scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.y + (scroll.h - 2), scroll.follow: 0 }
+! page-down _ when scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
+! page-down _ |> std/store:stored { scroll.follow: 1 }
+! wheel-up _ when scroll.y > 2 |> std/store:stored { scroll.y: scroll.y - 3, scroll.follow: 0 }
+! wheel-up _ |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
+! wheel-down _ when scroll.lines > scroll.h and scroll.y + 3 >= scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
+! wheel-down _ when scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.y + 3, scroll.follow: 0 }
+! wheel-down _ |> std/store:stored { scroll.follow: 1 }
+! enter _ when ui.live == 0 and ui.retire == 0 |> std/store:query(draft)
     ! query d |> std/fmt:ln("{{ d:S }}"): u |> std/store:stored { scroll.follow: 1 } |> show(text: "you: ")
         |> show(u.text)
         |> show(text: "\n\nagent: ")
@@ -474,11 +474,9 @@ koru/vaxis(kopium)
         |> std/env:get.or(name: "KOPIUM_MODEL", default: "meta/muse-spark-1.3-contributor"): m
         |> fire(model: m, max_tokens: 2000, temperature: "1", goal: u.text)
         |> std/string:clear(s: d)
-! key k when k.ch == 127 |> std/store:query(draft)
+! backspace _ |> std/store:query(draft)
     ! query d |> std/string:pop-char(s: d)
-! key k when k.ch == 8 |> std/store:query(draft)
-    ! query d |> std/string:pop-char(s: d)
-! key k when k.ch >= 32 and k.ch < 127 and ui.live == 0 and k.mods.ctrl == false |> std/store:query(draft)
+! char k when k.ch >= 32 and k.ch < 127 and ui.live == 0 and k.mods.ctrl == false |> std/store:query(draft)
     ! query d |> std/string:append-char(s: d, k.ch)
         | ok |> _
         | err _ |> _

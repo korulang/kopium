@@ -18,10 +18,10 @@ koru/vaxis(probe)
 ! draw w |> koru/vaxis:sub(parent: w, x: 0, y: 0, w: 20, h: 6): body
     |> koru/vaxis:wrap-lines(content: "L0\nL1\naaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn\nL3\nL4\nL5\nL6\nL7\nL8\nL9", width: 20): wl
     |> koru/vaxis:viewport(win: body, content: wl, offset: scroll.y)
-! key k when k.ch == 'n' |> std/store:stored { scroll.y: scroll.y + 1 }
-! key k when k.ch == 'u' and scroll.y > 0 |> std/store:stored { scroll.y: scroll.y - 1 }
-! key k when k.codepoint == 57352 and scroll.y > 0 |> std/store:stored { scroll.y: scroll.y - 1 }
-! key k when k.codepoint == 57353 |> std/store:stored { scroll.y: scroll.y + 1 }
-! mouse m when m.kind == 0 and m.button == 64 and scroll.y > 0 |> std/store:stored { scroll.y: scroll.y - 1 }
-! mouse m when m.kind == 0 and m.button == 65 |> std/store:stored { scroll.y: scroll.y + 1 }
-! key k when k.ch == 'q' |> koru/vaxis:quit()
+! char k when k.ch == 'n' |> std/store:stored { scroll.y: scroll.y + 1 }
+! char k when k.ch == 'u' and scroll.y > 0 |> std/store:stored { scroll.y: scroll.y - 1 }
+! up _ when scroll.y > 0 |> std/store:stored { scroll.y: scroll.y - 1 }
+! down _ |> std/store:stored { scroll.y: scroll.y + 1 }
+! wheel-up _ when scroll.y > 0 |> std/store:stored { scroll.y: scroll.y - 1 }
+! wheel-down _ |> std/store:stored { scroll.y: scroll.y + 1 }
+! char k when k.ch == 'q' |> koru/vaxis:quit()
