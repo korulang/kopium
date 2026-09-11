@@ -18,15 +18,15 @@
 //      dim italic strip between transcript and prompt renders the LIVE
 //      reasoning delta — the thought frontier, cleared at turn end.
 //   2. The SSE framer is ONE per process, minted at startup. The old
-//      drop-then-remint raced the store's deferred take, two framers
-//      coexisted, and pump swept BOTH — every delta appended twice
-//      ("saysay", "open(pathopen(path:"). A completed response leaves the
-//      buffer empty; reuse is correct.
-//   3. `take(batch[0])` orphaned every live row: fire() retires and
-//      send() inserts in one tick, the take lands late, the new row goes
-//      to [1] and [0] reads empty forever. brow tracking (d_turns') is
-//      restored — take the row insert reported. frag-store-take-by-index-
-//      orphans.
+//      drop-then-remint called take(framer[0]) — a literal index, always
+//      | empty — so two framers coexisted and pump swept BOTH; every
+//      delta appended twice ("saysay", "open(pathopen(path:"). A
+//      completed response leaves the buffer empty; reuse is correct.
+//   3. `take(batch[0])` is a permanent no-op — a literal is never a row
+//      handle (brand 0 is never minted; handles come from `| row rh`),
+//      so retire never retired and turn 3's insert hit `| full` — the
+//      original hang, in full. brow tracking (d_turns') is restored:
+//      take the row insert reported. frag-store-take-by-index-orphans.
 //   4. `!` arms are FIRST-MATCH — each emitted guard ends in `return`
 //      (output_emitted.zig). The stall watchdog sits BEFORE the pump arm
 //      or `ui.live == 1` swallows every tick. frag-event-arms-first-match.

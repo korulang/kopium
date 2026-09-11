@@ -162,3 +162,21 @@ The want is unchanged: returning a borrow past its owner's discharge must
 be a compile error. Nothing here makes that happen — this file, the app,
 and the three findings above are the discipline a human has to remember,
 which is what the ruling exists to remove.
+
+## Verdict — CLOSED 2026-09-11
+
+Re-ran `input.k` on koru main: `EXTRACTED: [HELLO]` — the string that
+crosses `close(doc)` arrives intact. `as.string` copies out of the arena
+(610_007 landed; KORU095 bans returning the borrow), so the hole is gone
+and the consumer-side pyramid-in-one-arm shape it forced is obsolete.
+
+Residual, stated plainly: the run ends `KORU LEAK CHECK FAILED` because
+THIS REPRO returns the owned copy and never frees it — the hole was the
+escape, not the ownership. Callers who consume inline (the now-standard
+ladder shape) don't leak.
+
+Side note worth keeping: this file's tail already recorded that
+`take(store[0])` by literal is a silent no-op — the same mechanism that
+later orphaned every pending row in `headed.k`'s batch store (fixed
+2026-09-11 by taking the `| row` handle; see
+`concepts/frag-store-take-by-index-orphans`).

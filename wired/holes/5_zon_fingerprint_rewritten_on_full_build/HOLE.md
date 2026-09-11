@@ -69,3 +69,12 @@ koruc probe_vocab.k >/dev/null 2>&1    # cached build
 grep fingerprint build.zig.zon          # still B — churn is full-build-only
 git checkout -- build.zig.zon; rm -f a.out
 ```
+
+## Status — not reproduced 2026-09-11
+
+Ran the repro on current koru main: `koruc session.k` full backend build,
+fingerprint `0xe24a419451a28150` before and after, `git status` clean.
+Multiple headed.k full builds the same day also left the zon untouched —
+the driver now reports `./build.zig.zon unchanged`. Either fixed upstream
+or the churn needed conditions absent today; one sample, so this is a
+status note, not a verdict. If drift recurs, the repro above still runs.
