@@ -62,6 +62,7 @@
 // viewport and the scroll count), and the thinking strip shows only the
 // latest reasoning chunk — the frontier, not the thought.
 
+import std/env
 import std/io
 import std/fmt
 import std/store
@@ -415,7 +416,8 @@ koru/vaxis(kopium)
         |> show(text: "\n\nagent: ")
         |> remember-said(role: "user", content: u.text)
         |> ask(goal: u.text)
-        |> fire(model: "deepseek/deepseek-v4-flash-0731", max_tokens: 2000, temperature: "1", goal: u.text)
+        |> std/env:get.or(name: "KOPIUM_MODEL", default: "deepseek/deepseek-v4-flash-0731"): m
+        |> fire(model: m, max_tokens: 2000, temperature: "1", goal: u.text)
         |> std/string:clear(s: d)
 ! key k when k.ch == 127 |> std/store:query(draft)
     ! query d |> std/string:pop-char(s: d)
