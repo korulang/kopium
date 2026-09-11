@@ -14,9 +14,9 @@
 //
 //   1. deepseek-v4-flash is a REASONING model: it burns delta.reasoning
 //      while content stays empty, so max_tokens 100 never reached the
-//      utterance (empty reply → parse error). Budget is 2000 now. The
-//      pane is blind during the think — reasoning is not rendered; named
-//      cut, the honest candidate for increment F.
+//      utterance (empty reply → parse error). Budget is 2000 now, and a
+//      dim italic strip between transcript and prompt renders the LIVE
+//      reasoning delta — the thought frontier, cleared at turn end.
 //   2. The SSE framer is ONE per process, minted at startup. The old
 //      drop-then-remint raced the store's deferred take, two framers
 //      coexisted, and pump swept BOTH — every delta appended twice
@@ -84,7 +84,7 @@ std/store:new(session, capacity: 2) { *std/bridge:Bridge<session!> }
 // paints through the catalog viewport and the store owns the offset.
 // h = term.height - 4 (topbar, statusbar, input, one pad — kept in step
 // with the draw sub-fill by hand), refreshed by `! resize`.
-std/store:new(scroll) { y: 0[i64], lines: 0[i64], h: 0[i64], follow: 1[i64] }
+std/store:new(scroll) { y: 0[i64], lines: 0[i64], h: 0[i64], follow: 1[i64], ty: 0[i64] }
 
 // What you see.
 std/store:new(transcript, capacity: 2) { *std/string:String<instance!> }
@@ -92,6 +92,11 @@ std/store:new(transcript, capacity: 2) { *std/string:String<instance!> }
 std/store:new(history, capacity: 2) { *std/string:String<instance!> }
 // This turn's streamed reply, cleared before each send.
 std/store:new(reply, capacity: 2) { *std/string:String<instance!> }
+// The live edge of the model's reasoning — delta.reasoning is a stream of
+// its own that never reaches `reply`. We keep only the LATEST chunk (clear
+// + append), so the strip shows the thought frontier without dragging a
+// second transcript behind the pane.
+std/store:new(thinking, capacity: 2) { *std/string:String<instance!> }
 // The line you are typing.
 std/store:new(draft, capacity: 2) { *std/string:String<instance!> }
 
@@ -156,16 +161,38 @@ collect = std/store:query(reply)
     | ok |> show(text)
     | err _ |> _
 
+// One reasoning chunk in, frontier out: clear + append keeps the strip at
+// the stream's edge. `think` is reached from handle-delta's `reasoning`
+// arm — content:"" rides along in the same delta and appends nothing.
+tor think { text: string }
+think = std/fmt:ln("… {{ text:s }}"): mt |> std/store:query(thinking)
+! query buf |> std/string:clear(s: buf) |> std/string:append(s: buf, mt.text)
+    | ok |> _
+    | err _ |> _
+
 tor handle-delta { payload: string }
 handle-delta = koru/yyjson:parse(text: payload)
 | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "choices")
     | found cs |> koru/yyjson:array.get(doc, v: cs, index: 0)
         | found c0 |> koru/yyjson:object.get(doc, v: c0, key: "delta")
-            | found dv |> koru/yyjson:object.get(doc, v: dv, key: "content")
-                | found tv |> koru/yyjson:as.string(doc, v: tv)
-                    | ok t |> collect(text: t) |> std/io:free(content: t) |> koru/yyjson:close(doc)
-                    | wrong-type |> koru/yyjson:close(doc)
-                | not-found |> koru/yyjson:close(doc)
+            | found dv |> koru/yyjson:object.get(doc, v: dv, key: "reasoning")
+                | found rv |> koru/yyjson:as.string(doc, v: rv)
+                    | ok rt |> think(text: rt) |> std/io:free(content: rt)
+                        |> koru/yyjson:object.get(doc, v: dv, key: "content")
+                            | found tv |> koru/yyjson:as.string(doc, v: tv)
+                                | ok t |> collect(text: t) |> std/io:free(content: t) |> koru/yyjson:close(doc)
+                                | wrong-type |> koru/yyjson:close(doc)
+                            | not-found |> koru/yyjson:close(doc)
+                    | wrong-type |> koru/yyjson:object.get(doc, v: dv, key: "content")
+                        | found tv |> koru/yyjson:as.string(doc, v: tv)
+                            | ok t |> collect(text: t) |> std/io:free(content: t) |> koru/yyjson:close(doc)
+                            | wrong-type |> koru/yyjson:close(doc)
+                        | not-found |> koru/yyjson:close(doc)
+                | not-found |> koru/yyjson:object.get(doc, v: dv, key: "content")
+                    | found tv |> koru/yyjson:as.string(doc, v: tv)
+                        | ok t |> collect(text: t) |> std/io:free(content: t) |> koru/yyjson:close(doc)
+                        | wrong-type |> koru/yyjson:close(doc)
+                    | not-found |> koru/yyjson:close(doc)
             | not-found |> koru/yyjson:close(doc)
         | out-of-range |> koru/yyjson:close(doc)
     | not-found |> koru/yyjson:close(doc)
@@ -221,7 +248,8 @@ dispatch = std/store:query(reply)
         |> show(text: "\n")
         |> act(src: src.text)
         |> std/string:free(s: cs)
-    | err _ |> show(text: "\n[could not snapshot the reply]\n\n")
+        |> unthink()
+    | err _ |> unthink() |> show(text: "\n[could not snapshot the reply]\n\n")
 
 // ── transfer pump, one frame's worth ────────────────────────────────────────
 //
@@ -275,10 +303,17 @@ send = app/wire:recall(): auth |> koru/curl:multi.new() |> koru/curl:multi.add.p
     | full f |> koru/curl:cancel(p: f): m |> koru/curl:multi.close(m) |> std/store:stored { ui.live: 0 }
 | failed _ |> std/store:stored { ui.live: 0 }
 
-// Clear the in-flight reply, then build this turn's request from the history.
+// Clear the in-flight reply and the thinking strip, then build this turn's
+// request from the history.
 tor ask { goal: string }
 ask = std/store:query(reply)
-! query buf |> std/string:clear(s: buf)
+! query buf |> std/string:clear(s: buf) |> std/store:query(thinking)
+    ! query tb |> std/string:clear(s: tb)
+
+// The turn ended — blank the strip so a stale frontier doesn't hang around.
+tor unthink {}
+unthink = std/store:query(thinking)
+! query tb |> std/string:clear(s: tb)
 
 tor fire { model: string, max_tokens: u32, temperature: string, goal: string }
 fire = retire() |> std/store:query(history)
@@ -299,6 +334,12 @@ std/string:from-page(text: "")
 
 std/string:from-page(text: "")
 | ok c |> std/string:take(s: c): v |> std/store:insert(reply) { v }
+    | row _ |> _
+    | full f |> std/string:free(s: f)
+| err _ |> _
+
+std/string:from-page(text: "")
+| ok t0 |> std/string:take(s: t0): v0 |> std/store:insert(thinking) { v0 }
     | row _ |> _
     | full f |> std/string:free(s: f)
 | err _ |> _
@@ -338,19 +379,23 @@ koru/vaxis:run(title: "kopium")
 // the pump arm or `ui.live == 1` swallows every tick and it never runs.
 koru/vaxis(kopium)
 ! draw w |> frame(win: w)
-    |> koru/vaxis:sub-fill(parent: w, top: 1, bottom: 3): body
+    |> koru/vaxis:sub-fill(parent: w, top: 1, bottom: 4): body
     |> koru/vaxis:sub-from-bottom(parent: w, up: 2, h: 1): iw
     |> std/store:query(draft)
     ! query d |> std/fmt:ln("> {{ d:S }}_"): line |> koru/vaxis:write-in(win: iw, x: 0, y: 0, line.text) |> std/store:query(transcript)
-        ! query buf |> std/fmt:ln("{{ buf:S }}"): tline |> koru/vaxis:viewport(win: body, content: tline.text, offset: scroll.y)
+        ! query buf |> std/fmt:ln("{{ buf:S }}"): tline |> koru/vaxis:viewport(win: body, content: tline.text, offset: scroll.y) |> std/store:query(thinking)
+            ! query tk |> std/fmt:ln("{{ tk:S }}                                                                                                    "): thl
+                |> koru/vaxis:style(bold: false, dim: true, italic: true, strikethrough: false): st
+                |> koru/vaxis:write-styled(x: 0, y: @as(u16, @intCast(scroll.ty)), thl.text, style: st)
 ! tick _ when ui.live == 1 and ui.stall > 3750 |> show(text: "\n[stalled — no bytes for ~60s; cancelling] ") |> std/store:take(batch[ui.brow])
     | item p |> koru/curl:cancel(p): m |> koru/curl:multi.close(m)
         |> std/store:stored { ui.live: 0, ui.stall: 0 }
+        |> unthink()
         |> show(text: "(cancelled the live transfer)\n\n")
-    | empty |> std/store:stored { ui.live: 0, ui.stall: 0 } |> show(text: "(no batch row to cancel — flags cleared)\n\n")
+    | empty |> std/store:stored { ui.live: 0, ui.stall: 0 } |> unthink() |> show(text: "(no batch row to cancel — flags cleared)\n\n")
 ! tick _ when ui.live == 1 |> pump() |> std/store:stored { ui.stall: ui.stall + 1 }
 ! tick _ when ui.retire == 1 |> retire()
-! resize s |> std/store:stored { scroll.h: s.height - 4 } |> rescroll()
+! resize s |> std/store:stored { scroll.h: s.height - 5, scroll.ty: s.height - 4 } |> rescroll()
 ! key k when k.ch == 27 |> koru/vaxis:quit()
 ! key k when (k.ch == 21 or (k.mods.ctrl and k.ch == 'u')) and scroll.y > scroll.h - 2 |> std/store:stored { scroll.y: scroll.y - (scroll.h - 2), scroll.follow: 0 }
 ! key k when (k.ch == 21 or (k.mods.ctrl and k.ch == 'u')) and scroll.y <= scroll.h - 2 |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
