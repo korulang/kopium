@@ -66,7 +66,15 @@
 // (57350..57355) which koru/vaxis passes with ch=0, and the wheel needs
 // the `! mouse` arm below to exist or capture never turns on.
 
+// The program says where it lives: `app` is the shared vocabulary/wire
+// modules, which live in ../headless. In-program alias declaration —
+// tui/ carries no koru.json.
+std/compiler:paths {
+    app: ../headless
+}
+
 import std/env
+import std/fs
 import std/io
 import std/fmt
 import std/store
@@ -108,6 +116,13 @@ std/store:new(reply, capacity: 2) { *std/string:String<instance!> }
 std/store:new(thinking, capacity: 2) { *std/string:String<instance!> }
 // The line you are typing.
 std/store:new(draft, capacity: 2) { *std/string:String<instance!> }
+
+// The tool-call log — every dispatched program and the verdict it got back.
+// headed.log answers the field-report question "did the model emit valid
+// Koru that got refused, or syntax it made up?" — parse-error and denied
+// land here verbatim. fs:write truncates, so the store accumulates and each
+// write dumps the whole session; `tail -f headed.log` follows a live run.
+std/store:new(logbuf, capacity: 2) { *std/string:String<instance!> }
 
 std/store:new(batch, capacity: 2) { *koru/curl:Pending<open!> }
 ! discharge p |> koru/curl:cancel(p) |> koru/curl:multi.close()
@@ -209,36 +224,49 @@ handle-delta = koru/yyjson:parse(text: payload)
 | err _ |> _
 
 // ── the act: run what the model said, tell everyone what happened ───────────
-//
-// Parameterless on purpose. It is called from `pump`'s `! finished` arm, which
-// is reached from a `! tick` handler, so everything it touches has to come out
-// of a store. That constraint is what the bridge-in-a-store probe was for.
-tor announce { text: string }
-announce = show(text) |> remember-said(role: "user", content: text)
+tor log-note { text: string }
+log-note = std/store:query(logbuf)
+! query lb |> std/string:append(s: lb, text)
+    | ok |> std/fmt:ln("{{ lb:S }}"): dump |> std/fs:write(path: "headed.log", content: dump.text)
+        | written |> _
+        | failed f |> _
+    | err _ |> _
 
+tor log-run { src: string, verdict: string }
+log-run = std/fmt:ln("{{ src:s }}\n→ {{ verdict:s }}\n\n"): e |> log-note(e.text)
+
+tor announce { src: string, text: string }
+announce = show(text) |> remember-said(role: "user", content: text) |> log-run(src, verdict: text)
+
+// `act` is reached from `pump`'s `! finished` arm, which is reached from a
+// `! tick` handler — so everything it touches besides `src` has to come out
+// of a store. That constraint is what the bridge-in-a-store probe was for.
+// Every verdict lands in headed.log next to the exact bytes the model
+// emitted — the parse-error arm here is "the model made it up", the
+// dispatch-error arm is "valid Koru, refused", and the log separates them.
 tor act { src: string }
 act = std/store:query(session)
 ! query br |> app/wire:warm-grammar(br) |> std/bridge:run(br, source: src)
     | result r |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s).\n\n"): ma
-        |> announce(ma.text)
-    | unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
+        |> announce(src, ma.text)
+    | unhandled-branch _ |> log-run(src, verdict: "unhandled-branch — discarded without a tool result")
     | defined d |> std/fmt:ln("[tool result] defined: '{{ d:s }}' is now a verb in this session's vocabulary — callable on later turns.\n\n"): mi
-        |> announce(mi.text)
+        |> announce(src, mi.text)
     | dispatch-error e |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run — you named a handle this session never issued.\n\n"): mb
-        |> announce(mb.text)
+        |> announce(src, mb.text)
     | event-denied ev |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only the verbs in Your vocabulary above — open, append, close, say, and every verb you defined this session.\n\n"): mc
-        |> announce(mc.text)
+        |> announce(src, mc.text)
     | parse-error p |> std/fmt:ln("[tool result] that was not Koru: {{ p.message:s }}. Each line is one invocation; a definition is two lines, the first starting with `tor `.\n\n"): md
-        |> announce(md.text)
+        |> announce(src, md.text)
     | partial p |> std/fmt:ln("[tool result] your turn ran as {{ p.total:d }} step(s); {{ p.ran:d }} completed. Step report:\n{{ p.report:s }}open resources: {{ p.handles:d }}.\n\n"): mpp
-        |> announce(mpp.text)
-    | exhausted _ |> announce(text: "[tool result] budget exhausted; nothing ran.\n\n")
+        |> announce(src, mpp.text)
+    | exhausted _ |> announce(src, text: "[tool result] budget exhausted; nothing ran.\n\n")
     | validation-error v |> std/fmt:ln("[tool result] invalid: {{ v:s }}\n\n"): mf
-        |> announce(mf.text)
+        |> announce(src, mf.text)
     | shape-error sh |> std/fmt:ln("[tool result] wrong shape: {{ sh.message:s }}\n\n"): mg
-        |> announce(mg.text)
+        |> announce(src, mg.text)
     | scope-not-found s2 |> std/fmt:ln("[tool result] no such scope: {{ s2:s }}\n\n"): mh
-        |> announce(mh.text)
+        |> announce(src, mh.text)
 
 // The stream is done: take what the model said, record it, run it.
 //
@@ -354,6 +382,12 @@ std/string:from-page(text: "")
     | full f |> std/string:free(s: f)
 | err _ |> _
 
+std/string:from-page(text: "== kopium headed — tool-call log ==\n\n")
+| ok l0 |> std/string:take(s: l0): lv |> std/store:insert(logbuf) { lv }
+    | row _ |> _
+    | full f |> std/string:free(s: f)
+| err _ |> _
+
 koru/sse:new(): s |> std/store:insert(framer) { s }
 | row _ |> _
 | full f |> koru/sse:close(s: f)
@@ -432,6 +466,7 @@ koru/vaxis(kopium)
         |> show(u.text)
         |> show(text: "\n\nagent: ")
         |> remember-said(role: "user", content: u.text)
+        |> std/fmt:ln("\n=== you: {{ u.text:s }}\n"): lt |> log-note(lt.text)
         |> ask(goal: u.text)
         |> std/env:get.or(name: "KOPIUM_MODEL", default: "deepseek/deepseek-v4-flash-0731"): m
         |> fire(model: m, max_tokens: 2000, temperature: "1", goal: u.text)

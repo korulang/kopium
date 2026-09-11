@@ -1,7 +1,7 @@
 .{
     .name = .tui,
     .version = "0.0.0",
-    .fingerprint = 0xca9f4dd19935ea00,
+    .fingerprint = 0xca9f4dd10eba269d,
     .dependencies = .{
         .vaxis = .{
             .url = "git+https://github.com/rockorager/libvaxis.git#75035b169e91a51c233f3742161f8eb8eafca659",
