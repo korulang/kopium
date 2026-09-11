@@ -1,44 +1,38 @@
-// ⚠ HONEST STATE, 2026-08-07: TURNS 1 AND 2 WORK. TURN 3 DOES NOT.
-//
-// Turn 1 is clean end to end — the model opens a note, the bridge holds it, the
-// tool result comes back into the conversation. Turn 2 reaches the resource
-// turn 1 opened and writes to it. Turn 3 hangs: the transfer starts, no delta
-// ever arrives, `! finished` never fires, so `ui.live` stays 1 and the keyboard
-// goes dead with no message.
-//
-// WHAT IS RULED OUT, measured not assumed:
-//   - Not the request. Turn 3's exact body replayed against OpenRouter with
-//     fetch returns HTTP 200 and real deltas.
-//   - Not the content. Reproduced with the third request varied.
-//   - Not the agent logic. `live.k` runs the same loop for six turns on
-//     `curl:await` and is stable.
-//
-// WHAT IS CONFIRMED: these capacity-2 "single slot" stores ACCUMULATE. The take
-// happens a tick after the insert, so two rows coexist and `pump` sweeps both.
-// Turn 2's reply arrives interleaved — `appen` + the whole string + `d(...)` —
-// which is one chunk stream being framed twice. Two attempted fixes did not
-// land: raising `ui.retire` from the `! finished` arm (the emitted Zig proves
-// both flags are written), and dropping the spent framer before minting the new
-// one. So the lifecycle is wronger than "one tick late" and I stopped rather
-// than keep guessing.
-//
-// THE PART THAT IS NOT MINE: `wired/d_turns.k` has this same pump/retire shape
-// and its header records verification with TWO typed turns. If this is the
-// pattern's bug rather than this file's, d_turns has it too and nobody has hit
-// it. That is the first thing to check.
-//
-// `live.k` is the version to run today. This file is committed because the
-// finding is worth more than the tidy tree.
-//
 // kopium with a head — type at the bottom, the agent acts on a live bridge.
 //
-// This is `wired/d_turns.k`'s chrome (vaxis dock, transcript pane, edit line,
-// curl multi + SSE under a tick) carrying `live.k`'s agent loop (the notes
-// vocabulary, a real model, a resource bridge that outlives every turn).
+// e_scrollback chrome (vaxis dock, VIEWPORT transcript with scrollback,
+// edit line, curl multi + SSE under a tick) carrying live.k's agent loop
+// (the notes vocabulary, a real model, a resource bridge that outlives
+// every turn).
 //
-// Type a request. Enter sends it. The model's reply streams into the pane and
-// then RUNS against the bridge, and whatever the bridge says goes back into the
-// conversation so the next thing you type is answered in context. ESC quits.
+// STATE 2026-09-11 — VERIFIED live under a pty, real turns against
+// deepseek-v4-flash: chained partial programs ran (`open | ok h |> append`,
+// two steps, both completed); an unparseable reply came back as a tool
+// result and the model recovered next turn; the transcript scrolls
+// (^u/^d near-page, ^t/^b ends) while follow pins the tail. The turn-3
+// hang reported below is FIXED — and it was never one bug:
+//
+//   1. deepseek-v4-flash is a REASONING model: it burns delta.reasoning
+//      while content stays empty, so max_tokens 100 never reached the
+//      utterance (empty reply → parse error). Budget is 2000 now. The
+//      pane is blind during the think — reasoning is not rendered; named
+//      cut, the honest candidate for increment F.
+//   2. The SSE framer is ONE per process, minted at startup. The old
+//      drop-then-remint raced the store's deferred take, two framers
+//      coexisted, and pump swept BOTH — every delta appended twice
+//      ("saysay", "open(pathopen(path:"). A completed response leaves the
+//      buffer empty; reuse is correct.
+//   3. `take(batch[0])` orphaned every live row: fire() retires and
+//      send() inserts in one tick, the take lands late, the new row goes
+//      to [1] and [0] reads empty forever. brow tracking (d_turns') is
+//      restored — take the row insert reported. frag-store-take-by-index-
+//      orphans.
+//   4. `!` arms are FIRST-MATCH — each emitted guard ends in `return`
+//      (output_emitted.zig). The stall watchdog sits BEFORE the pump arm
+//      or `ui.live == 1` swallows every tick. frag-event-arms-first-match.
+//   5. A stream that goes silent ~60s (3750 ticks, no bytes) is cancelled
+//      by its tracked row and the head stays alive — the 08-07 wedge is
+//      survivable now.
 //
 //   koruc headed.k && ./a.out
 //
@@ -63,9 +57,9 @@
 //    (wired/holes/3_extracted_string_is_a_borrow_that_escapes). The hazard is
 //    the escape, not the extraction.
 //
-// KNOWN, and visible while you use it: the transcript pane clips rather than
-// wrapping or scrolling — the viewport widget is the next increment, exactly as
-// d_turns.k said. Long replies run off the right edge.
+// KNOWN, and visible while you use it: the transcript hard-clips long lines
+// at the right edge (the viewport's honest no-soft-wrap) and the pane is
+// blind while the model reasons — `delta.reasoning` is never rendered.
 
 import std/io
 import std/fmt
@@ -80,11 +74,17 @@ import koru/yyjson
 import koru/sse
 
 // ── session state ───────────────────────────────────────────────────────────
-std/store:new(ui) { live: 0[i64], retire: 0[i64] }
+std/store:new(ui) { live: 0[i64], retire: 0[i64], stall: 0[i64], brow: 0[i64] }
 
 // The bridge itself. An owned-resource column; teardown closes it, and with it
 // every note the agent still holds.
 std/store:new(session, capacity: 2) { *std/bridge:Bridge<session!> }
+
+// Scrollback state — e_scrollback.k's increment, ported: the transcript
+// paints through the catalog viewport and the store owns the offset.
+// h = term.height - 4 (topbar, statusbar, input, one pad — kept in step
+// with the draw sub-fill by hand), refreshed by `! resize`.
+std/store:new(scroll) { y: 0[i64], lines: 0[i64], h: 0[i64], follow: 1[i64] }
 
 // What you see.
 std/store:new(transcript, capacity: 2) { *std/string:String<instance!> }
@@ -112,15 +112,28 @@ koru/vaxis:component(statusbar) {
 koru/vaxis:component(frame) {
     <dock>
         <topbar dock="top" h="1" title="== kopium — the agent's only tool is a Koru interpreter =="/>
-        <statusbar dock="bottom" h="1" hint="enter send | esc quit"/>
+        <statusbar dock="bottom" h="1" hint="enter send | esc quit | ^u/^d scroll | ^t/^b ends"/>
     </dock>
 }
 
 // ── small writers ───────────────────────────────────────────────────────────
+// Recount the transcript and hold the offset honest. `done n` is the piece
+// count of a "\n" split — the widget's line count plus the trailing-empty
+// skew e_scrollback.k names (transient one-line overshoot, self-heals on
+// the next append). While `follow` holds, y rides the bottom edge; a
+// scroll-up drops it until the pane reaches bottom again or a turn sends.
+tor rescroll {}
+rescroll = std/store:query(transcript)
+! query buf |> std/fmt:ln("{{ buf:S }}"): t |> std/string:split(s: t.text, sep: "\n")
+    ! piece _ |> _
+    | done n when scroll.follow == 1 and @as(i64, @intCast(n)) > scroll.h |> std/store:stored { scroll.lines: @as(i64, @intCast(n)), scroll.y: @as(i64, @intCast(n)) - scroll.h }
+    | done n when scroll.follow == 1 |> std/store:stored { scroll.lines: @as(i64, @intCast(n)), scroll.y: 0 }
+    | done n |> std/store:stored { scroll.lines: @as(i64, @intCast(n)) }
+
 tor show { text: string }
 show = std/store:query(transcript)
 ! query buf |> std/string:append(s: buf, text)
-    | ok |> _
+    | ok |> rescroll()
     | err _ |> _
 
 tor remember-said { role: string, content: string }
@@ -227,21 +240,29 @@ dispatch = std/store:query(reply)
 tor pump {}
 pump = std/store:query(batch)
 ! query p |> koru/curl:poll(p)
-    ! chunk ch |> std/store:query(framer)
+    ! chunk ch |> std/store:stored { ui.stall: 0 } |> std/store:query(framer)
         ! query fs |> koru/sse:feed(s: fs, bytes: ch.data)
             ! data d |> handle-delta(payload: d)
             | ok |> _
     ! finished r |> std/store:stored { ui.live: 0, ui.retire: 1 } |> koru/curl:close(resp: r) |> dispatch()
     | running |> _
-    | complete |> std/store:stored { ui.retire: 1 }
+    | complete when ui.live == 1 |> std/store:stored { ui.live: 0, ui.retire: 1 }
+        |> show(text: "\n[transfer ended without a finished event — reply may be partial]\n\n")
+    | complete |> _
 
-tor drop-framer {}
-drop-framer = std/store:take(framer[0])
-| item f |> koru/sse:close(s: f)
-| empty |> _
-
+// ONE framer for the process lifetime — minted at startup, never swapped.
+// The old drop-then-remint raced the store: the take lands a tick late, two
+// rows coexisted, and pump's `! query fs` swept BOTH — every SSE event was
+// appended twice ("saysay", "open(pathopen(path:"). A completed response
+// leaves the framer's buffer empty, so reuse across turns is correct.
+// Take the CURRENT row, never a guessed slot. fire() calls retire() in the
+// same tick that send() inserts, and a store take lands a tick late — so
+// the new row arrives at [1] while [0] is still being freed. take(batch[0])
+// then hits empty forever and the live pending leaks: orphaned transfer,
+// socket open, watchdog cancelling nothing. `brow` is d_turns' tracking,
+// restored — the insert reports its own row.
 tor retire {}
-retire = drop-framer() |> std/store:take(batch[0])
+retire = std/store:take(batch[ui.brow])
 | item p |> koru/curl:finish(p): m |> koru/curl:multi.close(m) |> std/store:stored { ui.retire: 0 }
 | empty |> std/store:stored { ui.retire: 0 }
 
@@ -249,9 +270,9 @@ retire = drop-framer() |> std/store:take(batch[0])
 // `body` puns from a param but not from a mid-chain bind.
 tor send { req: string }
 send = app/wire:recall(): auth |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: req, headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
-| started p |> std/store:stored { ui.live: 1 } |> std/store:insert(batch) { p }
-    | row _ |> _
-    | full f |> koru/curl:cancel(p: f): m |> koru/curl:multi.close(m)
+| started p |> std/store:stored { ui.live: 1, ui.stall: 0 } |> std/store:insert(batch) { p }
+    | row rh |> std/store:stored { ui.brow: rh }
+    | full f |> koru/curl:cancel(p: f): m |> koru/curl:multi.close(m) |> std/store:stored { ui.live: 0 }
 | failed _ |> std/store:stored { ui.live: 0 }
 
 // Clear the in-flight reply, then build this turn's request from the history.
@@ -259,13 +280,8 @@ tor ask { goal: string }
 ask = std/store:query(reply)
 ! query buf |> std/string:clear(s: buf)
 
-tor fresh-framer {}
-fresh-framer = drop-framer() |> koru/sse:new(): s |> std/store:insert(framer) { s }
-| row _ |> _
-| full f |> koru/sse:close(s: f)
-
 tor fire { model: string, max_tokens: u32, temperature: string, goal: string }
-fire = retire() |> fresh-framer() |> std/store:query(history)
+fire = retire() |> std/store:query(history)
 ! query h |> std/fmt:ln("{{ h:S }}"): hist |> app/wire:agent-body(model, max_tokens, temperature, goal, history: hist.text): body |> send(req: body)
 
 // ── startup ─────────────────────────────────────────────────────────────────
@@ -286,6 +302,10 @@ std/string:from-page(text: "")
     | row _ |> _
     | full f |> std/string:free(s: f)
 | err _ |> _
+
+koru/sse:new(): s |> std/store:insert(framer) { s }
+| row _ |> _
+| full f |> koru/sse:close(s: f)
 
 // A screen exists now, so the module stops writing to the terminal behind it.
 app/notes:hush()
@@ -313,29 +333,45 @@ koru/vaxis:run(title: "kopium")
 | err e |> std/io:print.ln("kopium failed: {{ e:s }}")
 
 // ── the loop ────────────────────────────────────────────────────────────────
+// ! arms are FIRST-MATCH — each emitted guard block ends in `return` (see
+// output_emitted.zig's tick handler). The stall watchdog must sit BEFORE
+// the pump arm or `ui.live == 1` swallows every tick and it never runs.
 koru/vaxis(kopium)
 ! draw w |> frame(win: w)
     |> koru/vaxis:sub-fill(parent: w, top: 1, bottom: 3): body
     |> koru/vaxis:sub-from-bottom(parent: w, up: 2, h: 1): iw
     |> std/store:query(draft)
     ! query d |> std/fmt:ln("> {{ d:S }}_"): line |> koru/vaxis:write-in(win: iw, x: 0, y: 0, line.text) |> std/store:query(transcript)
-        ! query buf |> std/fmt:ln("{{ buf:S }}"): tline |> koru/vaxis:write-in(win: body, x: 0, y: 0, tline.text)
-! tick _ when ui.live == 1 |> pump()
+        ! query buf |> std/fmt:ln("{{ buf:S }}"): tline |> koru/vaxis:viewport(win: body, content: tline.text, offset: scroll.y)
+! tick _ when ui.live == 1 and ui.stall > 3750 |> show(text: "\n[stalled — no bytes for ~60s; cancelling] ") |> std/store:take(batch[ui.brow])
+    | item p |> koru/curl:cancel(p): m |> koru/curl:multi.close(m)
+        |> std/store:stored { ui.live: 0, ui.stall: 0 }
+        |> show(text: "(cancelled the live transfer)\n\n")
+    | empty |> std/store:stored { ui.live: 0, ui.stall: 0 } |> show(text: "(no batch row to cancel — flags cleared)\n\n")
+! tick _ when ui.live == 1 |> pump() |> std/store:stored { ui.stall: ui.stall + 1 }
 ! tick _ when ui.retire == 1 |> retire()
+! resize s |> std/store:stored { scroll.h: s.height - 4 } |> rescroll()
 ! key k when k.ch == 27 |> koru/vaxis:quit()
+! key k when (k.ch == 21 or (k.mods.ctrl and k.ch == 'u')) and scroll.y > scroll.h - 2 |> std/store:stored { scroll.y: scroll.y - (scroll.h - 2), scroll.follow: 0 }
+! key k when (k.ch == 21 or (k.mods.ctrl and k.ch == 'u')) and scroll.y <= scroll.h - 2 |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
+! key k when (k.ch == 4 or (k.mods.ctrl and k.ch == 'd')) and scroll.y + scroll.h - 2 < scroll.lines - scroll.h |> std/store:stored { scroll.y: scroll.y + (scroll.h - 2) }
+! key k when (k.ch == 4 or (k.mods.ctrl and k.ch == 'd')) and scroll.y + scroll.h - 2 >= scroll.lines - scroll.h and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
+! key k when k.ch == 20 or (k.mods.ctrl and k.ch == 't') |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
+! key k when (k.ch == 2 or (k.mods.ctrl and k.ch == 'b')) and scroll.lines > scroll.h |> std/store:stored { scroll.y: scroll.lines - scroll.h, scroll.follow: 1 }
+! key k when (k.ch == 2 or (k.mods.ctrl and k.ch == 'b')) and scroll.lines <= scroll.h |> std/store:stored { scroll.y: 0, scroll.follow: 1 }
 ! key k when k.ch == 13 and ui.live == 0 and ui.retire == 0 |> std/store:query(draft)
-    ! query d |> std/fmt:ln("{{ d:S }}"): u |> show(text: "you: ")
+    ! query d |> std/fmt:ln("{{ d:S }}"): u |> std/store:stored { scroll.follow: 1 } |> show(text: "you: ")
         |> show(u.text)
         |> show(text: "\n\nagent: ")
         |> remember-said(role: "user", content: u.text)
         |> ask(goal: u.text)
-        |> fire(model: "deepseek/deepseek-v4-flash-0731", max_tokens: 100, temperature: "1", goal: u.text)
+        |> fire(model: "deepseek/deepseek-v4-flash-0731", max_tokens: 2000, temperature: "1", goal: u.text)
         |> std/string:clear(s: d)
 ! key k when k.ch == 127 |> std/store:query(draft)
     ! query d |> std/string:pop-char(s: d)
 ! key k when k.ch == 8 |> std/store:query(draft)
     ! query d |> std/string:pop-char(s: d)
-! key k when k.ch >= 32 and k.ch < 127 and ui.live == 0 |> std/store:query(draft)
+! key k when k.ch >= 32 and k.ch < 127 and ui.live == 0 and k.mods.ctrl == false |> std/store:query(draft)
     ! query d |> std/string:append-char(s: d, k.ch)
         | ok |> _
         | err _ |> _

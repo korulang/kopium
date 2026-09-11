@@ -1,0 +1,6 @@
+name: gap-closed
+kind: inferred
+shape: categorical
+face: in
+membrane: true
+note: a floated hole or open question got answered by an existing mechanism or a landed fix
