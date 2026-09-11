@@ -468,7 +468,7 @@ koru/vaxis(kopium)
         |> remember-said(role: "user", content: u.text)
         |> std/fmt:ln("\n=== you: {{ u.text:s }}\n"): lt |> log-note(lt.text)
         |> ask(goal: u.text)
-        |> std/env:get.or(name: "KOPIUM_MODEL", default: "deepseek/deepseek-v4-flash-0731"): m
+        |> std/env:get.or(name: "KOPIUM_MODEL", default: "meta/muse-spark-1.3-contributor"): m
         |> fire(model: m, max_tokens: 2000, temperature: "1", goal: u.text)
         |> std/string:clear(s: d)
 ! key k when k.ch == 127 |> std/store:query(draft)
