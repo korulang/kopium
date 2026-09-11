@@ -57,9 +57,10 @@
 //    (wired/holes/3_extracted_string_is_a_borrow_that_escapes). The hazard is
 //    the escape, not the extraction.
 //
-// KNOWN, and visible while you use it: the transcript hard-clips long lines
-// at the right edge (the viewport's honest no-soft-wrap) and the pane is
-// blind while the model reasons — `delta.reasoning` is never rendered.
+// KNOWN, and visible while you use it: the transcript soft-wraps at the
+// body width now (koru/vaxis:wrap-lines — the same wrapped bytes feed the
+// viewport and the scroll count), and the thinking strip shows only the
+// latest reasoning chunk — the frontier, not the thought.
 
 import std/io
 import std/fmt
@@ -83,8 +84,11 @@ std/store:new(session, capacity: 2) { *std/bridge:Bridge<session!> }
 // Scrollback state — e_scrollback.k's increment, ported: the transcript
 // paints through the catalog viewport and the store owns the offset.
 // h = term.height - 4 (topbar, statusbar, input, one pad — kept in step
-// with the draw sub-fill by hand), refreshed by `! resize`.
-std/store:new(scroll) { y: 0[i64], lines: 0[i64], h: 0[i64], follow: 1[i64], ty: 0[i64] }
+// with the draw sub-fill by hand), refreshed by `! resize`. y/lines are
+// denominated in VISUAL ROWS — draw and rescroll both run the transcript
+// through koru/vaxis:wrap-lines at scroll.w first, so paint and count are
+// the same bytes and a resize re-flows both.
+std/store:new(scroll) { y: 0[i64], lines: 0[i64], h: 0[i64], w: 0[i64], follow: 1[i64], ty: 0[i64] }
 
 // What you see.
 std/store:new(transcript, capacity: 2) { *std/string:String<instance!> }
@@ -129,10 +133,11 @@ koru/vaxis:component(frame) {
 // scroll-up drops it until the pane reaches bottom again or a turn sends.
 tor rescroll {}
 rescroll = std/store:query(transcript)
-! query buf |> std/fmt:ln("{{ buf:S }}"): t |> std/string:split(s: t.text, sep: "\n")
+! query buf |> std/fmt:ln("{{ buf:S }}"): t |> koru/vaxis:wrap-lines(content: t.text, width: scroll.w): wrapped |> std/string:split(s: wrapped, sep: "\n")
     ! piece _ |> _
     | done n when scroll.follow == 1 and @as(i64, @intCast(n)) > scroll.h |> std/store:stored { scroll.lines: @as(i64, @intCast(n)), scroll.y: @as(i64, @intCast(n)) - scroll.h }
     | done n when scroll.follow == 1 |> std/store:stored { scroll.lines: @as(i64, @intCast(n)), scroll.y: 0 }
+    | done n when scroll.y > @as(i64, @intCast(n)) - 1 |> std/store:stored { scroll.lines: @as(i64, @intCast(n)), scroll.y: @as(i64, @intCast(n)) - 1 }
     | done n |> std/store:stored { scroll.lines: @as(i64, @intCast(n)) }
 
 tor show { text: string }
@@ -383,7 +388,7 @@ koru/vaxis(kopium)
     |> koru/vaxis:sub-from-bottom(parent: w, up: 2, h: 1): iw
     |> std/store:query(draft)
     ! query d |> std/fmt:ln("> {{ d:S }}_"): line |> koru/vaxis:write-in(win: iw, x: 0, y: 0, line.text) |> std/store:query(transcript)
-        ! query buf |> std/fmt:ln("{{ buf:S }}"): tline |> koru/vaxis:viewport(win: body, content: tline.text, offset: scroll.y) |> std/store:query(thinking)
+        ! query buf |> std/fmt:ln("{{ buf:S }}"): tline |> koru/vaxis:wrap-lines(content: tline.text, width: scroll.w): wl |> koru/vaxis:viewport(win: body, content: wl, offset: scroll.y) |> std/store:query(thinking)
             ! query tk |> std/fmt:ln("{{ tk:S }}                                                                                                    "): thl
                 |> koru/vaxis:style(bold: false, dim: true, italic: true, strikethrough: false): st
                 |> koru/vaxis:write-styled(x: 0, y: @as(u16, @intCast(scroll.ty)), thl.text, style: st)
@@ -395,7 +400,7 @@ koru/vaxis(kopium)
     | empty |> std/store:stored { ui.live: 0, ui.stall: 0 } |> unthink() |> show(text: "(no batch row to cancel — flags cleared)\n\n")
 ! tick _ when ui.live == 1 |> pump() |> std/store:stored { ui.stall: ui.stall + 1 }
 ! tick _ when ui.retire == 1 |> retire()
-! resize s |> std/store:stored { scroll.h: s.height - 5, scroll.ty: s.height - 4 } |> rescroll()
+! resize s |> std/store:stored { scroll.h: s.height - 5, scroll.ty: s.height - 4, scroll.w: s.width } |> rescroll()
 ! key k when k.ch == 27 |> koru/vaxis:quit()
 ! key k when (k.ch == 21 or (k.mods.ctrl and k.ch == 'u')) and scroll.y > scroll.h - 2 |> std/store:stored { scroll.y: scroll.y - (scroll.h - 2), scroll.follow: 0 }
 ! key k when (k.ch == 21 or (k.mods.ctrl and k.ch == 'u')) and scroll.y <= scroll.h - 2 |> std/store:stored { scroll.y: 0, scroll.follow: 0 }
