@@ -184,12 +184,12 @@ fn slotOf(
 //   - `openFile(path, .{})`: no create, no truncate, no write. `open` above
 //     is the destructive verb; this one cannot modify the disk by
 //     construction, only witness it.
-//   - Named branches, no handle minted, no obligation issued: `| ok` and
-//     `| missing path` are outcomes, not resources. Contrast koru
-//     335_042 (`std/io:read-file`'s buffer carries `allocated!` and MUST
-//     reach `std/io:free`): no Koru-visible buffer ever exists here, so
-//     there is nothing to discharge — the bytes travel the `say` channel
-//     (stderr transcript, quiet-gated) and die there.
+//   - The bytes come back as the `| ok` payload — a plain string VALUE, not
+//     a buffer, so nothing mints and nothing is owed (the pool dupes its
+//     copy; contrast koru 335_042's `allocated!` on std/io:read-file). The
+//     earlier shape streamed to the stderr transcript and returned a bare
+//     `ok`, which left the head blind: under `hush` the print went nowhere
+//     and the model heard "it ran" about bytes it never saw.
 //   - A missing file is `| missing path`, not a panic: the verb runs,
 //     reports, and the bridge survives for the next turn — the same shape
 //     as `std/io:read-file`'s `not-found` arm (live.k leans on it). The
@@ -197,11 +197,17 @@ fn slotOf(
 //     (430_056): a fragment that does not handle `missing` hands it back as
 //     `unhandled-branch`, and the host (live.k's `act`) feeds the model what
 //     it left on the bridge.
+//   - Bounded honesty, same as `edit`: past 64KiB the verb refuses LOUD as
+//     `| too-large path` rather than silently truncating. `content_buf` is
+//     module state — no allocator, the same pattern as `handle_buf`.
 // Read opens. It does not run: evaluation is a later verb.
 
+var content_buf: [65536]u8 = undefined;
+
 ~pub tor read { path: string }
-| ok
+| ok string
 | missing string
+| too-large string
 
 ~proc read|zig {
     const f = std.fs.cwd().openFile(path, .{}) catch {
@@ -209,14 +215,23 @@ fn slotOf(
         return .{ .missing = path };
     };
     defer f.close();
-    var buf: [4096]u8 = undefined;
+    var len: usize = 0;
     while (true) {
-        const n = f.read(&buf) catch @panic("notes: read failed");
+        const n = f.read($mod.content_buf[len..]) catch @panic("notes: read failed");
         if (n == 0) break;
-        if (!$mod.quiet) std.debug.print("{s}", .{buf[0..n]});
+        len += n;
+        if (len == $mod.content_buf.len) {
+            var probe: [1]u8 = undefined;
+            const more = f.read(&probe) catch @panic("notes: read failed");
+            if (more != 0) {
+                if (!$mod.quiet) std.debug.print("      [read] too-large: '{s}' exceeds 64KiB — refusing\n", .{path});
+                return .{ .too_large = path };
+            }
+            break;
+        }
     }
-    if (!$mod.quiet) std.debug.print("\n      [read] ok: '{s}'\n", .{path});
-    return .ok;
+    if (!$mod.quiet) std.debug.print("      [read] ok: '{s}' ({d} bytes)\n", .{path, len});
+    return .{ .ok = $mod.content_buf[0..len] };
 }
 
 // ============================================================================

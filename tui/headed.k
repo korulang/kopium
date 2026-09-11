@@ -80,6 +80,7 @@ import std/fmt
 import std/store
 import std/string
 import std/bridge
+import std/interpreter
 import app/notes
 import app/wire
 import koru/vaxis
@@ -247,9 +248,11 @@ announce = show(text) |> remember-said(role: "user", content: text) |> log-run(s
 tor act { src: string }
 act = std/store:query(session)
 ! query br |> app/wire:warm-grammar(br) |> std/bridge:run(br, source: src)
-    | result r |> std/fmt:ln("[tool result] ok, it ran. The session now holds {{ r.handles:d }} open resource(s).\n\n"): ma
+    | result r |> std/interpreter:value.stringify(r.value): v
+        |> std/fmt:ln("[tool result] ok, it ran and returned {{ v:s }}. The session now holds {{ r.handles:d }} open resource(s).\n\n"): ma
         |> announce(src, ma.text)
-    | unhandled-branch _ |> log-run(src, verdict: "unhandled-branch — discarded without a tool result")
+    | unhandled-branch ub |> std/fmt:ln("[tool result] the call ended on the outcome '{{ ub.branch:s }}', which you did not arm — it returned {{ ub.payload:s }}. That value is the call's answer; to chain an outcome onward, arm it: | ok v |> <verb>(v). The session still holds {{ ub.handles:s }}.\n\n"): mu
+        |> announce(src, mu.text)
     | defined d |> std/fmt:ln("[tool result] defined: '{{ d:s }}' is now a verb in this session's vocabulary — callable on later turns.\n\n"): mi
         |> announce(src, mi.text)
     | dispatch-error e |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run — you named a handle this session never issued.\n\n"): mb

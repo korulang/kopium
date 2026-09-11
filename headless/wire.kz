@@ -208,6 +208,9 @@ var grammar_len: usize = 0;
         \\Session facts:
         \\- If the human is chatting, asking a question, or you are unsure what
         \\  they want, use say().
+        \\- To look inside a file, call read() — the contents come back in the
+        \\  tool result. open() is the DESTRUCTIVE verb: it creates the file
+        \\  empty, so never open() a file you meant to read.
         \\- Handles are issued by open() and STILL OPEN — this session outlives
         \\  each turn.
         \\- If the action is impossible — wrong handle, missing handle,
@@ -217,6 +220,7 @@ var grammar_len: usize = 0;
         \\Examples of well-formed replies:
         \\say(text: "Not much — tell me a note to open.")
         \\say(text: "I opened notes.txt.")
+        \\read(path: "notes.txt")
         \\open(path: "notes.txt") | ok h |> append(handle: h, text: "hello")
         \\open(path: "notes.txt") | ok h |> close(handle: h)
         \\
