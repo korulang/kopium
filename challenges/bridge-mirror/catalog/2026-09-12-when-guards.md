@@ -1,4 +1,4 @@
-# 2026-09-12-when-guards — `when` parses mid-turn, does not gate, eats the argument
+# 2026-09-12-when-guards — `when` parsed mid-turn and ran mangled; now wire-refused per item (koru b1952ac18)
 
 Construct: **`when` guards on invocations** — `verb(...) when <expr>`,
 conditional dispatch the compiler honors and `flow_parser` knows.
@@ -9,21 +9,18 @@ Measured this session (kopium `main`, canned `std/bridge:run` on `notes`):
 |---|---|---|
 | compiled `.k` | supported — guard evaluated, call skipped | — |
 | single-item bridge source | `parse-error`: "one flow per turn: nothing follows the closing ')' except arms" — refused-honest | refused-honest |
-| item inside a multi-item turn | **ran** — `step 2/3 result`, `say` fired with an EMPTY text; the guard neither gated nor errored | gap |
+| item inside a multi-item turn | `step N/M parse-error` — "nothing follows the closing ')' except arms"; koru `b1952ac18`, pinned by `440_021` | refused-honest |
 
-The mid-turn verdict is the worst cell in the map so far: the construct is
-accepted (no parse-error), the step reports `result`, the verb executes,
-and the argument arrives mangled — a `when false` that neither refused nor
-honored the guard. Whatever the flow parser did with the trailing `when`,
-the outcome is silent wrongness, the exact failure class this catalog
-exists to name.
+The mid-turn verdict WAS the worst cell in the map: accepted, reported
+`result`, verb fired with a mangled argument. Fixed koru-side in
+`b1952ac18` — the per-item wire gate refuses `when` on invocations the
+same way a single-item turn does.
 
-Disposition: same fix site as `wire-gate-scope` — the sequencing loop's
-per-item validation decides whether `when` is wire-legal; the interpreter
-side decides whether eval honors or loudly refuses guards. If guards are
-deliberately out of the wire's power, the refusal must be the wire's own
-parse-error everywhere, not silence mid-turn.
+Note the boundary of this fix: it covers `when` on the invocation
+(`verb(...) when x`). A `when` inside an arm (`| ok h when <expr> |>`)
+is a different cell — `flow_parser` stores it as `cont.condition` and the
+interpreter never evaluates it — still a gap if the wire lets it through.
 
-Would correct this row: `say(...) when false` mid-turn either skips with a
-named step outcome or reports `step N/M parse-error`; `when true` runs the
-call intact.
+Disposition: RESOLVED for the invocation-level construct. Arm-level
+guards want the same ruling applied at eval: honor `cont.condition` or
+refuse it, never run it ungated — a candidate next map row.
