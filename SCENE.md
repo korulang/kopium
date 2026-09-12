@@ -64,6 +64,10 @@ it acts.
 
 ## Tending log
 
+- 2026-09-12: wall repair + 13th `harness-join` replay. Probes rode the
+  `ok string` contract (`| ok text |> say`), `consumers` compiles
+  `headed.k` in tui/. New case `partial-denial`: a refusal mid-turn is a
+  per-step report line, the turn runs on. `harness-check` 24/24.
 - 2026-09-10: the wire flip landed — `wire:clean` keeps the whole turn,
   `extra-lines` is retired, and `std/bridge:run` (koru `e2c9bfc9a`) sequences
   multi-item turns with a per-step `?partial` report. New wall cases

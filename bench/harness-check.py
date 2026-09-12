@@ -22,6 +22,7 @@ CASES: list[tuple[str, str, str]] = [
     ("define", "session table survives the line", "probe_define.py"),
     ("live-define", "define completes on the live drive path, canned", "probe_live_define.py"),
     ("multiline", "a multi-item turn sequences and reports per step", "probe_multiline.py"),
+    ("partial-denial", "a refusal mid-turn is a step line, the turn runs on", "probe_partial_denial.py"),
     ("define-in-turn", "define and use a verb in the same turn", "probe_define_use.py"),
     ("consumers", "every bridge:run caller compiles (exhaustive arms)", "probe_consumers.py"),
     ("mock-on-session", "mock register on session.k shape", "probe_session_mock.py"),
