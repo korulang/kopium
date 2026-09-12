@@ -23,6 +23,15 @@ two surfaces that already exist — its output is a matrix, and rows that
 expose a real lie may hand a pin to koru or a case to the wall, but the
 row itself is the yield.*
 
+*Aspiration (rugged — named 2026-09-12, not the current focus): the wire
+as server-side rendering. The model authors declarative Koru; the bridge
+renders every effect branch server-side; the outcome renders back into
+context as a first-class event. `?partial`'s per-step report is the
+embryo of it. The map measures the distance to that: every `gap` row is
+a silent mis-render — a 200 that shipped wrong markup, worse than a 4xx.
+The aspiration is why the taxonomy orders as it does: transfer breaks on
+lies, survives refusals.*
+
 ---
 
 ## The brief (sealed — you are the contestant)

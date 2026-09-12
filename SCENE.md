@@ -37,6 +37,11 @@ it acts.
   `python3 bench/harness-check.py` — the scoreboard for the decisions
   that make the τ³ path and the long-running bridge the same machine.
   τ³ compare is a different number (model spend).
+- The wire as SSR (rugged aspiration, named 2026-09-12 — not the current
+  focus): the model authors declarative source; the bridge renders every
+  effect branch server-side; outcomes render back into context. The
+  `bridge-mirror` map measures the distance — a `gap` row is a silent
+  mis-render, a 200 that shipped wrong markup.
 - The resource world is a place a successor can inspect: outstanding
   holds, how stale, the why of the last possess (`image.png` — the
   session that opened it wanted a resize). Vocabulary still persists;
@@ -64,6 +69,13 @@ it acts.
 
 ## Tending log
 
+- 2026-09-12: `bridge-mirror` planted — the interpreter↔compiler map.
+  Seed + sweep, 5 rows: named arms/nesting/bindings transfer; `|?`
+  parses-and-never-fires, `when` runs ungated with mangled args, the
+  wire gate is single-item only, unknown fields never refused. The
+  delta is a pattern: the interpreter parses more than it honors.
+  Fix shape is one honesty wall, koru-side. Wire-as-SSR aspiration
+  named (loose directions).
 - 2026-09-12: wall repair + 13th `harness-join` replay. Probes rode the
   `ok string` contract (`| ok text |> say`), `consumers` compiles
   `headed.k` in tui/. New case `partial-denial`: a refusal mid-turn is a
