@@ -17,21 +17,26 @@ import sys
 from pathlib import Path
 
 BENCH = Path(__file__).parent
-HEADLESS = BENCH.parent / "headless"
+ROOT = BENCH.parent
 
-# Every program on the agent path that switches over `std/bridge:run`.
-CONSUMERS = ["session.k", "live.k", "headed.k"]
+# Every program on the agent path that switches over `std/bridge:run`,
+# as (directory, source) — the head moved to tui/ in cc9911c.
+CONSUMERS = [
+    ("headless", "session.k"),
+    ("headless", "live.k"),
+    ("tui", "headed.k"),
+]
 
 
 def main() -> int:
     failed = 0
-    for name in CONSUMERS:
-        src = HEADLESS / name
+    for dirname, name in CONSUMERS:
+        src = ROOT / dirname / name
         if not src.exists():
-            print(f"FAIL  {name} — missing")
+            print(f"FAIL  {dirname}/{name} — missing")
             failed += 1
             continue
-        r = subprocess.run(["koruc", name], cwd=HEADLESS, capture_output=True, text=True)
+        r = subprocess.run(["koruc", name], cwd=ROOT / dirname, capture_output=True, text=True)
         if r.returncode != 0:
             print(f"FAIL  {name} — does not compile")
             for line in ((r.stdout or "") + (r.stderr or "")).splitlines():

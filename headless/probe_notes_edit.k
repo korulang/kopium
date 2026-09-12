@@ -108,7 +108,7 @@ s-close = app/notes:last-minted(): h
 // 1. Before bytes: the fixture as the old verbs left it.
 tor before { br: *std/bridge:Bridge }
 before = std/io:print.ln("--- 1. before: read the fixture ---")
-    |> std/bridge:run(br, source: "read(path: \"probe_edit_fixture.txt\")\n| ok |> _")
+    |> std/bridge:run(br, source: "read(path: \"probe_edit_fixture.txt\")\n| ok text |> say(text: text)")
     | result r |> std/io:print.ln("read ran — bridge holds {{ r.handles:d }} resource(s), nothing minted")
     | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — unexpected, ok was handled")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG")
@@ -138,7 +138,7 @@ single = std/io:print.ln("--- 2. single-match edit rewrites the disk ---")
 // 3. After bytes: the replacement is on disk.
 tor after { br: *std/bridge:Bridge }
 after = std/io:print.ln("--- 3. after: read the rewritten fixture ---")
-    |> std/bridge:run(br, source: "read(path: \"probe_edit_fixture.txt\")\n| ok |> _")
+    |> std/bridge:run(br, source: "read(path: \"probe_edit_fixture.txt\")\n| ok text |> say(text: text)")
     | result r |> std/io:print.ln("read ran — bridge holds {{ r.handles:d }} resource(s)")
     | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — unexpected, ok was handled")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG")
@@ -198,7 +198,7 @@ multi = std/io:print.ln("--- 6. two matches is ambiguous, not a write ---")
 // 7. The refusals wrote nothing: the single replacement stands alone.
 tor unchanged { br: *std/bridge:Bridge }
 unchanged = std/io:print.ln("--- 7. refusals wrote nothing: read the fixture ---")
-    |> std/bridge:run(br, source: "read(path: \"probe_edit_fixture.txt\")\n| ok |> _")
+    |> std/bridge:run(br, source: "read(path: \"probe_edit_fixture.txt\")\n| ok text |> say(text: text)")
     | result r |> std/io:print.ln("refusals confirmed — fixture still reads with the single replacement")
     | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — unexpected, ok was handled")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG")

@@ -27,7 +27,7 @@ import app/notes
 // run's own, quoted as given.
 tor attempt { br: *std/bridge:Bridge }
 attempt = std/io:print.ln("--- 1. attempt py-expr-eval: read the task file ---")
-    |> std/bridge:run(br, source: "read(path: \"probe_task_expr.txt\")\n| ok |> _")
+    |> std/bridge:run(br, source: "read(path: \"probe_task_expr.txt\")\n| ok text |> say(text: text)")
     | result r |> std/io:print.ln("read ran — bridge holds {{ r.handles:d }} resource(s), nothing minted")
     | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}] — WRONG, ok was handled")
     | defined d |> std/io:print.ln("DEFINED {{ d:s }} — WRONG, read should dispatch, not install")
