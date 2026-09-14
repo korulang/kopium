@@ -69,14 +69,21 @@ it acts.
 
 ## Tending log
 
+- 2026-09-14: hole 8 settled koru-side (`0d3d699af`). Generated dispatcher
+  bindings — locals, params, and module-level impl decls — now carry the
+  `__koru_*` namespace user code cannot spell; event containers
+  self-qualify `Input`/`Output` via `@This()`; and register-helper dedupe
+  keys on the site's home module, fixing the merged-companion double
+  transform that suppressed helpers. Pinned by koru `440_023`. The
+  vocabulary author names their own state freely — the derivation no
+  longer owns a hidden reserved-word list.
 - 2026-09-14: hole 7 settled koru-side (`deb163cd8`). `CreateSpec.branch`
   names the outcome that carries a create; the acquire loop books the spec
   whose branch fired — `post` now nets zero, the probe exits clean, and the
   resource world stopped reporting holds for branches that never ran. The
   same normalized-name fix (`namesEql`, `-`≡`_`) unblocked kebab-named wire
   arms: `| bad-amount b |>` now matches the mangled `bad_amount` tag. Pinned
-  koru-side by `440_022_branch_payload_acquires_once`. Hole 8 (generated
-  dispatch locals shadowing module state) remains open.
+  koru-side by `440_022_branch_payload_acquires_once`.
 - 2026-09-13: two fronts moved. `bridge-mirror` row 6: arm-level `when`
   (`| ok t when false |>`) parses full-fidelity, fires UNGATED on the
   bridge — selectArm never reads cont.condition; the wire's own "can never

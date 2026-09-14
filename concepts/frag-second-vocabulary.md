@@ -21,20 +21,22 @@ a notes verb on the scope is `event-denied`, a `define` through `run` and
 its call both work, `worth`'s `ok`/`missing` arms bind and fire. All four
 derived things carried.
 
-What did NOT carry — three seams, each now named:
+What did NOT carry — three seams, each named; two now settled:
 
-- **Branch-payload phantoms over-acquire** (hole 7): a consume+reissue
-  verb whose named branches carry `string<acct!>` emits one CreateSpec per
-  branch, and the interpreter's acquire loop fires per spec — not per
-  fired branch. Two `post`s booked three undischarged records for one
-  handle; hang-up dispatched `close-acct` per stale record and the module
-  panicked on the dead slot. The resource world a successor inspects was
-  lying about what was held.
-- **Generated locals collide with module state** (hole 8): the emitted
-  `dispatch_<scope>` uses `name_len`, `name_buf`, `event_name` as locals
-  in the same scope as the vocabulary's `var`s. A module naming its own
-  state `name_len` cannot register — parametric by luck of the namespace.
-- **`$mod` in a plain `fn` emits verbatim into Zig** — dies as
+- **Branch-payload phantoms over-acquire** (hole 7, SETTLED koru
+  `deb163cd8`): a consume+reissue verb whose named branches carry
+  `string<acct!>` emitted one CreateSpec per branch, and the interpreter's
+  acquire loop fired per spec — not per fired branch. Two `post`s booked
+  three undischarged records for one handle. Fixed by scoping each spec
+  to the branch that carries it; pinned by `440_022`.
+- **Generated locals collide with module state** (hole 8, SETTLED koru
+  `0d3d699af`): the emitted `dispatch_<scope>` used `name_len`,
+  `name_buf`, `event_name` as locals in the same scope as the
+  vocabulary's `var`s. Fixed by putting every implementation-only
+  generated binding under `__koru_*` and self-qualifying event
+  containers' `Input`/`Output`; pinned by `440_023`. Parametricity is no
+  longer luck of the namespace.
+- **`$mod` in a plain `fn` emits verbatim into Zig** (open): dies as
   `expected expression, found 'invalid token'` instead of a Koru-level
   refusal naming the real constraint (only `~proc` bodies see `$mod`).
 
@@ -44,14 +46,13 @@ pool already enforced. That duplication is a latent vocabulary-API
 question, not a bug.
 
 The shape this gives the scene: derivation is real — a second vocabulary
-is an afternoon, not a project — and the remaining work is at the
-emission/obligation layer, where "what the declaration says" and "what
-the pool books" still diverge. Wire-as-SSR note: the bridge *did* render
-every effect branch server-side here; the mis-render was below the wire,
-in the bookkeeping.
+is an afternoon, not a project — and the two bookkeeping/namespace seams
+the spike surfaced are closed at the emission layer, where "what the
+declaration says" and "what the pool books" had diverged. Wire-as-SSR
+note: the bridge *did* render every effect branch server-side here; the
+mis-render was below the wire, in the bookkeeping.
 
-What would correct this: hole 7's settler closing (post nets one record,
-probe exits clean), hole 8's settler closing (a `var name_len` module
-registers), or a ruling that branch payloads may not carry phantoms —
-which would be the larger hole, since a refusal-armed verb could then
-never keep possession across the refusal.
+What would correct this: a ruling that branch payloads may not carry
+phantoms — the larger hole, since a refusal-armed verb could then never
+keep possession across the refusal — or a third vocabulary surfacing a
+seam class the first two could not see.

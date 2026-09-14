@@ -46,4 +46,21 @@ sh wired/holes/8_dispatcher_locals_collide_with_module_state/settler.sh
 # exit 1 = hole CLOSED (the same module compiles and runs)
 ```
 
-## Verdict — OPEN 2026-09-13
+## Verdict — CLOSED 2026-09-14
+
+Settled koru-side in `0d3d699af` ("emit: generated dispatcher bindings
+carry the __koru_ namespace"). Every implementation-only binding the
+registry emits — locals, params, and the module-level decls
+(`ScopeEvent`, `FieldValue`, `getArg`, `buildInput`, `dispatcher_std`)
+— now spells `__koru_*`, which Koru source cannot name; the protocol
+surface (`dispatch_<scope>`, `scope_events_<scope>`, pub aliases) keeps
+its conventional names. Event-container signatures self-qualify
+(`@This().Input`/`@This().Output`) so a user `const Input` can't make a
+sibling reference ambiguous. The settler also surfaced a second bug in
+the same fix: register-helper dedupe was keyed on the callee's
+qualifier (`std.runtime`), so a merged `.k`/`.kz` companion's second
+transform copy suppressed the first's helpers — the key is now the
+site's home items list (`Helpers.siteHomeModule`). Pinned by koru
+regression `440_023_dispatcher_locals_never_shadow_module_state`;
+settler reports CLOSED (exit 1 is the recorded convention, not a
+failure).
