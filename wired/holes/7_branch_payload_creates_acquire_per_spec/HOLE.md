@@ -70,4 +70,16 @@ sh wired/holes/7_branch_payload_creates_acquire_per_spec/settler.sh
 # exit 1 = hole CLOSED (post nets zero, probe exits clean)
 ```
 
-## Verdict — OPEN 2026-09-13
+## Verdict — CLOSED 2026-09-14 (was OPEN 2026-09-13)
+
+Settled koru-side in `deb163cd8` ("runtime: a branch-payload create books
+the fired branch only"): `CreateSpec` gained `branch` (source spelling;
+`null` for a bare return), the registry tags each branch-payload spec with
+its branch, and the acquire loop in `interpreter.run.kz` books a spec only
+when it names `dispatch_result.branch`. The manifest carries the branch too.
+One normalized comparator (`namesEql`, `-`≡`_`, in the new
+`interpreter.names` part) serves both the acquire filter and `selectArm` —
+the same raw-eql blind spot had also made `| bad-amount b |>` wire arms
+unmatchable against the mangled `bad_amount` tag. Pinned by koru regression
+`440_022_branch_payload_acquires_once`; settler reports CLOSED and the probe
+exits clean (post-ok/post-bad each net zero, hang-up releases once).
