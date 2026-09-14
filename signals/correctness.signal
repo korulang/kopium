@@ -1,0 +1,10 @@
+name: correctness
+kind: inferred
+shape: categorical
+face: in
+membrane: true
+note: a surface that REPORTED state (a pool, a manifest, a count) was shown
+      lying about it — the fix makes the report match what actually holds.
+      Distinct from bug-fix (behavior was wrong) — here the behavior was
+      right and the accounting of it was wrong.
+route: surface
