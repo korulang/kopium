@@ -1,0 +1,183 @@
+// ledger.kz — SECOND DOMAIN VOCABULARY (parametricity spike, 2026-09-13).
+//
+// The north-star claim under test: a `register` block derives prompt,
+// grammar, enforcement, and growth — one declaration, four derived things.
+// `notes` proved the shape once; this module is the second instance. Same
+// transaction shapes — minted opaque handle, a consume+reissue verb, a
+// consuming verb, a named-outcome stateless read, a voice — different
+// domain (named accounts with integer balances, no disk, no files).
+// Whatever derivation does NOT carry here is the finding; what the probe
+// has to hand-add is the seam made visible.
+
+~import std/runtime
+
+const std = @import("std");
+
+const MAX_ACCTS = 8;
+
+var balances: [MAX_ACCTS]i64 = .{0} ** MAX_ACCTS;
+var names: [MAX_ACCTS][32]u8 = undefined;
+var acct_name_len: [MAX_ACCTS]usize = .{0} ** MAX_ACCTS;
+var live: [MAX_ACCTS]bool = .{false} ** MAX_ACCTS;
+var opened: usize = 0;
+
+var handle_buf: [MAX_ACCTS][16]u8 = undefined;
+var handle_len: [MAX_ACCTS]usize = .{0} ** MAX_ACCTS;
+var last_minted_buf: [16]u8 = undefined;
+var last_minted_len: usize = 0;
+var mint_seed: u64 = 0;
+var mint_count: u32 = 0;
+
+fn acctOf(
+    handle: []const u8,
+    mod_live: [MAX_ACCTS]bool,
+    mod_opened: usize,
+    mod_handle_buf: [MAX_ACCTS][16]u8,
+    mod_handle_len: [MAX_ACCTS]usize,
+) ?usize {
+    var s: usize = 0;
+    while (s < mod_opened) : (s += 1) {
+        if (mod_live[s] and
+            std.mem.eql(u8, mod_handle_buf[s][0..mod_handle_len[s]], handle))
+        {
+            return s;
+        }
+    }
+    return null;
+}
+
+// ============================================================================
+// THE VERBS
+// ============================================================================
+
+~pub tor open-acct { name: string } -> string<acct!>
+
+~proc open-acct|zig {
+    var slot: usize = 0;
+    while (slot < $mod.opened) : (slot += 1) {
+        if (!$mod.live[slot]) break;
+    } else {
+        slot = $mod.opened;
+        if (slot >= MAX_ACCTS) @panic("ledger: too many open accounts");
+        $mod.opened += 1;
+    }
+    $mod.live[slot] = true;
+    $mod.balances[slot] = 0;
+    const n = @min(name.len, 32);
+    @memcpy($mod.names[slot][0..n], name[0..n]);
+    $mod.acct_name_len[slot] = n;
+    std.debug.print("      [ledger] opened '{s}'\n", .{name[0..n]});
+
+    // Opaque mint — the same discipline as notes: 6 hex over a seeded mix,
+    // unpredictable across sessions, unique among live handles.
+    if ($mod.mint_seed == 0) {
+        $mod.mint_seed = std.crypto.random.int(u64);
+    }
+    var mix = $mod.mint_seed;
+    mix ^= mix >> 33;
+    mix *%= 0xff51afd7ed558ccd;
+    mix ^= mix >> 33;
+    mix +%= @as(u64, $mod.mint_count + 1) *% 0x9e3779b97f4a7c15;
+    mix ^= mix >> 33;
+    $mod.mint_count += 1;
+
+    var candidate: [8]u8 = undefined;
+    var attempts: u32 = 0;
+    while (true) : (attempts += 1) {
+        const c = std.fmt.bufPrint(&candidate, "{x:0>6}", .{@as(u24, @truncate(mix))}) catch @panic("ledger: handle too long");
+        var collides = false;
+        for (0..$mod.opened) |s| {
+            if ($mod.live[s] and
+                std.mem.eql(u8, $mod.handle_buf[s][0..$mod.handle_len[s]], c))
+            {
+                collides = true;
+                break;
+            }
+        }
+        if (!collides) {
+            @memcpy($mod.handle_buf[slot][0..c.len], c);
+            $mod.handle_len[slot] = c.len;
+            break;
+        }
+        if (attempts > 32) @panic("ledger: handle collision after retries");
+        mix ^= mix >> 33;
+        mix *%= 0xbf58476d1ce4e5b9;
+        mix ^= mix >> 29;
+    }
+    $mod.last_minted_len = $mod.handle_len[slot];
+    @memcpy($mod.last_minted_buf[0..$mod.last_minted_len], $mod.handle_buf[slot][0..$mod.handle_len[slot]]);
+    return $mod.handle_buf[slot][0..$mod.handle_len[slot]];
+}
+
+// post consumes the handle and re-issues it on EVERY outcome — including
+// `bad-amount`, or the obligation would leak on the refusal arm. A branch
+// payload carrying a phantom is the unmeasured shape this spike probes.
+~pub tor post { handle: string<!acct>, amount: string }
+| ok string<acct!>
+| bad-amount string<acct!>
+
+~proc post|zig {
+    const slot = acctOf(handle, $mod.live, $mod.opened, $mod.handle_buf, $mod.handle_len) orelse @panic("ledger: post on a handle this module never minted");
+    const delta = std.fmt.parseInt(i64, amount, 10) catch {
+        std.debug.print("      [ledger] bad-amount: '{s}' is not an integer — nothing posted\n", .{amount});
+        return .{ .bad_amount = handle };
+    };
+    $mod.balances[slot] += delta;
+    std.debug.print("      [ledger] posted {d} to '{s}' → {d}\n", .{ delta, $mod.names[slot][0..$mod.acct_name_len[slot]], $mod.balances[slot] });
+    return .{ .ok = handle };
+}
+
+// Stateless named-outcome read, the `read` parallel: asks by NAME, not by
+// handle, so it needs no possession — the bridge's eyes on this world.
+var worth_buf: [32]u8 = undefined;
+
+~pub tor worth { name: string }
+| ok string
+| missing string
+
+~proc worth|zig {
+    for (0..$mod.opened) |s| {
+        if ($mod.live[s] and
+            std.mem.eql(u8, $mod.names[s][0..$mod.acct_name_len[s]], name))
+        {
+            const r = std.fmt.bufPrint(&$mod.worth_buf, "{d}", .{$mod.balances[s]}) catch @panic("ledger: worth render failed");
+            return .{ .ok = r };
+        }
+    }
+    return .{ .missing = name };
+}
+
+~pub tor close-acct { handle: string<!acct> }
+
+~proc close-acct|zig {
+    const slot = acctOf(handle, $mod.live, $mod.opened, $mod.handle_buf, $mod.handle_len) orelse @panic("ledger: close-acct on a handle this module never minted");
+    if ($mod.live[slot]) {
+        std.debug.print("      [ledger] '{s}' closed at {d}\n", .{ $mod.names[slot][0..$mod.acct_name_len[slot]], $mod.balances[slot] });
+        $mod.live[slot] = false;
+    }
+}
+
+~pub tor say { text: string }
+
+~proc say|zig {
+    std.debug.print("      {s}\n", .{text});
+}
+
+// Inspection seam for canned sessions and probes — NOT in the register.
+~[retain]pub tor last-minted {} -> string
+
+~proc last-minted|zig {
+    return $mod.last_minted_buf[0..$mod.last_minted_len];
+}
+
+// ============================================================================
+// THE PERMISSION MODEL — the whole claim in one block
+// ============================================================================
+
+~std/runtime:register(scope: "ledger") {
+    open-acct(10)
+    post(1)
+    worth(1)
+    close-acct(1)
+    say(1)
+}

@@ -1,0 +1,18 @@
+// Hole 8 repro — a vocabulary module that happens to name its state
+// `name_len`, colliding with the generated dispatcher's local of the same
+// name. One verb, one register block: the minimum a scope needs.
+~import std/runtime
+
+const std = @import("std");
+
+var name_len: usize = 0;
+
+~pub tor ping { text: string }
+
+~proc ping|zig {
+    $mod.name_len = text.len;
+}
+
+~std/runtime:register(scope: "collide") {
+    ping(1)
+}

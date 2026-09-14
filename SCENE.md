@@ -69,6 +69,19 @@ it acts.
 
 ## Tending log
 
+- 2026-09-13: two fronts moved. `bridge-mirror` row 6: arm-level `when`
+  (`| ok t when false |>`) parses full-fidelity, fires UNGATED on the
+  bridge — selectArm never reads cont.condition; the wire's own "can never
+  accept a chain eval would execute differently" header is now a measured
+  lie. And the second vocabulary landed: `headless/ledger.kz` (accounts,
+  balances, opaque acct handles) derived prompt, wall, hand-back, and
+  growth from the register block alone — parametricity held — while
+  surfacing two koru-side holes: branch-payload phantoms acquire one
+  obligation per SPEC (not per fired branch; pool over-books, hang-up
+  double-dispatches, module panics — hole 7) and generated dispatch locals
+  shadow module state (hole 8). `probe_ledger.k` panicking at hang-up is
+  the honest witness, not a bug to soothe.
+
 - 2026-09-12: `bridge-mirror` planted — the interpreter↔compiler map.
   Seed + sweep, 5 rows: named arms/nesting/bindings transfer; `|?`
   parses-and-never-fires, `when` runs ungated with mangled args, the
