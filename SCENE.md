@@ -69,6 +69,12 @@ it acts.
 
 ## Tending log
 
+- 2026-09-14: the `$mod`-in-plain-`fn` seam settled koru-side
+  (`dca682df7`) — host lines at both emit sites run `rewriteModToBare`,
+  so the spelling interpolates inside a module's own container exactly as
+  proc bodies do. Koru `400_189` (parked aspirational since Aug,
+  Lars-ruled) unparked and green; imported-module path verified by hand.
+  All three seams the ledger spike surfaced are now closed.
 - 2026-09-14: hole 8 settled koru-side (`0d3d699af`). Generated dispatcher
   bindings — locals, params, and module-level impl decls — now carry the
   `__koru_*` namespace user code cannot spell; event containers

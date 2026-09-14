@@ -21,7 +21,7 @@ a notes verb on the scope is `event-denied`, a `define` through `run` and
 its call both work, `worth`'s `ok`/`missing` arms bind and fire. All four
 derived things carried.
 
-What did NOT carry — three seams, each named; two now settled:
+What did NOT carry — three seams, each named; all three now settled:
 
 - **Branch-payload phantoms over-acquire** (hole 7, SETTLED koru
   `deb163cd8`): a consume+reissue verb whose named branches carry
@@ -36,9 +36,10 @@ What did NOT carry — three seams, each named; two now settled:
   generated binding under `__koru_*` and self-qualifying event
   containers' `Input`/`Output`; pinned by `440_023`. Parametricity is no
   longer luck of the namespace.
-- **`$mod` in a plain `fn` emits verbatim into Zig** (open): dies as
-  `expected expression, found 'invalid token'` instead of a Koru-level
-  refusal naming the real constraint (only `~proc` bodies see `$mod`).
+- **`$mod` in a plain `fn` emits verbatim into Zig** (SETTLED koru
+  `dca682df7`): host lines at both emit sites now run `rewriteModToBare`
+  — the spelling interpolates to the bare decl inside the module's
+  container, same rule proc bodies get. Pin `400_189` unparked.
 
 Also observed, not yet a hole: every vocabulary re-implements
 handle→resource lookup (`slotOf`/`acctOf`) and re-validates possession the
@@ -46,11 +47,11 @@ pool already enforced. That duplication is a latent vocabulary-API
 question, not a bug.
 
 The shape this gives the scene: derivation is real — a second vocabulary
-is an afternoon, not a project — and the two bookkeeping/namespace seams
-the spike surfaced are closed at the emission layer, where "what the
-declaration says" and "what the pool books" had diverged. Wire-as-SSR
-note: the bridge *did* render every effect branch server-side here; the
-mis-render was below the wire, in the bookkeeping.
+is an afternoon, not a project — and every seam the spike surfaced is now
+closed at the emission/interp layer, where "what the declaration says"
+and "what the pool books" had diverged. Wire-as-SSR note: the bridge
+*did* render every effect branch server-side here; the mis-render was
+below the wire, in the bookkeeping.
 
 What would correct this: a ruling that branch payloads may not carry
 phantoms — the larger hole, since a refusal-armed verb could then never

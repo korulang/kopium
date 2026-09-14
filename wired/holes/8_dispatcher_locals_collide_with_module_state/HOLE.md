@@ -37,6 +37,10 @@ Sibling observation, same emission-honesty family (not separately holed):
 `$mod.` inside a plain `fn` (it rewrites only in `~proc` bodies) emits
 verbatim into the Zig and dies as `expected expression, found 'invalid
 token'` — a refusal that should name itself at the Koru level.
+**Settled 2026-09-14, koru `dca682df7`:** host lines at both emit sites
+now run through `rewriteModToBare` — `$mod.` in a plain `fn` interpolates
+to the bare decl, matching the proc-body rule. Koru `400_189` (parked
+aspirational since Aug, Lars-ruled) unparked and green.
 
 ## Repro / settler
 
