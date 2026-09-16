@@ -69,6 +69,16 @@ it acts.
 
 ## Tending log
 
+- 2026-09-14: field-membership closed koru-side (`b4742ff96`) — and it
+  is the first DERIVED enforcement: `validateFlow` judges provided fields
+  against the scope's own `get_event_input` table, the same registry the
+  prompt and dispatcher emit from. `InputLookupFn` now answers null for
+  a name outside the scope (vocabulary membership stays `event-denied`).
+  Pin `440_025`. The masquerade's subset boundary is now enforced by the
+  register's own data rather than a hand-maintained list — the
+  enforcement leg of derive-prompt-wire-enforcement-growth is real.
+  Mirror gaps left: cross-item bindings (unbound identifier stringifies
+  instead of refusing by name).
 - 2026-09-14: mirror row 6 closed koru-side (`e132cf991`). `selectArm`
   now judges `when` guards in source order — the arm's binding
   provisionally in a scratch scope, first truthy wins, unguarded is the

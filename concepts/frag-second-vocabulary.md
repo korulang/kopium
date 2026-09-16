@@ -46,6 +46,17 @@ handle→resource lookup (`slotOf`/`acctOf`) and re-validates possession the
 pool already enforced. That duplication is a latent vocabulary-API
 question, not a bug.
 
+2026-09-14: the enforcement leg deepened. Field-membership — "a named
+field the verb never declared is `validation-error` at dispatch" — now
+exists (koru `b4742ff96`, pin `440_025`), and crucially it is *derived*:
+`validateFlow` judges provided fields against the scope's own
+`get_event_input` table, the same registry data the prompt and dispatcher
+are emitted from. No vocabulary-specific check was written; `ledger`'s
+verbs get field refusal for free, as will the third vocabulary. The
+masquerade's subset boundary is now enforced by the register's own data —
+the first enforcement mechanism that is genuinely parametric rather than
+hand-maintained per vocabulary.
+
 The shape this gives the scene: derivation is real — a second vocabulary
 is an afternoon, not a project — and every seam the spike surfaced is now
 closed at the emission/interp layer, where "what the declaration says"
