@@ -1,0 +1,121 @@
+// calc.kz — THIRD DOMAIN VOCABULARY (parametricity probe, 2026-09-16).
+//
+// notes and ledger both live in the possession world — every enforcement
+// leg the bridge-mirror settled (bind it, HandleNotHeld, per-item scope,
+// unknown fields) was built over vocabularies that mint opaque handles.
+// This module has none. The question under test: does the register
+// derivation degrade gracefully when the resource world is absent —
+// does the prompt still teach handle language, does a refusal branch
+// carry a payload with no possession to keep, and does the binding
+// discipline still apply to the only names left (branch payloads)?
+
+~import std/runtime
+
+const std = @import("std");
+
+const MAX_SLOTS = 16;
+
+var names: [MAX_SLOTS][32]u8 = undefined;
+var name_len: [MAX_SLOTS]usize = .{0} ** MAX_SLOTS;
+var values: [MAX_SLOTS][32]u8 = undefined;
+var value_len: [MAX_SLOTS]usize = .{0} ** MAX_SLOTS;
+var used: [MAX_SLOTS]bool = .{false} ** MAX_SLOTS;
+var count: usize = 0;
+
+var sum_buf: [32]u8 = undefined;
+var quot_buf: [32]u8 = undefined;
+var recall_buf: [32]u8 = undefined;
+
+fn slotOf(name: []const u8) ?usize {
+    for (0..$mod.count) |s| {
+        if ($mod.used[s] and
+            std.mem.eql(u8, $mod.names[s][0..$mod.name_len[s]], name))
+        {
+            return s;
+        }
+    }
+    return null;
+}
+
+// ============================================================================
+// THE VERBS — no handles anywhere; names and payloads are the only names
+// ============================================================================
+
+~pub tor add { a: string, b: string }
+| sum string
+| bad-input string
+
+~proc add|zig {
+    const x = std.fmt.parseInt(i64, a, 10) catch return .{ .bad_input = a };
+    const y = std.fmt.parseInt(i64, b, 10) catch return .{ .bad_input = b };
+    const r = std.fmt.bufPrint(&$mod.sum_buf, "{d}", .{x + y}) catch @panic("calc: sum render");
+    return .{ .sum = r };
+}
+
+// A refusal-shaped branch with a payload and nothing to hold: by-zero
+// answers the attempted divisor, not a handle. If possession were
+// secretly load-bearing in the derivation, this is where it shows.
+~pub tor div { a: string, b: string }
+| quotient string
+| by-zero string
+
+~proc div|zig {
+    const x = std.fmt.parseInt(i64, a, 10) catch return .{ .by_zero = a };
+    const y = std.fmt.parseInt(i64, b, 10) catch return .{ .by_zero = b };
+    if (y == 0) return .{ .by_zero = b };
+    const r = std.fmt.bufPrint(&$mod.quot_buf, "{d}", .{@divTrunc(x, y)}) catch @panic("calc: quotient render");
+    return .{ .quotient = r };
+}
+
+// Name-keyed state, no mint: remember stores under a plain name, recall
+// asks for it back by the same name. Possession is absent by design —
+// nothing here is an obligation the pool could book.
+~pub tor remember { name: string, value: string }
+
+~proc remember|zig {
+    const slot = slotOf(name) orelse blk: {
+        if ($mod.count >= MAX_SLOTS) @panic("calc: out of slots");
+        const s = $mod.count;
+        $mod.count += 1;
+        $mod.used[s] = true;
+        const n = @min(name.len, 32);
+        @memcpy($mod.names[s][0..n], name[0..n]);
+        $mod.name_len[s] = n;
+        break :blk s;
+    };
+    const v = @min(value.len, 32);
+    @memcpy($mod.values[slot][0..v], value[0..v]);
+    $mod.value_len[slot] = v;
+    std.debug.print("      [calc] remembered '{s}' = {s}\n", .{ name, value });
+}
+
+~pub tor recall { name: string }
+| ok string
+| missing string
+
+~proc recall|zig {
+    if (slotOf(name)) |s| {
+        const n = $mod.value_len[s];
+        @memcpy($mod.recall_buf[0..n], $mod.values[s][0..n]);
+        return .{ .ok = $mod.recall_buf[0..n] };
+    }
+    return .{ .missing = name };
+}
+
+~pub tor say { text: string }
+
+~proc say|zig {
+    std.debug.print("      {s}\n", .{text});
+}
+
+// ============================================================================
+// THE PERMISSION MODEL — the whole claim in one block
+// ============================================================================
+
+~std/runtime:register(scope: "calc") {
+    add(4)
+    div(4)
+    remember(4)
+    recall(4)
+    say(10)
+}

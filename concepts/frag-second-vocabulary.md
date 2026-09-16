@@ -68,6 +68,18 @@ instead of `HandleNotHeld` blaming a handle. Nothing in the check names
 The masquerade's three boundaries — what parses, what the wire admits,
 what the interpreter honours — now coincide on every measured cell.
 
+2026-09-16, third vocabulary `calc` (no handles — the seam class the
+handle vocabularies could not see): the derivation held. Payload
+bindings, refusal branches without possession, bound-reference and
+field-membership refusals, the vocabulary wall, per-scope growth — all
+carried free of hand-work. But the probe surfaced the first seam in the
+derived surface itself, not the runtime: the wire grammar's worked
+example is hardcoded notes (`open`/`append`, "the handle the call just
+issued"), taught verbatim on a scope where both verbs are `event-denied`
+and nothing mints a handle. The vocabulary list is derived; the example
+is not — hole 9. The finding reframes the claim: derivation must reach
+*inside* the prompt's prose, not only the manifest it appends.
+
 The shape this gives the scene: derivation is real — a second vocabulary
 is an afternoon, not a project — and every seam the spike surfaced is now
 closed at the emission/interp layer, where "what the declaration says"

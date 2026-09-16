@@ -69,6 +69,17 @@ it acts.
 
 ## Tending log
 
+- 2026-09-16: third vocabulary `headless/calc.kz` — no handles at all.
+  `probe_calc.k` green across ten turns: payload bindings, refusal
+  branches with no possession, the new bound-reference check, the
+  vocabulary wall, derived field-membership, growth — all carried free.
+  World state correctly crosses items while bindings die. The probe
+  surfaced hole 9, the first seam in the DERIVED surface rather than
+  the runtime: `WIRE_GRAMMAR_TEXT`'s chain example is hardcoded notes
+  (`open`/`append`, "the handle the call just issued") — on calc it
+  teaches verbs the wall will deny. Settler open; fix shape (derive the
+  example from `branches_fn`/`input_fn` vs de-domain the prose) is a
+  ruling — prompt wording is a spelling.
 - 2026-09-16: last mirror gap closed koru-side (`15d8745ab`, pin
   `440_026`) — the catalogue is empty. An unbound identifier was
   stringifying to its own text: `append(handle: h)` dispatched
