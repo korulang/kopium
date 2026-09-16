@@ -1,0 +1,7 @@
+name: hole-settled
+kind: inferred
+shape: categorical
+face: in
+membrane: false
+note: a filed hole got its live settler flipped green by a landed fix. Synonym of gap-closed, which is the preferred spelling — this one was auto-registered by a commit that reached for the ledger's own word. Fold into gap-closed when the signal vocabulary is next gardened.
+route: surface
