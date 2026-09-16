@@ -57,6 +57,17 @@ masquerade's subset boundary is now enforced by the register's own data —
 the first enforcement mechanism that is genuinely parametric rather than
 hand-maintained per vocabulary.
 
+2026-09-16: the bound-reference leg closed, and with it the bridge-mirror
+catalogue is empty — every measured cell is `supported` or
+`refused-honest`. An unbound identifier no longer degrades to its own
+text (koru `15d8745ab`, pin `440_026`): the wire parser refuses bare
+values at item heads, and the flow's validation walks each arm path
+with a bound set, refusing `validation-error` that names the binding
+instead of `HandleNotHeld` blaming a handle. Nothing in the check names
+`notes` or `ledger` — it is scope discipline, uniform across registers.
+The masquerade's three boundaries — what parses, what the wire admits,
+what the interpreter honours — now coincide on every measured cell.
+
 The shape this gives the scene: derivation is real — a second vocabulary
 is an afternoon, not a project — and every seam the spike surfaced is now
 closed at the emission/interp layer, where "what the declaration says"

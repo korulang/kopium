@@ -69,6 +69,19 @@ it acts.
 
 ## Tending log
 
+- 2026-09-16: last mirror gap closed koru-side (`15d8745ab`, pin
+  `440_026`) — the catalogue is empty. An unbound identifier was
+  stringifying to its own text: `append(handle: h)` dispatched
+  `handle="h"` and failed `HandleNotHeld`, blaming the handle. Now a
+  bare identifier is judged a reference at two walls: the wire parser
+  refuses it at item heads (`step 2/2 parse-error — no bare values`),
+  and arm bodies — Koru fragments where the shape parses — get
+  `validation-error` naming the binding from a per-path bound set in a
+  new `interpreter.args` part. `430_056`'s `pick(n: -1)` caught a real
+  bug mid-fix (a leading `-` is a literal, not a ref). Three-boundary
+  coincidence — parses = admitted = honoured — now holds on every
+  measured cell; the "sensible subset" is executable, derived, and
+  uniform across vocabularies.
 - 2026-09-14: field-membership closed koru-side (`b4742ff96`) — and it
   is the first DERIVED enforcement: `validateFlow` judges provided fields
   against the scope's own `get_event_input` table, the same registry the
