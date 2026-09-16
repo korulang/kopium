@@ -62,4 +62,18 @@ sh wired/holes/9_grammar_example_is_notes_shaped/settler.sh
 # exit 2 = unmeasured (repro failed to build/run)
 ```
 
-## Verdict — OPEN 2026-09-16
+## Verdict — CLOSED 2026-09-16 (koru `d7e6d3b0c`)
+
+Ruled derive-the-cast, de-domain-the-noun. `scope-grammar` now renders
+`wireGrammarRules` (`koru_std/runtime.example.kz`, a `~part` sibling):
+the fixed shape rules plus a chain bullet whose example
+`scopeChainExample` synthesizes from the scope's own manifest — head =
+first verb that provably hands a value to an arm (payload-carrying
+branch, or a bare return minting on `__type_ref`, met as `ok`), target =
+the possession edge when one exists, else the lightest sink. On calc the
+derived render is `add(a: "1", b: "2") | sum v |> say(text: v)`; on
+notes it reproduces the old cast from data. Known limit: a bare
+`-> string` with no phantom leaves no manifest trace — a scope of only
+plain returns gets the no-example bullet (440_017's `api`). Settler
+flips green by construction: every verb the example names is drawn from
+the vocabulary the wall enforces.

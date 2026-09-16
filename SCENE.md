@@ -77,9 +77,11 @@ it acts.
   surfaced hole 9, the first seam in the DERIVED surface rather than
   the runtime: `WIRE_GRAMMAR_TEXT`'s chain example is hardcoded notes
   (`open`/`append`, "the handle the call just issued") — on calc it
-  teaches verbs the wall will deny. Settler open; fix shape (derive the
-  example from `branches_fn`/`input_fn` vs de-domain the prose) is a
-  ruling — prompt wording is a spelling.
+  teaches verbs the wall will deny. SETTLED same day (koru
+  `d7e6d3b0c`, ruled derive-the-cast): `scope-grammar` synthesizes the
+  example from the scope's own manifest — `add | sum v |> say` on
+  calc, `open | ok v |> append` on notes, no cast at all when nothing
+  is provably chainable.
 - 2026-09-16: last mirror gap closed koru-side (`15d8745ab`, pin
   `440_026`) — the catalogue is empty. An unbound identifier was
   stringifying to its own text: `append(handle: h)` dispatched

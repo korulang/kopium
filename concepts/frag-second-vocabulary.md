@@ -74,18 +74,28 @@ bindings, refusal branches without possession, bound-reference and
 field-membership refusals, the vocabulary wall, per-scope growth — all
 carried free of hand-work. But the probe surfaced the first seam in the
 derived surface itself, not the runtime: the wire grammar's worked
-example is hardcoded notes (`open`/`append`, "the handle the call just
+example was hardcoded notes (`open`/`append`, "the handle the call just
 issued"), taught verbatim on a scope where both verbs are `event-denied`
-and nothing mints a handle. The vocabulary list is derived; the example
-is not — hole 9. The finding reframes the claim: derivation must reach
+and nothing mints a handle. The vocabulary list was derived; the example
+was not — hole 9. The finding reframed the claim: derivation must reach
 *inside* the prompt's prose, not only the manifest it appends.
+
+Hole 9 settled the same day (koru `d7e6d3b0c`), and settled by
+derivation, not deletion: `scope-grammar` synthesizes the worked example
+from the scope's own manifest — the head is the first verb that provably
+hands a value to an arm, the chain target is the possession edge when
+one exists (`open`→`append` on notes, reproduced from data), else the
+lightest sink that can carry the binding (`add | sum v |> say` on calc).
+The frontier the probe found is gone: every domain byte in the prompt is
+now drawn from the table that judges the model's output.
 
 The shape this gives the scene: derivation is real — a second vocabulary
 is an afternoon, not a project — and every seam the spike surfaced is now
-closed at the emission/interp layer, where "what the declaration says"
-and "what the pool books" had diverged. Wire-as-SSR note: the bridge
-*did* render every effect branch server-side here; the mis-render was
-below the wire, in the bookkeeping.
+closed: at the emission/interp layer, where "what the declaration says"
+and "what the pool books" had diverged, and at the prompt layer, where
+the last fixed cast is now synthesized from the manifest. Wire-as-SSR
+note: the bridge *did* render every effect branch server-side here; the
+mis-render was below the wire, in the bookkeeping.
 
 What would correct this: a ruling that branch payloads may not carry
 phantoms — the larger hole, since a refusal-armed verb could then never
