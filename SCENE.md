@@ -69,6 +69,13 @@ it acts.
 
 ## Tending log
 
+- 2026-09-14: mirror row 6 closed koru-side (`e132cf991`). `selectArm`
+  now judges `when` guards in source order — the arm's binding
+  provisionally in a scratch scope, first truthy wins, unguarded is the
+  else, unjudgeable is a named `GuardUnjudgable` dispatch-error. New
+  `interpreter.guards` part; pin `440_024`. The wire's "can never accept
+  a chain eval would execute differently" invariant is true again. Open
+  mirror cells left: cross-item bindings, unknown-field refusal.
 - 2026-09-14: the `$mod`-in-plain-`fn` seam settled koru-side
   (`dca682df7`) — host lines at both emit sites run `rewriteModToBare`,
   so the spelling interpolates inside a module's own container exactly as

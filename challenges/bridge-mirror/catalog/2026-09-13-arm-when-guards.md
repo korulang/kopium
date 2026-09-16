@@ -10,7 +10,7 @@ probe `headless/probe_arm_when.k`; compiled probe /tmp when_compiled.k):
 | surface | program | verdict | class |
 |---|---|---|---|
 | compiled `.k` | `check(x: 10) \| high h when h > 100 \|> … \| high h \|> …` | guard evaluated: `h > 100` false → skipped, unguarded `high` arm ran | supported |
-| wire + bridge `source:` | `read(path: "…")\n\| ok t when false \|> say(…)\n\| ok u \|> say(…)` | **`result` — the guarded arm FIRED.** `FIRED-despite-false-guard` printed; the `false` literal was never evaluated | gap |
+| wire + bridge `source:` | `read(path: "…")\n\| ok t when false \|> say(…)\n\| ok u \|> say(…)` | ~~**`result` — the guarded arm FIRED.**~~ **CLOSED koru `e132cf991`**: `selectArm` judges `cont.condition` in source order (scratch scope provisionally holding the arm's binding; first truthy wins, unguarded is the else; unjudgeable → `GuardUnjudgable` dispatch-error). Pinned by `440_024`. | supported (was gap) |
 | wire + bridge `source:` | same shape, `when true` | fires — consistent with evaluation but the false case proves it is ignored | — |
 
 `interpreter.select.kz` `selectArm` matches on branch name (or catch-all)
@@ -44,3 +44,11 @@ arms is the narrower question; the interpreter lie stands either way, for
 Would correct this row: `read(path: "…")\n| ok t when false |> say("X")\n| ok u |> say("Y")`
 prints `Y` (guard honored, fell through) or reports a named refusal —
 `step`/`validation`/`unhandled` naming the guard — and never prints `X`.
+
+**Settled 2026-09-14 (koru `e132cf991`):** the "would correct" row runs
+verbatim — `| ok t when false |>` falls through, `| ok u |>` prints `Y`,
+and with no unguarded arm the turn reports `unhandled-branch`. Guards
+evaluate against the arm's own binding (`t == "…"` judged), matching the
+compiled if/else-if/else lowering; an unjudgeable guard is a named
+`GuardUnjudgable` dispatch-error rather than a silent skip. Koru pin
+`440_024`; the wire header's invariant is true again.

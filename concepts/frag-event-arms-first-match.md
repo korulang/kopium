@@ -28,3 +28,13 @@ can ever see a tick.
 Open: whether first-match is the intended language law or an emission
 accident is unruled — a koru regression pin (two overlapping `!` arms,
 assert only the first ran) would settle it. File under candidate pins.
+
+2026-09-14: first-match is no longer compiled-only folklore. `|` wire arms
+carried the same shape the other direction — `when` parsed into
+`cont.condition` and the bridge's `selectArm` ignored it entirely, so a
+false guard *fired* (bridge-mirror row 6). Koru `e132cf991` made the
+interpreter mirror the compiled if/else-if/else lowering: guards judged
+in source order against the arm's own binding, first truthy wins,
+unguarded is the else, unjudgeable is a named dispatch-error
+(`GuardUnjudgable`), pinned by `440_024`. Both arm syntaxes now share the
+law: order is semantics, and a guard is a judgment — never decoration.
