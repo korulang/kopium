@@ -182,3 +182,85 @@ truncating intake. Scope note: the task is the minimal serial case
 this round settles: on a chainable serial task, the chain costs more reasoning
 than it saves turns.
 
+# Round 4 (2026-09-17, later) — the fan-out re-opener
+
+Round 3's own scope note named the untested payoff case: *several independent
+calls collapsing into one turn*. `experiment_fanout.k` is that task — three
+independent notes (`exp-a.txt`→`alpha`, `exp-b.txt`→`beta`,
+`exp-c.txt`→`gamma`), each its own open→append→close, plus a `turn-check N
+tag: [bytes]` probe per file per turn. Same model, same three arms, same
+metrics, 12-turn headroom, 720s cap.
+
+**Instrumentation history that matters.** Three batches ran. Batch 1 lost its
+composed arm mid-flight: a probe compiled into `headless/a.out` while the
+benchmark was live — composed runs 3–5 are the probe binary, excluded on
+sight. Then a real defect surfaced: `std/fmt:ln` renders into a fixed
+4096-byte scratch (by design — the panic teaches `fmt.blk`), and `ask`
+renders the *whole transcript* through it. Every run in batches 1–2 — all
+three arms — died there once the conversation crossed ~4KB (around turn
+9–12). Post-completion panics left `ctc`/`sctc` intact, so those runs still
+measure; the full-window metric was censored everywhere. The fix converted
+the unbounded renders (transcript, reply snapshot, tool-result messages) to
+`std/fmt:fmt.blk` and the unbounded terminal prints to `std/io:print.blk` —
+the stdlib's designed escapes, present in the pre-chain era too, so the same
+source still compiles on both toolchains (era adaptation unchanged in shape;
+the strip regex now swallows indented arm bodies, blk blocks included).
+Batch 3 is the fixed harness: **zero panics in 15 runs**, full windows
+uncensored for the first time.
+
+Valid sample: composed n=12 (5+2+5), one-line n=15, pre-chain n=15.
+Logs: `bench/experiment-logs/fanout-b{1,2,3}/`.
+
+| arm | bytes ok | strict | done@ turns | strict@ turns | median ctc | median strict ctc |
+|---|---|---|---|---|---|---|
+| composed  | 12/12 | 11/12 | 1–2 (five @1) | ~4 | **3,814** | 9,583 |
+| one-line  | 5/15  | 5/15  | 8–11 | 9–12 | 20,166 | 21,777 |
+| pre-chain | 15/15 | 15/15 | 8 (metronome) | 9 (metronome) | 10,067 | 11,586 |
+
+Full window (batch 3 only, uncensored): composed median 41,917; one-line
+32,476; pre-chain 18,945.
+
+## Reading round 4
+
+- **The payoff case is real.** Five of twelve composed runs banked all three
+  files' bytes on turn 1 — one reply carrying three items, each
+  `open | ok h |> append(handle: h)` — then closed all three on turn 2 with
+  the minted handle strings read back out of the step report. Nine
+  invocations' work in two turns. Median lenient ctc 3,814 vs pre-chain's
+  10,067 — ~2.6× cheaper, the exact inverse of round 3's serial-task result.
+- **Strict cost is parity.** 9,583 vs 11,586 — composed ~17% cheaper, inside
+  the variance. The write collapses; the close still costs turns.
+- **Composition is a bet; serial is a metronome.** Composed sctc spread
+  3,468–19,159 (5.5×); pre-chain 10,629–12,819 (1.2×). Every pre-chain run:
+  bytes by turn 8, closed by turn 9, nine single invocations — it never
+  discovered the multi-item turn its own era allowed (the grammar teaches
+  one invocation per line; batching went unused). Composed is faster on
+  average and unpredictable per-run.
+- **Reliability: near-parity, not an edge.** Composed 12/12 bytes, 11/12
+  strict — the one gap is a panic-censored run, not a failure. Pre-chain
+  15/15 both. Post-completion wander is symmetric: composed-5 opened a
+  spontaneous `probe.txt` after finishing (holds=1 at teardown); two
+  pre-chain runs likewise ended holds=1 after banking strict at turn 9.
+- **The full window inverts the story.** Composed finishes by turn ~4 then
+  keeps spending on verification turns — 41,917 vs 18,945 median total
+  session. Under a fixed 12-turn loop the arm that completes early pays the
+  most for the remaining turns; ctc/sctc are the honest task-cost measures.
+- **one-line is a dead control on fan-out.** 5/15 done — the truncating
+  intake's failure is the round-3 corruption shape scaled: turn-1 chain
+  leaves a handle open, next turn's append doubles the bytes (`alpha\nalpha`),
+  and no later turn-check ever matches.
+
+## Verdict round 4
+
+The fan-out re-opener **lands**: where independent calls exist, composition
+pays — median bytes-on-disk by turn ~1.5 vs 8, ~2.6× cheaper lenient cost,
+strict cost parity, reliability near-parity (11–12/12 vs 15/15). Combined
+with round 3 the law is now conditional, not directional: **composition
+taxes serial dependence (~3× more expensive) and pays on independence (~2.6×
+cheaper, 5× faster to first bytes)** — the model spends its reasoning budget
+exactly where the structure gives it something to buy. What remains untested:
+a vocabulary whose verbs are *only* independent (no handle chains at all),
+and whether the composed model's variance narrows with a better grammar
+teaching the nested spelling (three of twelve runs still attempted the
+refused flat chain first).
+

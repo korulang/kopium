@@ -153,7 +153,9 @@ send = app/wire:recall(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |> 
 // parameter captured into a sweep arm — 690_234, green since 2026-08-03.
 tor ask { model: string, max_tokens: u32, temperature: string, goal: string }
 ask = std/store:query(transcript)
-! query h |> std/fmt:ln("{{ h:S }}"): hist |> app/wire:agent-body(model, max_tokens, temperature, goal, history: hist.text): body |> send(req: body)
+! query h |> std/fmt:fmt.blk {
+    {{ h:S }}
+}: hist |> app/wire:agent-body(model, max_tokens, temperature, goal, history: hist): body |> send(req: body)
 
 // Append this turn to the conversation, so the next one can reason from it.
 tor record { goal: string, said: string }
@@ -188,35 +190,49 @@ observe = std/store:query(transcript)
 tor act { br: *std/bridge:Bridge, goal: string, source: string }
 act = record(goal, said: source) |> std/bridge:run(br, source)
 | result r |> std/interpreter:value.stringify(r.value): v
-    |> std/io:print.ln("  ok — returned {{ v:s }}, bridge now holds {{ r.handles:d }} resource(s)")
-    |> std/fmt:ln("[tool result] ok, it ran and returned {{ v:s }}. The session now holds {{ r.handles:d }} open resource(s)."): ma
-    |> observe(ma.text)
+    |> std/io:print.blk {
+        ok — returned {{ v:s }}, bridge now holds {{ r.handles:d }} resource(s)
+    } |> std/fmt:fmt.blk {
+        [tool result] ok, it ran and returned {{ v:s }}. The session now holds {{ r.handles:d }} open resource(s).
+    }: ma |> observe(text: ma)
 | defined d |> std/io:print.ln("  defined {{ d:s }} — the session's vocabulary now includes it")
     |> std/fmt:ln("[tool result] defined: '{{ d:s }}' is now a verb in this session's vocabulary — you can call it on a later turn."): mi
     |> observe(mi.text)
-| dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
-    |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run. HandleNotHeld means you named a handle this session never issued — check which handles you actually opened."): mb
-    |> observe(mb.text)
-| unhandled-branch ub |> std/io:print.ln("  UNHANDLED: branch '{{ ub.branch:s }}' fired with {{ ub.payload:s }}; held {{ ub.handles:s }}")
-    |> std/fmt:ln("[tool result] Your fragment ran but did not handle the outcome '{{ ub.branch:s }}' (it returned {{ ub.payload:s }}). The session still holds {{ ub.handles:s }} — those are yours to use on the next turn. Read the outcome and continue, or close what you opened."): mu
-    |> observe(mu.text)
+| dispatch-error e |> std/io:print.blk {
+        REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran
+    } |> std/fmt:fmt.blk {
+        [tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run. HandleNotHeld means you named a handle this session never issued — check which handles you actually opened.
+    }: mb |> observe(text: mb)
+| unhandled-branch ub |> std/io:print.blk {
+        UNHANDLED: branch '{{ ub.branch:s }}' fired with {{ ub.payload:s }}; held {{ ub.handles:s }}
+    } |> std/fmt:fmt.blk {
+        [tool result] Your fragment ran but did not handle the outcome '{{ ub.branch:s }}' (it returned {{ ub.payload:s }}). The session still holds {{ ub.handles:s }} — those are yours to use on the next turn. Read the outcome and continue, or close what you opened.
+    }: mu |> observe(text: mu)
 | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
     |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only the verbs in Your vocabulary above — open, append, close, read, edit, say, and every verb you defined this session."): mc
     |> observe(mc.text)
-| parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
-    |> std/fmt:ln("[tool result] That was not Koru: {{ p.message:s }}. Each line is one invocation; a definition is two lines, the first starting with `tor `."): md
-    |> observe(md.text)
+| parse-error p |> std/io:print.blk {
+        the model did not emit Koru: {{ p.message:s }}
+    } |> std/fmt:fmt.blk {
+        [tool result] That was not Koru: {{ p.message:s }}. Each line is one invocation; a definition is two lines, the first starting with `tor `.
+    }: md |> observe(text: md)
 | partial p |> std/io:print.ln("  steps: {{ p.ran:d }}/{{ p.total:d }} ran, bridge holds {{ p.handles:d }}")
-    |> std/fmt:ln("[tool result] Your turn ran as {{ p.total:d }} step(s); {{ p.ran:d }} completed. Step report:\n{{ p.report:s }}Open resources: {{ p.handles:d }}."): mp
-    |> observe(mp.text)
+    |> std/fmt:fmt.blk {
+        [tool result] Your turn ran as {{ p.total:d }} step(s); {{ p.ran:d }} completed. Step report:
+        {{ p.report:s }}Open resources: {{ p.handles:d }}.
+    }: mp |> observe(text: mp)
 | exhausted _ |> std/io:print.ln("  budget exhausted")
     |> observe(text: "[tool result] budget exhausted; nothing ran.")
-| validation-error v |> std/io:print.ln("  invalid: {{ v:s }}")
-    |> std/fmt:ln("[tool result] invalid invocation: {{ v:s }}"): mf
-    |> observe(mf.text)
-| shape-error sh |> std/io:print.ln("  wrong shape: {{ sh.message:s }}")
-    |> std/fmt:ln("[tool result] wrong shape: {{ sh.message:s }}"): mg
-    |> observe(mg.text)
+| validation-error v |> std/io:print.blk {
+        invalid: {{ v:s }}
+    } |> std/fmt:fmt.blk {
+        [tool result] invalid invocation: {{ v:s }}
+    }: mf |> observe(text: mf)
+| shape-error sh |> std/io:print.blk {
+        wrong shape: {{ sh.message:s }}
+    } |> std/fmt:fmt.blk {
+        [tool result] wrong shape: {{ sh.message:s }}
+    }: mg |> observe(text: mg)
 | scope-not-found s2 |> std/io:print.ln("  no such scope: {{ s2:s }}")
     |> std/fmt:ln("[tool result] no such scope: {{ s2:s }}"): mh
     |> observe(mh.text)
@@ -240,10 +256,16 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
 // sequences it. There is no drop to warn about — `extra-lines` is retired.
 tor drive { br: *std/bridge:Bridge, goal: string }
 drive = std/store:query(reply)
-! query buf |> std/fmt:ln("{{ buf:S }}"): raw |> std/io:print.ln("  raw  > [{{ raw.text:s }}]") |> app/wire:clean(raw: raw.text)
-    | ok cs |> std/fmt:ln("{{ cs:S }}"): src
-        |> std/io:print.ln("  model> {{ src.text:s }}")
-        |> act(br, goal, source: src.text)
+! query buf |> std/fmt:fmt.blk {
+    {{ buf:S }}
+}: raw |> std/io:print.blk {
+    raw  > [{{ raw:s }}]
+} |> app/wire:clean(raw)
+    | ok cs |> std/fmt:fmt.blk {
+        {{ cs:S }}
+    }: src |> std/io:print.blk {
+        model> {{ src:s }}
+    } |> act(br, goal, source: src)
         |> std/string:free(s: cs)
     | err e |> std/io:print.ln("  could not snapshot the reply: {{ e:s }}")
 

@@ -58,26 +58,49 @@ CHECK_RE = re.compile(r"turn-check (\d+): \[(.*?)\]", re.DOTALL)
 # the branch did not exist until the chain rung. Dropping it is not weakening
 # the experiment: the era's run cannot emit it. If the arm's text moves, this
 # stops matching and we fail loud rather than silently run a stale source.
-UNHANDLED_ARM_RE = re.compile(r"\| unhandled-branch ub[^\n]*\n(?:\s+\|>[^\n]*\n)*")
+# The arm body is every indented line after the `||` header — including
+# fmt.blk/print.blk block content, which is why the pattern swallows
+# whitespace-led lines rather than only `|>` continuations.
+UNHANDLED_ARM_RE = re.compile(r"\| unhandled-branch ub[^\n]*\n(?:[ \t]+[^\n]*\n)*")
+
+# Task definitions. `serial` is the original single-file chain; `fanout` is
+# the round-3 re-opener — three independent files so a composed turn can do
+# nine invocations' work in one reply. `files` maps filename -> expected
+# bytes; `check` parses the per-turn probe lines.
+TASKS = {
+    "serial": {
+        "source": "experiment.k",
+        "files": {"exp.txt": "alpha"},
+        "check": re.compile(r"turn-check (\d+): \[(.*?)\]", re.DOTALL),
+        "timeout": 240,
+    },
+    "fanout": {
+        "source": "experiment_fanout.k",
+        "files": {"exp-a.txt": "alpha", "exp-b.txt": "beta", "exp-c.txt": "gamma"},
+        "check": re.compile(r"turn-check (\d+) (a|b|c): \[(.*?)\]", re.DOTALL),
+        "timeout": 720,
+    },
+}
 
 
-def ensure_preflip() -> bool:
+def ensure_preflip(task: dict) -> bool:
     """The control arm is the pre-flip intake: a worktree at PREFLIP_REF with
-    the current experiment.k dropped in beside its (old) wire.kz."""
+    the current task source dropped in beside its (old) wire.kz."""
     if not PREFLIP_HEADLESS.exists():
         r = subprocess.run(["git", "worktree", "add", str(PREFLIP), PREFLIP_REF],
                            cwd=REPO, capture_output=True, text=True)
         if r.returncode != 0:
             print(r.stdout + r.stderr)
             return False
-    (PREFLIP_HEADLESS / "experiment.k").write_bytes((HEADLESS / "experiment.k").read_bytes())
+    src = task["source"]
+    (PREFLIP_HEADLESS / src).write_bytes((HEADLESS / src).read_bytes())
     return True
 
 
-def ensure_prechain() -> bool:
+def ensure_prechain(task: dict) -> bool:
     """The pre-chain arm: kopium at PRECHAIN_REF, compiled by the pre-chain
-    koruc so the wire itself refuses `|>`. experiment.k is the same file minus
-    the `unhandled-branch` arm the era's run cannot produce."""
+    koruc so the wire itself refuses `|>`. The task source is the same file
+    minus the `unhandled-branch` arm the era's run cannot produce."""
     if not PRECHAIN_HEADLESS.exists():
         r = subprocess.run(["git", "worktree", "add", str(PRECHAIN), PRECHAIN_REF],
                            cwd=REPO, capture_output=True, text=True)
@@ -94,21 +117,23 @@ def ensure_prechain() -> bool:
     if head != PRECHAIN_KORU_REF:
         print(f"  ! koru-prechain is at {head}, expected {PRECHAIN_KORU_REF}")
         return False
-    src = (HEADLESS / "experiment.k").read_text()
+    src_name = task["source"]
+    src = (HEADLESS / src_name).read_text()
     adapted = UNHANDLED_ARM_RE.sub("", src, count=1)
     if adapted == src:
-        print("  ! unhandled-branch arm not found in experiment.k — the era adaptation needs revisiting")
+        print(f"  ! unhandled-branch arm not found in {src_name} — the era adaptation needs revisiting")
         return False
-    (PRECHAIN_HEADLESS / "experiment.k").write_text(adapted)
+    (PRECHAIN_HEADLESS / src_name).write_text(adapted)
     return True
 
 
-def compile_arm(directory: Path, koruc: str = "koruc") -> Path | None:
-    src = directory / "experiment.k"
+def compile_arm(directory: Path, task: dict, koruc: str = "koruc") -> Path | None:
+    src_name = task["source"]
+    src = directory / src_name
     if not src.exists():
         print(f"  ! {src} missing")
         return None
-    r = subprocess.run([koruc, "experiment.k"], cwd=directory, capture_output=True, text=True)
+    r = subprocess.run([koruc, src_name], cwd=directory, capture_output=True, text=True)
     if r.returncode != 0:
         print(f"  ! koruc failed in {directory}")
         print((r.stdout or "") + (r.stderr or ""))
@@ -116,11 +141,13 @@ def compile_arm(directory: Path, koruc: str = "koruc") -> Path | None:
     return directory / "a.out"
 
 
-def run_once(binary: Path, directory: Path, logdir: Path, arm: str, n: int) -> dict:
-    target = directory / "exp.txt"
-    target.unlink(missing_ok=True)
+def run_once(binary: Path, directory: Path, logdir: Path, arm: str, n: int, task: dict) -> dict:
+    files = task["files"]
+    for f in files:
+        (directory / f).unlink(missing_ok=True)
     try:
-        r = subprocess.run([str(binary)], cwd=directory, capture_output=True, text=True, timeout=240)
+        r = subprocess.run([str(binary)], cwd=directory, capture_output=True,
+                           text=True, timeout=task["timeout"])
         out = (r.stdout or "") + (r.stderr or "")
         rc = r.returncode
         timed_out = False
@@ -137,12 +164,26 @@ def run_once(binary: Path, directory: Path, logdir: Path, arm: str, n: int) -> d
     turns = len(TURN_RE.findall(out))
     steps = [tuple(map(int, m.groups())) for m in STEP_RE.finditer(out)]
     holds = [int(m.group(1)) for m in HOLDS_RE.finditer(out)]
-    content = target.read_text().strip() if target.exists() else None
+    contents = {f: ((directory / f).read_text().strip() if (directory / f).exists() else None)
+                for f in files}
 
-    # Cost-to-completion: sum usage through the first turn whose file check
-    # shows the task's bytes. `None` (censored) if the task never completed.
-    checks = [(int(m.group(1)), m.group(2)) for m in CHECK_RE.finditer(out)]
-    done_turn = next((t for t, c in checks if "alpha" in c), None)
+    # Cost-to-completion: sum usage through the first turn whose file checks
+    # ALL show the task's bytes. `None` (censored) if the task never completed.
+    # Fanout checks print `turn-check N tag: [content]`; serial prints
+    # `turn-check N: [content]` — normalize both to (turn, tag, content).
+    checks = []
+    for m in task["check"].finditer(out):
+        if len(m.groups()) == 3:
+            checks.append((int(m.group(1)), m.group(2), m.group(3)))
+        else:
+            checks.append((int(m.group(1)), "", m.group(2)))
+    expected = list(files.values())
+    done_turn = None
+    for t in sorted({t for t, _, _ in checks}):
+        got = [c for tt, _, c in checks if tt == t]
+        if all(any(e in c for c in got) for e in expected):
+            done_turn = t
+            break
     cost_to_complete = sum(p + c for p, c in usages[:done_turn]) if done_turn else None
 
     # Strict completion: bytes right AND the bridge holding nothing at that
@@ -151,10 +192,11 @@ def run_once(binary: Path, directory: Path, logdir: Path, arm: str, n: int) -> d
     # that can't close in the same turn.
     hold_events = [(m.start(), int(m.group(1))) for m in HOLDS_RE.finditer(out)]
     strict_turn = None
-    for t, c in checks:
-        if "alpha" not in c:
+    for t in sorted({t for t, _, _ in checks}):
+        got = [c for tt, _, c in checks if tt == t]
+        if not all(any(e in c for c in got) for e in expected):
             continue
-        check_pos = out.find(f"turn-check {t}:")
+        check_pos = out.find(f"turn-check {t}")
         held = next((h for pos, h in reversed(hold_events) if pos < check_pos), None)
         if held == 0:
             strict_turn = t
@@ -168,8 +210,8 @@ def run_once(binary: Path, directory: Path, logdir: Path, arm: str, n: int) -> d
         "turns": turns,
         "steps": steps,
         "final_holds": holds[-1] if holds else None,
-        "content": content,
-        "ok": content == "alpha",
+        "contents": contents,
+        "ok": all(contents[f] == e for f, e in files.items()),
         "done_turn": done_turn,
         "cost_to_complete": cost_to_complete,
         "strict_turn": strict_turn,
@@ -191,7 +233,7 @@ def summarise(name: str, runs: list[dict]) -> None:
     sctc = [r["strict_ctc"] for r in runs if r["strict_ctc"] is not None]
     print(f"\n{name}")
     print(f"  runs         {n}")
-    print(f"  completed    {ok}/{n}  (exp.txt == 'alpha')")
+    print(f"  completed    {ok}/{n}  (task files all correct)")
     print(f"  cost-to-comp {len(ctc)}/{n} reached by file check", end="")
     if ctc:
         print(f"  median {statistics.median(ctc):.0f}  all {sorted(ctc)}")
@@ -212,17 +254,19 @@ def summarise(name: str, runs: list[dict]) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=3)
+    ap.add_argument("--task", choices=sorted(TASKS), default="serial")
     args = ap.parse_args()
+    task = TASKS[args.task]
 
-    composed_bin = compile_arm(HEADLESS)
-    if not ensure_preflip():
+    composed_bin = compile_arm(HEADLESS, task)
+    if not ensure_preflip(task):
         print("FAIL: could not provision the pre-flip control worktree")
         return 1
-    oneline_bin = compile_arm(PREFLIP_HEADLESS)
-    if not ensure_prechain():
+    oneline_bin = compile_arm(PREFLIP_HEADLESS, task)
+    if not ensure_prechain(task):
         print("FAIL: could not provision the pre-chain control worktree")
         return 1
-    prechain_bin = compile_arm(PRECHAIN_HEADLESS, str(PRECHAIN_KORUC))
+    prechain_bin = compile_arm(PRECHAIN_HEADLESS, task, str(PRECHAIN_KORUC))
     if composed_bin is None or oneline_bin is None or prechain_bin is None:
         print("FAIL: could not build all three arms")
         return 1
@@ -233,7 +277,7 @@ def main() -> int:
     results: dict[str, list[dict]] = {name: [] for name, _, _ in arms}
     for i in range(args.n):
         for name, binary, directory in arms:
-            r = run_once(binary, directory, logdir, name, i + 1)
+            r = run_once(binary, directory, logdir, name, i + 1, task)
             results[name].append(r)
             flag = "TIMEOUT" if r["timed_out"] else ("ok " if r["ok"] else "MISS")
             print(f"  run {i + 1} {name:9} tokens={r['tokens']:>6} "

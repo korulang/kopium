@@ -77,6 +77,24 @@ when composing. The cost claim is corrected from "plausible, unproven" to
 it: a task where several independent invocations collapse into one turn
 (fan-out, not a serial chain) measured against the same control.
 
+MEASURED 2026-09-17, same day — the re-opener ran (round 4,
+`experiment_fanout.k`: three independent notes, open→append→close each,
+n=12/15/15 across three batches after a harness panic and a binary-clobber
+were found and excluded). The payoff case is REAL: composed banked all bytes
+by turn 1 in 5/12 runs (three items in one reply), median done@~1.5 vs
+pre-chain's metronomic done@8, lenient ctc ~2.6× cheaper (3,814 vs 10,067),
+strict cost parity (9,583 vs 11,586), reliability near-parity (11–12/12 vs
+15/15). The settled law is now conditional, not directional: **composition
+taxes serial dependence (~3× more expensive) and pays on independence (~2.6×
+cheaper, ~5× faster to first bytes)** — the model spends its reasoning budget
+exactly where the structure gives it something to buy. Two refinements the
+measurement adds: composed is high-variance (sctc spread 5.5× vs pre-chain's
+1.2× — a bet vs a metronome), and the pre-chain model never discovered the
+multi-item turn its own era allowed (the grammar teaches one invocation per
+line; batching is legal and unused). Under a fixed turn cap the full-window
+metric inverts (composed pays for verification turns after finishing early);
+cost-to-completion is the honest measure.
+
 IMPLEMENTED 2026-09-08 — the hand-back fires live, and the vocab-shaped
 consequence is now measured:
 

@@ -69,6 +69,19 @@ it acts.
 
 ## Tending log
 
+- 2026-09-17: the fan-out re-opener landed — composition's payoff case is
+  REAL and conditional. `experiment_fanout.k` (three independent notes,
+  open→append→close each) against the same three arms: composed n=12,
+  one-line n=15, pre-chain n=15. Composed banked all bytes by turn 1 in
+  5/12 runs (three items in one reply), median done@~1.5 vs pre-chain's
+  metronomic done@8, lenient ctc ~2.6× cheaper (3,814 vs 10,067), strict
+  parity (9,583 vs 11,586), reliability near-parity (11–12/12 vs 15/15).
+  The law is now conditional: composition taxes serial dependence (~3×)
+  and pays on independence (~2.6×, ~5× faster to first bytes). Harness
+  fix landed alongside: `std/fmt:ln`'s 4096-byte scratch panicked EVERY
+  batch-1/2 run at ~turn 9 — unbounded renders now go through
+  `std/fmt:fmt.blk` / `std/io:print.blk` (era-safe); batch 3 ran 15/15
+  panic-free with uncensored windows. `frag-partial-programs` evolved.
 - 2026-09-17: the pre-chain cost control ran — and INVERTED the fragment's
   cost claim. New third arm in `bench/experiment.py`: kopium `d7e5c3b`
   compiled by a worktree koruc at `511392414` (= `70aeb093a~1`), whose
