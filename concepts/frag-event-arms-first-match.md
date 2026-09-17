@@ -38,3 +38,14 @@ in source order against the arm's own binding, first truthy wins,
 unguarded is the else, unjudgeable is a named dispatch-error
 (`GuardUnjudgable`), pinned by `440_024`. Both arm syntaxes now share the
 law: order is semantics, and a guard is a judgment — never decoration.
+
+2026-09-17: first-match's consequence is now enforced, not just observable.
+The compiled side refused dead arms all along (SHAPE002); the interpreted
+side silently ran first-match and reported `result` — the gap behind the
+queued "discharged-handle defect" (`open | ok h |> append | ok h2 |>
+close(h2)`: the close sat in a never-firing sibling arm, the pool kept the
+handle, a later turn re-appended through it). Koru `a01abb341` mirrors
+`firstDuplicateSibling` into `validateFlow` — a second unguarded
+same-branch arm is `validation-error` teaching the indent spelling — pinned
+by `440_027`. The frag's open question is fully settled: order is law on
+both surfaces, and a dead arm is a refusal, not a no-op.

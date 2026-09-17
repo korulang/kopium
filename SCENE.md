@@ -69,6 +69,17 @@ it acts.
 
 ## Tending log
 
+- 2026-09-17: the queued "discharged-handle defect" measured and settled
+  koru-side (`a01abb341`). The model's flat `open | ok h |> append | ok h2
+  |> close(h2)` parses as SIBLING arms on `open` — and arm selection is
+  first-match, so the second `ok` arm never fired: `result` verdict, `close`
+  never dispatched, handle held, next turn's append re-used it. The
+  interpreter now mirrors SHAPE002 (`checkShadowedArms` in `validateFlow`):
+  a second unguarded same-branch arm is `validation-error` teaching the
+  indented nesting spelling. Koru `440_027` pins it; `410_002`'s own source
+  carried the dead-arm shape (masked by budget exhaustion) and now nests.
+  Probe `headless/probe_discharged.k`; catalog row
+  `2026-09-17-shadowed-arm`.
 - 2026-09-16: third vocabulary `headless/calc.kz` — no handles at all.
   `probe_calc.k` green across ten turns: payload bindings, refusal
   branches with no possession, the new bound-reference check, the
