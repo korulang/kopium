@@ -116,3 +116,69 @@ favor on both axes rather than against. Net across both rounds: composition is
 unproven. The instrument is now good enough to settle it with a pre-chain
 control and a larger n.
 
+---
+
+# Round 3 (2026-09-17) — the true pre-chain control
+
+Rounds 1–2's control was weakened twice over: the one-line intake truncated to
+the head but the *modern* `parse.wire` still accepted a single-line chain. This
+round adds the arm the earlier verdicts asked for:
+
+- **pre-chain** — kopium at `d7e5c3b` (contemporaneous with koru
+  `70aeb093a~1`), compiled by that era's `koruc` (worktree
+  `~/src/koru-prechain` at `511392414`). Its `parse.wire` rejects `|>`
+  outright — *"chains are not wire: one invocation per turn"* — so the handle
+  crosses turns as a **literal string the model reads out of the tool result
+  and writes back**. `experiment.k` is the same file minus the
+  `unhandled-branch` arm (the branch did not exist until the chain rung —
+  dropped, not stubbed).
+- The runner also gained a **strict** completion metric: cost through the
+  first turn-check where the bytes are right AND the bridge holds 0. The
+  lenient metric counted `alpha`-on-disk while the note stayed open —
+  flattering arms that defer the close. `HOLDS_RE` was widened to also match
+  the `partial` branch's `bridge holds N` phrasing (it previously undercounted
+  closure on runs that ended via a partial report).
+
+Same task, same model (`meta/muse-spark-1.3-contributor`, temperature 0),
+4-turn headroom, `--n 5` × 2 batches = **n=10 per arm**. No timeouts this
+round. Logs: `bench/experiment-logs/round{3,4}-n5/`.
+
+| arm | bytes ok | closed | median ctc | median strict ctc | median window |
+|---|---|---|---|---|---|
+| composed  | 10/10 | 10/10 | 4,018 | 10,622 | 12,595 |
+| one-line  | 9/10  | 8/10  | 4,389 | 7,369  | 10,674 |
+| pre-chain | 10/10 | 10/10 | **2,161** | **3,512** | **5,462** |
+
+## Reading round 3
+
+- **The cost claim inverts.** Against a control where chains are genuinely
+  unavailable, composition is not cheaper — it is ~3× *more* expensive on
+  strict cost-to-completion (median 10,622 vs 3,512) and ~2.3× on the full
+  window. The mechanism is visible in the usage lines: the composed model
+  burns 2,000–3,000 reasoning tokens per turn planning and defending its
+  chains (and twice paid a whole refused turn to the new unreachable-arm
+  check — `unreachable 'ok' arm`, correctly emitted and correctly recovered),
+  while the pre-chain model emits one invocation per turn at ~300–600
+  completion tokens each.
+- **Reliability is parity, not an edge.** Both surviving arms went 10/10 on
+  bytes and 10/10 on closure. The earlier reliability advantage was measured
+  against the *truncating* intake (one-line: 9/10 bytes, 8/10 closed — its
+  misses are still the re-append corruption); against the honest serial
+  control, composition buys nothing on correctness.
+- What composition *did* buy: bytes landed sooner — composed wrote `alpha` on
+  turn 1 in 6/10 runs vs pre-chain's earliest possible turn 2. Latency, not
+  cost or reliability.
+- The pre-chain arm never once attempted a chain — the era's grammar says
+  "no chains (|>)" and the model obeyed it. Zero parse rejections in 10 runs.
+
+## Verdict round 3
+
+The fragment's **cost claim is measured false** for this task shape: serial
+invocation under the one-line wire is ~3× cheaper to strict completion and
+equally reliable at n=10. The **reliability** claim survives only against the
+truncating intake. Scope note: the task is the minimal serial case
+(open→append→close); composition's putative payoff is tasks where several
+*independent* calls collapse into one turn, which this task has none of. What
+this round settles: on a chainable serial task, the chain costs more reasoning
+than it saves turns.
+

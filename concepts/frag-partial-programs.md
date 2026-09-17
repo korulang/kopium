@@ -54,15 +54,28 @@ within ~4%). Round 2 added a per-turn file probe so cost is measured to
 COMPLETION (n=5, 4-turn headroom): composition 5/5 vs one-line 3/5, median
 cost-to-completion 3,192 vs 4,203 tokens — modestly cheaper AND more reliable.
 Caveats: 4/10 runs stalled at the 240s cap, and the control still allows a
-single-line chain, so the law's bite is small for a chainable task. Net: the
-cost claim moves from "not supported" to "plausible, unproven"; the reliability
-claim stands. A pre-chain control and larger n would settle it.
+single-line chain, so the law's bite is small for a chainable task.
 
-What would correct this: a measured replay where multi-invocation turns
-produce mush, refusal churn, or worse cost-per-task than single-invocation
-turns under identical goals. Neither 2026-09-10 round produced that
-(reliability favors composition; cost is wash-to-modestly-favorable). A
-pre-chain control and a larger n would settle the cost question.
+MEASURED 2026-09-17 — the true pre-chain control ran (round 3, n=10/arm):
+kopium `d7e5c3b` under koru `511392414` (= `70aeb093a~1`), whose `parse.wire`
+refuses `|>` outright, so the handle crosses turns as a literal string the
+model echoes back. Result INVERTS the cost claim: strict cost-to-completion
+(bytes right AND bridge holding 0) median 3,512 pre-chain vs 10,622 composed —
+composition ~3× MORE expensive, reliability parity (10/10 both, vs the
+truncating intake's 9/10 bytes / 8/10 closed). The mechanism: the composed
+model spends 2–3k reasoning tokens per turn planning chains; the serial model
+spends ~300–600. Composition's measured advantage on this task is latency only
+— `alpha` landed turn 1 in 6/10 composed runs vs earliest-possible turn 2
+pre-chain.
+
+What this means for the belief: the capability stays (composition is the
+product — a turn that does AND confirms, and parallel-independent calls are
+the untested payoff case), but "a full reasoning pass per turn" cuts the OTHER
+way — serial turns are cheap passes, and the model reasons hardest exactly
+when composing. The cost claim is corrected from "plausible, unproven" to
+"measured false on serial-chainable tasks at this model." What would re-open
+it: a task where several independent invocations collapse into one turn
+(fan-out, not a serial chain) measured against the same control.
 
 IMPLEMENTED 2026-09-08 — the hand-back fires live, and the vocab-shaped
 consequence is now measured:

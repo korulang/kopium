@@ -69,6 +69,19 @@ it acts.
 
 ## Tending log
 
+- 2026-09-17: the pre-chain cost control ran — and INVERTED the fragment's
+  cost claim. New third arm in `bench/experiment.py`: kopium `d7e5c3b`
+  compiled by a worktree koruc at `511392414` (= `70aeb093a~1`), whose
+  `parse.wire` refuses `|>` outright — the handle crosses turns as a
+  literal the model echoes back. n=10/arm, no timeouts: strict
+  cost-to-completion (bytes right AND holds 0) median 3,512 pre-chain vs
+  10,622 composed — composition ~3× MORE expensive, reliability parity
+  (10/10 both arms). Mechanism: composing costs 2–3k reasoning tokens per
+  turn; serial turns cost ~300–600. Composition's only measured edge:
+  bytes land sooner (turn 1 in 6/10 runs). `frag-partial-programs`
+  evolved — the cost claim is now "measured false on serial-chainable
+  tasks"; the re-opener is a fan-out task (independent calls in one
+  turn), which this task has none of.
 - 2026-09-17: the queued "discharged-handle defect" measured and settled
   koru-side (`a01abb341`). The model's flat `open | ok h |> append | ok h2
   |> close(h2)` parses as SIBLING arms on `open` — and arm selection is
