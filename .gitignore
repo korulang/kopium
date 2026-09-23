@@ -41,3 +41,7 @@ probe_opaque_2.txt
 probe-headed.txt
 # the frag experiment runner
 bench/experiment-logs/
+exp-*.txt
+probe*.txt
+test-note.txt
+notes-edit.transcript.txt
