@@ -133,3 +133,18 @@ What would correct this: `clean` starts preserving continuation arms (making
 handled reads single-turn), or a ruling that bare `ok` should complete by
 convention — either flips the two-turn consequence while the probes stay the
 record of the current semantics.
+
+MEASURED 2026-09-23 — composition survives the growth boundary. The live-define
+`audit-marker-rebind` run (catalog entry same date) asked muse-spark to
+redefine an invented verb so its new body files a marker line then the text —
+a body that must use both params. The model emitted a CHAIN as the body:
+`log = append(handle: h, text: "---") | ok q |> append(handle: q, text: m)`,
+and the whole loop carried it — install, vocabulary listing, re-dispatch,
+possession (the marker lands on disk between the two entries). Defined bodies
+were always mechanically full flows (stored as source, re-parsed per call);
+this is the first live evidence a model composes INSIDE one when the goal
+requires it. The composition this fragment protects is not a turn-level
+surface the define contract truncates — it reaches inside the invention.
+Same run, second measurement: same-kind rebinding generalizes — append→append
+succeeds exactly as speak→speak did, so the surviving kind-guard is
+cross-kind mixing only, not a rule about `say` or about rebinding per se.
