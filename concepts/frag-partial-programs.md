@@ -162,6 +162,16 @@ behavior — the defined-flows table is a live namespace resolved at call
 time, not a snapshot taken at install. That is the semantics any future
 compile-defined-to-native step (R3) must preserve or consciously break.
 
+LANDED LIVE 2026-09-23, same night — the `double-entry-armed` replay
+repaired only the steering (the goal names `| ok q |>` rather than bare
+`|>`) and the full arc ran end-to-end: jot defined, double defined on jot
+via the arm shape, `double` dispatched (two unmarked postings on disk),
+jot redefined to a marker-prefixed body, `double` redispatched UNCHANGED
+(two `---`-marked postings on disk). The model's final turn composed the
+dispatch and the close as two items in one reply, unprompted. Stacking and
+late binding are no longer canned properties — a live model grew a
+two-level vocabulary and the semantics held through a same-name rebinding.
+
 The live break carries its own measurement, in two pieces. First: the model
 chose the bare `|>` chain (`jot(...) |> jot(...)`) — the goal text suggested
 it and the full parser ACCEPTED it at install, while `flow_parser.parseFlow`
