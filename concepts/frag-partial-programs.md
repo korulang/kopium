@@ -148,3 +148,33 @@ surface the define contract truncates — it reaches inside the invention.
 Same run, second measurement: same-kind rebinding generalizes — append→append
 succeeds exactly as speak→speak did, so the surviving kind-guard is
 cross-kind mixing only, not a rule about `say` or about rebinding per se.
+
+MEASURED 2026-09-23, same day — composition composes, and the delta that
+forbids one of its shapes is now pinned at the layer that owns it. The
+`double-entry-late-bind` replay asked for a SECOND defined verb whose body
+calls the first (stacking), then a redefine of the first to test whether the
+untouched second sees it (late binding). Live, the arc broke at dispatch —
+but the canned control (`headless/probe_define_stack.k`, zero-token, two
+`std/bridge:run` calls over `say`) proves both halves mechanically:
+`double = jot(m: mm) | ok q |> jot(m: mm)` installed, dispatched `jot`
+twice, and after jot was redefined the UNCHANGED `double` printed the new
+behavior — the defined-flows table is a live namespace resolved at call
+time, not a snapshot taken at install. That is the semantics any future
+compile-defined-to-native step (R3) must preserve or consciously break.
+
+The live break carries its own measurement, in two pieces. First: the model
+chose the bare `|>` chain (`jot(...) |> jot(...)`) — the goal text suggested
+it and the full parser ACCEPTED it at install, while `flow_parser.parseFlow`
+(the dispatch-time body re-parser) wants `| arm |>` and refused. A body can
+install that can never run — the define-time and dispatch-time grammars
+disagree inside the growth machine itself, a composition-forbidding shape
+this fragment's law names banned, now located at a parser boundary rather
+than a prompt. Second: the refusal's cause (`[REDEFINE-DISPATCH] re-parse
+of 'double' failed: Invalid invocation syntax`) went to stderr only; the
+tool result carried bare `REFUSED: ValidationFailed`. Given no cause, the
+model manufactured one — it cited a `HandleNotHeld` error that exists
+nowhere and invented a norm ("passing the literal is predicting, not
+binding") to refuse a goal it could have met by re-emitting the same call.
+An observability gap at the growth boundary produces confabulated law:
+whatever the dispatch layer knows and the wire does not say, the model will
+explain wrongly and then obey its own explanation.
