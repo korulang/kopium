@@ -50,6 +50,18 @@ loop (edit → check → test → board) already closes a full generational
 cycle over artifacts — the missing seam gates only the agent's own
 inventions riding along.
 
+2026-09-25, a third sharpening: **the generator's self-grounding step is a
+verb, not an operator habit.** Challenge doctrine says a replayable
+generator re-derives "what's missing" from its own catalog each run; here
+`queue()` makes the corpus compute that — tests on disk minus cases suite.k
+declares — so the frontier is a wire value the model reads, not a task an
+operator picks. Selection already lived in `board()`; variation in the
+model; heredity (of world-state) in the filesystem. With `queue()` the
+fourth leg — *what to work on next* — also lives inside the world, and
+the loop `queue → work → board → queue` needs no human between turns.
+The remaining human gates are promotion (commit, catalog) and taste, not
+task-selection.
+
 Open edges: the vocabulary file's provenance fields (defined-by,
 earned-on, use-count); name collisions across generations (redefine
 already rules it — last write wins, which is correct); staleness against

@@ -221,6 +221,64 @@ var content_buf: [65536]u8 = undefined;
 }
 
 // ============================================================================
+// QUEUE — the corpus reports its own frontier
+// ============================================================================
+//
+// Walk every <pkg>/tests dir under LIBS_ROOT; a file is "known" if its
+// corpus-relative path appears anywhere in suite.k's text (case entries
+// carry `"file": "…"`). What remains is the task queue, computed from the
+// world rather than curated in a doc — the flywheel verb: queue() names
+// the next piece of work, board() grades it. Test dirs may nest one level
+// (signal/tests/<case>/input.k).
+
+~pub tor queue {} -> string
+
+~proc queue|zig {
+    const allocator = std.heap.page_allocator;
+    const suite = std.fs.cwd().readFileAlloc(allocator, LIBS_ROOT ++ "/suite.k", 1 << 20) catch return "queue: cannot read suite.k";
+    defer allocator.free(suite);
+    var w: usize = 0;
+    var count: usize = 0;
+    var root = std.fs.cwd().openDir(LIBS_ROOT, .{ .iterate = true }) catch return "queue: cannot open root";
+    defer root.close();
+    var rit = root.iterate();
+    while (rit.next() catch null) |pkg| {
+        if (pkg.kind != .directory) continue;
+        var tpath_buf: [512]u8 = undefined;
+        const tpath = std.fmt.bufPrint(&tpath_buf, "{s}/tests", .{pkg.name}) catch continue;
+        var tdir = root.openDir(tpath, .{ .iterate = true }) catch continue;
+        defer tdir.close();
+        var tit = tdir.iterate();
+        while (tit.next() catch null) |ent| {
+            var rel_buf: [512]u8 = undefined;
+            var rel: []const u8 = "";
+            if (ent.kind == .file) {
+                if (!std.mem.endsWith(u8, ent.name, ".k") and !std.mem.endsWith(u8, ent.name, ".kz")) continue;
+                rel = std.fmt.bufPrint(&rel_buf, "{s}/tests/{s}", .{ pkg.name, ent.name }) catch continue;
+            } else if (ent.kind == .directory) {
+                for ([_][]const u8{ "input.k", "input.kz" }) |leaf| {
+                    var ipath_buf: [512]u8 = undefined;
+                    const ipath = std.fmt.bufPrint(&ipath_buf, "{s}/tests/{s}/{s}", .{ pkg.name, ent.name, leaf }) catch continue;
+                    tdir.access(ipath[pkg.name.len + 7 ..], .{}) catch continue;
+                    rel = std.fmt.bufPrint(&rel_buf, "{s}", .{ipath}) catch continue;
+                    break;
+                }
+                if (rel.len == 0) continue;
+            } else continue;
+            if (std.mem.indexOf(u8, suite, rel) != null) continue;
+            const line = std.fmt.bufPrint($mod.out_buf[w..], "{s}\n", .{rel}) catch break;
+            w += line.len;
+            count += 1;
+        }
+    }
+    const head = std.fmt.bufPrint($mod.tail_buf[0..], "{d} uncased test file(s):\n", .{count}) catch return "queue: fmt";
+    var hlen: usize = head.len;
+    @memcpy($mod.tail_buf[hlen..][0..@min(w, $mod.tail_buf.len - hlen)], $mod.out_buf[0..@min(w, $mod.tail_buf.len - hlen)]);
+    hlen += @min(w, $mod.tail_buf.len - hlen);
+    return $mod.tail_buf[0..hlen];
+}
+
+// ============================================================================
 // SAY — the voice, a tool call like any other
 // ============================================================================
 
@@ -241,5 +299,6 @@ var content_buf: [65536]u8 = undefined;
     check(5)
     test(10)
     board(10)
+    queue(2)
     say(1)
 }

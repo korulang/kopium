@@ -269,25 +269,28 @@ turn = app/wire:warm-grammar(br)
     |> ask(model, max_tokens, temperature, goal)
     |> drive(br, goal)
 
-// The libs workbench session — first replay of the libs-workbench challenge.
+// The libs workbench session — third replay: the compile-fail idiom.
 // The agent's world is the koru-libs corpus; every verb shells the real
 // toolchain or the real filesystem, rooted at LIBS_ROOT. Paths the model
 // passes are corpus-relative ("gzip/index.kz").
 //
-// The task arc: an uncased self-verifying test (gzip/tests/malformed_input.kz
-// panics on failure, prints on success) gets cased into the suite. The model
-// must READ the suite shape and a cased sibling to learn the marker idiom,
-// EDIT the test + suite.k, then verify through check/test/board. The oracle
-// is mechanical: board() reports 14/14 with a new case in history, or it
-// doesn't. No grade by vibes.
+// The task arc: queue() is the world's own frontier — the corpus computes
+// which test files suite.k doesn't case. The target this replay picks is a
+// NEGATIVE case: gzip/tests/deflate_finish_without_push.k must FAIL to
+// compile (KORU030 phantom-state refusal), so casing it takes a different
+// marker family than the two runtime tests already in the catalog. The
+// model has to read a cased negative sibling to learn the compile-fail
+// idiom, discover the real error id from the toolchain's own diagnostic,
+// and pin it — the suite grades the pin, not us.
 tor converse { model: string, max_tokens: u32, temperature: string }
 converse = std/bridge:create(id: "kopium-live-libs", scope: "libs"): br
 |> std/io:print.ln("--- libs session open; the world is the koru-libs corpus")
-|> turn(br, model, max_tokens, temperature, n: 1, goal: "You are working inside the koru-libs repository; paths are relative to its root. The suite in suite.k runs a board of declared cases. gzip/tests/stream_roundtrip.kz exists but is not a case. Read both files and say what it would take for the suite to score it.")
-|> turn(br, model, max_tokens, temperature, n: 2, goal: "Make it so: edit the files so the suite runs and scores stream_roundtrip.kz. A bare call (no arms) returns its value to you; say() output does not come back.")
-|> turn(br, model, max_tokens, temperature, n: 3, goal: "Verify with check(path: \"suite.k\") and test(path: \"gzip/tests/stream_roundtrip.kz\") — bare calls, so the results return to you. If either is red, fix it this turn.")
-|> turn(br, model, max_tokens, temperature, n: 4, goal: "Run board() bare and say the RESULTS line and what history reported.")
-|> turn(br, model, max_tokens, temperature, n: 5, goal: "If the board was not fully green, fix what it reported and run board() again. Otherwise just say the board stayed green.")
+|> turn(br, model, max_tokens, temperature, n: 1, goal: "You are working inside the koru-libs repository; paths are relative to its root. Call queue() — a bare call returns its value to you; say() output does not come back. It lists test files the suite in suite.k doesn't case yet. Find gzip/tests/deflate_finish_without_push.k on it.")
+|> turn(br, model, max_tokens, temperature, n: 2, goal: "Read gzip/tests/deflate_finish_without_push.k and its cased sibling gzip/tests/deflate_use_after_finish.k. Say what makes the sibling's case different from the two runtime cases already cased (look at suite.k) — the target is a NEGATIVE case: it must fail to compile, and the suite checks the failure matches a declaration.")
+|> turn(br, model, max_tokens, temperature, n: 3, goal: "The error declaration must name the real refusal. Run test(path: \"gzip/tests/deflate_finish_without_push.k\") bare — it won't compile, and the failure tail carries the actual diagnostic id and message. Then edit the target file to carry the same marker shape as its cased sibling, and add the case entry to suite.k.")
+|> turn(br, model, max_tokens, temperature, n: 4, goal: "Verify: check(path: \"suite.k\") and test(path: \"gzip/tests/deflate_finish_without_push.k\") — bare calls, results come back to you. A negative case passes when it fails to compile in the way the markers declare. If anything is red, repair it now.")
+|> turn(br, model, max_tokens, temperature, n: 5, goal: "Run board() bare and report the RESULTS line and what history said — bare, so the text returns to you.")
+|> turn(br, model, max_tokens, temperature, n: 6, goal: "If the board was not fully green, repair what it reported and run board() again. Otherwise say the board stayed green and name the case you added.")
 |> std/io:print.ln("--- transcript ends; the board is the verdict")
 
 // Seed the two session Strings.

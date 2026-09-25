@@ -32,7 +32,7 @@ file-verbs = std/bridge:run(br, source: "read(path: \"gzip/index.kz\") | ok t |>
 | scope-not-found s |> std/io:print.ln("no scope: {{ s:s }}")
 
 tor toolchain-verbs { br: *std/bridge:Bridge }
-toolchain-verbs = std/bridge:run(br, source: "check(path: \"gzip/tests/roundtrip.kz\") | ok |> say(text: \"check green\") | error e |> say(text: e)\ntest(path: \"sqlite3/tests/basic.k\") | pass |> say(text: \"test pass\") | fail f |> say(text: f)\nboard()")
+toolchain-verbs = std/bridge:run(br, source: "queue()\ncheck(path: \"gzip/tests/roundtrip.kz\") | ok |> say(text: \"check green\") | error e |> say(text: e)\ntest(path: \"sqlite3/tests/basic.k\") | pass |> say(text: \"test pass\") | fail f |> say(text: f)\nboard()")
 | partial p |> std/io:print.ln("partial {{ p.ran:d }}/{{ p.total:d }}:\n{{ p.report:s }}")
 | result r |> std/io:print.ln("result")
 | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}]")

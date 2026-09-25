@@ -18,10 +18,14 @@ through. Every package greened is a compiler-exercise that persists in the
 repo; every verb the model earns is vocabulary a successor session can
 inherit.*
 
-*The task queue is self-generating: suite.k currently cases ~3 of 24
-packages, and ~41 bare `~proc` sites (curl 13, pq 8, docker 8, ai 5, gzip
-7) still spell the pre-KORU110 form that refuses to compile. Every red row
-and every uncased package is a task the board can grade without a judge.*
+*The task queue is self-generating — and now grammatical: the `queue()`
+verb walks every `<pkg>/tests` dir under the corpus root, diffs what it
+finds against the paths suite.k declares, and returns the uncased list.
+86 entries on first measure (2026-09-25). The corpus computes its own
+frontier; a replay begins by asking the world what it lacks. (The earlier
+"~41 bare `~proc` sites" claim here measured wrong — the actual bare
+declarations were 2, both in `koru/koru.kz`; the rest were already
+`~proc|zig`-annotated. The uncased-test queue is the real queue.)*
 
 ---
 
@@ -43,12 +47,18 @@ register block per the standing rule:
 - `test(path) | pass | fail report` — shells `koruc run <file>`; the
   per-case oracle.
 - `board() -> string` — shells `koruc suite test`; the whole board.
+- `queue() -> string` — the corpus reporting its own frontier: test files
+  on disk that suite.k doesn't case. The generator's self-grounding step,
+  internalized into a verb.
 - `say(text)` — the voice, as always.
 
 A task is real when the suite grades it without a judge:
 
 - **Coverage gap** — an uncased package gets a case (smoke minimum: it
   compiles and exercises the public entry).
+- **Negative case** — a file that must fail to compile gets the
+  compile-fail marker family and a pinned diagnostic; the suite passes it
+  only when it refuses the declared way.
 - **Red repair** — a failing case goes green without the test weakening.
 - **Idiom migration** — bare `~proc` → `~proc ...|zig` under KORU110.
 
@@ -70,6 +80,32 @@ the suite delta shows the named case red→green or a new case green, with
 ZERO unrelated regressions; defined verbs that ran are listed; no secrets;
 no full50. Taste-gate: a real package's board got better — not a toy task
 dressed as one.
+
+## The loop is the generator
+
+This challenge is flywheel-shaped by construction — the same four
+mechanisms the challenge doctrine says make a replayable generator, each
+one a verb or a file rather than an operator habit:
+
+- **`queue()` is the self-grounding step.** The doctrine's contestant
+  reads the catalog and brings something not already there; here the
+  *world* computes "not already there" — uncased test files on disk.
+  Frontier 86 on first measure.
+- **`board()` is the done-gate.** `koruc suite test` cannot be argued
+  with; history reports `new` / `fixed` / `regression(s)` in its own
+  words.
+- **History is lineage.** suite.k's history block is the fitness record —
+  each green delta is a heritable improvement, and the corpus retains it
+  where a successor session reads it (corpus heredity, the cheap channel —
+  already measured: a later replay learned the `text:` marker spelling
+  from a file an earlier replay repaired).
+- **The catalog is replay depth.** Each green run writes a `scenario.md`;
+  re-running a cataloged task is a re-run, not a replay.
+
+So a replay is `queue() → pick a row → work it → board() → catalog it`,
+and the loop never bottoms out while the corpus has gaps the suite
+doesn't see. When the queue empties the generator has *converged* — a
+measurable end-state, not a vibe.
 
 ## The heredity leg (pending — not a gate yet)
 
