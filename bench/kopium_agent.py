@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -273,6 +274,31 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             return inner
         return {}
 
+    # A held-open stream that stops mid-response defeats litellm's request
+    # timeout, and a signal-based interrupt lands INSIDE litellm's retry
+    # loop where it's swallowed as a transient error (both measured
+    # 2026-09-25 on task 1: 30+ min wedged in an SSL read). The watchdog
+    # must live outside the call: run generate in a daemon thread, give up
+    # after 300s, and retry. The abandoned thread leaks its socket but the
+    # task proceeds.
+    def _llm(self, messages):
+        for _ in range(3):
+            pool = ThreadPoolExecutor(max_workers=1)
+            fut = pool.submit(
+                generate,
+                model=self.llm,
+                messages=messages,
+                **self.llm_args,
+            )
+            try:
+                result = fut.result(timeout=300)
+            except FutureTimeout:
+                pool.shutdown(wait=False)
+                continue
+            pool.shutdown(wait=False)
+            return result
+        raise TimeoutError("llm call stalled after 3 attempts")
+
     # ------------------------------------------------------------ the loop
     def generate_next_message(
         self, message: UserMessage, state: KopiumAgentState
@@ -290,11 +316,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
 
         # 1. Ask the model for ONE line of Koru. No tools are offered — the
         #    only "tool schema" the model sees is the register block render.
-        response = generate(
-            model=self.llm,
-            messages=state.system_messages + state.messages,
-            **self.llm_args,
-        )
+        response = self._llm(state.system_messages + state.messages)
         reply = (response.content or "").strip()
 
         # Strip incidental fences the model volunteers.
@@ -324,14 +346,10 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             state.messages.append(
                 UserMessage.text(
                     f"[internal] Your last reply was not accepted: {detail}. "
-                    f"Reply with EXACTLY ONE invocation from the vocabulary."
+                    f"Reply with invocations from your vocabulary — one per line."
                 )
             )
-            response = generate(
-                model=self.llm,
-                messages=state.system_messages + state.messages,
-                **self.llm_args,
-            )
+            response = self._llm(state.system_messages + state.messages)
             reply = (response.content or "").strip()
             if reply.startswith("```"):
                 reply = re.sub(r"```(?:[a-z]*)\n?", "", reply).strip()
