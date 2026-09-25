@@ -161,7 +161,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 extra_rules=self.cfg.extra_rules,
             )
         self.llm = llm
-        self.llm_args = llm_args or {}
+        self.llm_args = {"timeout": 180, **(llm_args or {})}
         self.call_count = 0
         self._session: Optional[GateSession] = None
 
@@ -179,7 +179,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
 
     def _system_prompt(self) -> str:
         grammar = self._grammar()
-        if "A wire line is exactly one invocation" not in grammar:
+        if "A wire turn is one flow" not in grammar:
             raise RuntimeError("bridge grammar missing wire rules (440_017)")
         if "Your vocabulary:" not in grammar:
             raise RuntimeError("bridge grammar missing vocabulary (440_017)")
@@ -353,7 +353,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 tau_name = self.cfg.koru_to_tau.get(event_name, event_name)
                 args = self._args_from_value(value_json)
                 out = AssistantMessage.text(
-                    "", tool_calls=[ToolCall(name=tau_name, arguments=args)]
+                    "", tool_calls=[ToolCall(id=f"koru_{self.call_count}_{event_name}", name=tau_name, arguments=args)]
                 )
         else:
             # Second rejection: the model cannot find the vocabulary. Say so —

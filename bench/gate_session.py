@@ -8,6 +8,7 @@ from pathlib import Path
 
 class GateSession:
     def __init__(self, binary: Path):
+        binary = Path(binary)
         if not binary.exists():
             raise FileNotFoundError(f"gate binary missing: {binary}")
         self.binary = binary
