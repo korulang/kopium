@@ -1,0 +1,6 @@
+name: belief
+kind: inferred
+shape: categorical
+face: in
+membrane: true
+note: a durable belief about the system changed — declared 2026-09-25 when self-grounding moved inside the world as the queue() verb; task-selection became a wire value, leaving only promotion and taste as human gates (frag-generational-vocabulary, evolve)
