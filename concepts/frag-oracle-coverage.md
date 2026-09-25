@@ -29,6 +29,15 @@ predates the wire flip, holes 6–9, and derived field-membership. A stale
 winning number would be vanity; a stale losing number is still information,
 but the refresh is owed.
 
+2026-09-25: the refresh stopped being "owed" and became **the gate**. The
+project's continuation criterion is now stated on the scorecard — fruit is
+reward moving decisively off 10/28 toward 25/28, attributable to the wire
+flip and landed holes, visible in the trajectory census not just the digit.
+A refreshed ~10/28 ends the shared-axis claim honestly and demotes kopium
+to a category claim (capability grammar, growth, enforcement the stock
+shapes can't express) — which does not pay rent on a benchmark it wasn't
+designed for. Measurement and continuation are the same decision here.
+
 **Live layer — weak.** Challenge done-gates are mechanical in the brief but
 checked by a human reading the transcript. The disk verdict is `cat` plus
 judgment. A dead upstream stream is recorded as "the model did not emit

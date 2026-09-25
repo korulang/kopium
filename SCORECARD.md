@@ -6,6 +6,29 @@ runnable), **structural** (argument from the architecture, not run), or
 debt, not a win. Rows append as replays land; a cell that flips from measured
 to structural or back is a real event — say so.*
 
+## The gate — stated 2026-09-25
+
+**Unless a shared-axis measurement shows fruit, this project is not where
+the time goes.** That is the agreed frame, and it is falsifiable by
+construction:
+
+- The refresh that must happen: `bench/run_compare.py` on current main —
+  same tau2 airline tasks, same model, both arms, trajectories + reasoning
+  captured this time.
+- What counts as fruit: koru reward moves decisively off the stale 10/28
+  toward the stock arm's 25/28, *attributable* to the wire flip and the
+  landed holes — i.e., cap-outs and serial-dependence failures shrink in
+  the trajectory census, not just the reward digit.
+- What the other outcome means: a refreshed ~10/28 on current main says
+  composition didn't move the shared axis — then kopium's remaining claim
+  is category-level (capability grammar, growth, enforcement the others
+  can't express), and that claim does not pay rent on a benchmark it
+  wasn't designed for. Continued spend then needs a different
+  justification than "competes with pi/omp" — say so plainly or stop.
+
+The gap is named: **parity-evidence.** Everything below the line is the
+case for; the gate is the case for continuing at all.
+
 The comparison set:
 
 - **function-calling** — OpenAI/Anthropic-style tool calls: JSON schema
