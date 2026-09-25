@@ -283,9 +283,11 @@ turn = app/wire:warm-grammar(br)
 tor converse { model: string, max_tokens: u32, temperature: string }
 converse = std/bridge:create(id: "kopium-live-libs", scope: "libs"): br
 |> std/io:print.ln("--- libs session open; the world is the koru-libs corpus")
-|> turn(br, model, max_tokens, temperature, n: 1, goal: "You are working inside the koru-libs repository. Paths are relative to its root (e.g. read(path: \"suite.k\")). A previous session added a new case to the suite and left the board red. Call board() with NO arms — a bare invocation returns its value to you — and say what failed and why.")
-|> turn(br, model, max_tokens, temperature, n: 2, goal: "Now fix what the board reported. Read the file it names if you need it, compare against a working sibling (gzip/tests/oneshot_roundtrip.kz), and make the repair with edit(). Every defect the board reported, plus the defect the diagnostic names.")
-|> turn(br, model, max_tokens, temperature, n: 3, goal: "Run board() again — bare, no arms. Say the RESULTS line and what history reported.")
+|> turn(br, model, max_tokens, temperature, n: 1, goal: "You are working inside the koru-libs repository; paths are relative to its root. The suite in suite.k runs a board of declared cases. gzip/tests/stream_roundtrip.kz exists but is not a case. Read both files and say what it would take for the suite to score it.")
+|> turn(br, model, max_tokens, temperature, n: 2, goal: "Make it so: edit the files so the suite runs and scores stream_roundtrip.kz. A bare call (no arms) returns its value to you; say() output does not come back.")
+|> turn(br, model, max_tokens, temperature, n: 3, goal: "Verify with check(path: \"suite.k\") and test(path: \"gzip/tests/stream_roundtrip.kz\") — bare calls, so the results return to you. If either is red, fix it this turn.")
+|> turn(br, model, max_tokens, temperature, n: 4, goal: "Run board() bare and say the RESULTS line and what history reported.")
+|> turn(br, model, max_tokens, temperature, n: 5, goal: "If the board was not fully green, fix what it reported and run board() again. Otherwise just say the board stayed green.")
 |> std/io:print.ln("--- transcript ends; the board is the verdict")
 
 // Seed the two session Strings.
