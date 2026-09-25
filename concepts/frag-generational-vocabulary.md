@@ -40,6 +40,16 @@ improving itself through its own consumer. The genotype is an inspectable
 self-improvement where the artifact under selection is a program you can
 hold.
 
+2026-09-23, the libs scope landed (`headless/libs.kz`) and sharpened one
+edge: **heredity has two channels, and the cheaper one was already free.**
+A filesystem domain persists its own work — an edit that survives a
+session needs no vocabulary seam, and the suite re-measures it every
+generation. World-state heredity is the domain's property; only the
+*vocabulary* genome waits on the `DefinedFlows` seam. So the workbench
+loop (edit → check → test → board) already closes a full generational
+cycle over artifacts — the missing seam gates only the agent's own
+inventions riding along.
+
 Open edges: the vocabulary file's provenance fields (defined-by,
 earned-on, use-count); name collisions across generations (redefine
 already rules it — last write wins, which is correct); staleness against

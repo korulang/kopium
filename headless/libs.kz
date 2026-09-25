@@ -1,0 +1,245 @@
+// libs.kz — the agent's ENTIRE vocabulary over the koru-libs corpus.
+//
+// The workbench scope: file verbs (read/edit/write) plus the toolchain
+// verbs (check/test/board) that shell out to koruc — the same
+// std.process.Child.run primitive koru/regressions' own runner uses.
+// Every path resolves under LIBS_ROOT and escapes are refused: the world
+// the agent inhabits IS the library, and the boundary is enforced in the
+// module, not asked of the model.
+//
+// The verbs mirror the oracle's units on purpose — the suite scores
+// per-case files and a board, so the vocabulary speaks files and boards.
+// What the model can do and what the judge measures are the same nouns.
+//
+// No handles, no possession edges: every verb is stateless. The persistence
+// lives in the corpus itself — an edit that survives is heredity the world
+// keeps for free, before the defined-flows seam even exists.
+
+~import std/runtime
+
+const std = @import("std");
+
+const LIBS_ROOT = "/Users/larsde/src/koru-libs";
+const KORUC = "/Users/larsde/src/koru/zig-out/bin/koruc";
+
+var quiet: bool = false;
+
+~pub tor hush {}
+
+~proc hush|zig {
+    $mod.quiet = true;
+}
+
+// ============================================================================
+// PATH RESOLUTION — the world's boundary
+// ============================================================================
+//
+// Every verb takes a corpus-relative path ("signal/tests/x.k"). An absolute
+// path is accepted only if it already sits under LIBS_ROOT; ".." is refused
+// outright. The returned slice lives in path_buf — module-owned, next call
+// overwrites, same pattern as notes' handle_buf.
+
+var path_buf: [4096]u8 = undefined;
+
+fn rootPath(path: []const u8, buf: []u8) ?[]const u8 {
+    if (std.mem.indexOf(u8, path, "..") != null) return null;
+    if (path.len == 0) return null;
+    if (std.fs.path.isAbsolute(path)) {
+        if (!std.mem.startsWith(u8, path, LIBS_ROOT)) return null;
+        return path;
+    }
+    return std.fmt.bufPrint(buf, "{s}/{s}", .{ LIBS_ROOT, path }) catch null;
+}
+
+// ============================================================================
+// SUBPROCESS — the toolchain verbs' shared engine
+// ============================================================================
+//
+// Child.run collects stdout+stderr; we hand back the TAIL (errors live at
+// the end of a koruc stream). Module buffer, page_allocator freed on the way
+// out — the produced program's leak counter watches, so every allocPrint and
+// Child alloc is freed before return. `board`'s board tail fits in out_buf;
+// past that we keep the end.
+
+var out_buf: [32768]u8 = undefined;
+
+fn runKoruc(argv: []const []const u8, out: []u8) []const u8 {
+    const res = std.process.Child.run(.{
+        .allocator = std.heap.page_allocator,
+        .argv = argv,
+        .cwd = LIBS_ROOT,
+    }) catch return "spawn failed";
+    defer std.heap.page_allocator.free(res.stdout);
+    defer std.heap.page_allocator.free(res.stderr);
+    const code: u8 = switch (res.term) {
+        .Exited => |c| c,
+        else => 255,
+    };
+    var w: usize = 0;
+    const head = std.fmt.bufPrint(out[w..], "exit {d}\n", .{code}) catch return "fmt";
+    w += head.len;
+    for ([_][]const u8{ res.stdout, res.stderr }) |s| {
+        const room = out.len - w;
+        const take = @min(room, s.len);
+        @memcpy(out[w..][0..take], s[s.len - take ..]);
+        w += take;
+    }
+    return out[0..w];
+}
+
+fn reportTail(text: []const u8, buf: []u8) []const u8 {
+    const take = @min(buf.len, text.len);
+    @memcpy(buf[0..take], text[text.len - take ..]);
+    return buf[0..take];
+}
+
+var tail_buf: [16384]u8 = undefined;
+
+// ============================================================================
+// READ / EDIT / WRITE — the file verbs (notes shapes, corpus-rooted)
+// ============================================================================
+
+var content_buf: [65536]u8 = undefined;
+
+~pub tor read { path: string }
+| ok string
+| missing string
+| too-large string
+| denied string
+
+~proc read|zig {
+    const full = rootPath(path, $mod.path_buf[0..]) orelse return .{ .denied = path };
+    const f = std.fs.cwd().openFile(full, .{}) catch return .{ .missing = path };
+    defer f.close();
+    var len: usize = 0;
+    while (true) {
+        const n = f.read($mod.content_buf[len..]) catch return .{ .missing = path };
+        if (n == 0) break;
+        len += n;
+        if (len == $mod.content_buf.len) return .{ .too_large = path };
+    }
+    return .{ .ok = $mod.content_buf[0..len] };
+}
+
+~pub tor edit { path: string, old_text: string, new_text: string }
+| ok string
+| missing string
+| mismatch string
+| ambiguous string
+| too-large string
+| denied string
+
+~proc edit|zig {
+    const full = rootPath(path, $mod.path_buf[0..]) orelse return .{ .denied = path };
+    if (old_text.len == 0) return .{ .mismatch = path };
+    const f = std.fs.cwd().openFile(full, .{}) catch return .{ .missing = path };
+    var buf: [65536]u8 = undefined;
+    var len: usize = 0;
+    while (true) {
+        const n = f.read(buf[len..]) catch @panic("libs: edit read failed");
+        if (n == 0) break;
+        len += n;
+        if (len == buf.len) {
+            f.close();
+            return .{ .too_large = path };
+        }
+    }
+    f.close();
+    const content = buf[0..len];
+    var count: usize = 0;
+    var from: usize = 0;
+    while (std.mem.indexOf(u8, content[from..], old_text)) |rel| {
+        count += 1;
+        if (count > 1) break;
+        from += rel + old_text.len;
+    }
+    if (count == 0) return .{ .mismatch = path };
+    if (count > 1) return .{ .ambiguous = path };
+    const at = std.mem.indexOf(u8, content, old_text) orelse @panic("libs: edit splice failed");
+    const out = std.fs.cwd().createFile(full, .{}) catch @panic("libs: edit write failed");
+    defer out.close();
+    out.writeAll(content[0..at]) catch @panic("libs: write failed");
+    out.writeAll(new_text) catch @panic("libs: write failed");
+    out.writeAll(content[at + old_text.len ..]) catch @panic("libs: write failed");
+    return .{ .ok = path };
+}
+
+~pub tor write { path: string, text: string }
+| ok string
+| denied string
+
+~proc write|zig {
+    const full = rootPath(path, $mod.path_buf[0..]) orelse return .{ .denied = path };
+    const f = std.fs.cwd().createFile(full, .{}) catch @panic("libs: write failed");
+    defer f.close();
+    f.writeAll(text) catch @panic("libs: write failed");
+    return .{ .ok = path };
+}
+
+// ============================================================================
+// CHECK / TEST / BOARD — the toolchain verbs
+// ============================================================================
+//
+// check = the fast gate (koruc --check, frontend only). test = the per-case
+// oracle (koruc run — compile + execute, the exit code is the verdict).
+// board = the whole suite (koruc suite test); the tail carries the board.
+// All three return the tail of the child stream — the diagnostic lives at
+// the end.
+
+~pub tor check { path: string }
+| ok
+| error string
+| denied string
+
+~proc check|zig {
+    const full = rootPath(path, $mod.path_buf[0..]) orelse return .{ .denied = path };
+    const argv = [_][]const u8{ KORUC, "--check", full };
+    const out = runKoruc(&argv, $mod.out_buf[0..]);
+    if (std.mem.startsWith(u8, out, "exit 0")) return .ok;
+    return .{ .error = reportTail(out, $mod.tail_buf[0..]) };
+}
+
+~pub tor test { path: string }
+| pass
+| fail string
+| denied string
+
+~proc test|zig {
+    const full = rootPath(path, $mod.path_buf[0..]) orelse return .{ .denied = path };
+    const argv = [_][]const u8{ KORUC, "run", full };
+    const out = runKoruc(&argv, $mod.out_buf[0..]);
+    if (std.mem.startsWith(u8, out, "exit 0")) return .pass;
+    return .{ .fail = reportTail(out, $mod.tail_buf[0..]) };
+}
+
+~pub tor board {} -> string
+
+~proc board|zig {
+    const argv = [_][]const u8{ KORUC, "suite", "test" };
+    const out = runKoruc(&argv, $mod.out_buf[0..]);
+    return reportTail(out, $mod.tail_buf[0..]);
+}
+
+// ============================================================================
+// SAY — the voice, a tool call like any other
+// ============================================================================
+
+~pub tor say { text: string }
+
+~proc say|zig {
+    if (!$mod.quiet) std.debug.print("      {s}\n", .{text});
+}
+
+// ============================================================================
+// THE PERMISSION MODEL
+// ============================================================================
+
+~std/runtime:register(scope: "libs") {
+    read(1)
+    edit(2)
+    write(2)
+    check(5)
+    test(10)
+    board(10)
+    say(1)
+}
