@@ -28,18 +28,32 @@ The comparison set:
 | Typed refusals that teach | **measured** — `unhandled-branch` hand-back explained back by the model the next turn (2026-09-08 witness); per-step `?partial` reports; parse-error vs event-denied vs validation-error vs exhausted | structural — an error string in the tool result; typing is convention | structural — same | structural — a traceback; typed only by accident |
 | Parametricity — one declaration → working agent for N domains | **measured** — three vocabularies from register blocks alone: notes, ledger, calc; derived prompt + wall + growth carried free (`probe_calc.k` green across ten turns) | structural — each tool set is a bespoke schema + host code | structural — each server is bespoke | structural — no declaration exists |
 | Composition economics | **measured** — serial chains ~3× cost tax; independent fan-out ~2.6× cheaper, ~5× faster to first bytes (n=10–15/arm, `bench/experiment.py` rounds 3–4) | unmeasured | unmeasured | unmeasured |
-| Cost / reliability vs a foreign baseline | **unmeasured** — every number above is arm-vs-arm inside kopium | unmeasured | unmeasured | unmeasured |
+| Cost / reliability vs a foreign baseline | **measured, stale, and losing** — tau2 airline head-to-head vs stock LLMAgent, same model/tasks, Aug 15–16 (`bench/results/compare_full50_taught.csv`): reward **10/28 koru vs 25/28 stock**; koru spent 5.8× fewer tokens and 3.5× less cost, ran 2.3× slower wall. A month stale — predates the wire flip, holes 6–9, derived field-membership — and on a foreign vocabulary (airline tools). The oracle exists (`bench/run_compare.py`); the number wants a refresh | — (it was the stock arm) | n/a | n/a |
 | Grammar coherence — one language end to end | **measured, negatively** — install accepts bare `|>` bodies that dispatch refuses (`2026-09-23-double-entry-late-bind`); the claim is a work in progress, honestly | n/a | n/a | n/a |
 
-## What a baseline harness would measure
+## What the baseline already measures — and what it still can't see
 
-The one row that turns this from argument into comparison: a thin
-function-calling loop over the same model (`meta/muse-spark-1.3-contributor`,
-temp 0) with the same six verbs as JSON tools, run against the same task
-battery — serial open→append→close, the three-note fan-out, and the
-define-a-verb arc (where the honest measured result for the baseline is
-`cannot express`). Cost-to-completion, bytes-right reliability, turns-to-done.
-~150 lines of Python on `bench/`, reusing the experiment.py harness shape.
+The foreign baseline EXISTS: `bench/run_compare.py` runs kopium's gate and
+the stock `LLMAgent` (JSON-schema tools) on the same tau2 airline tasks,
+same model, graded by the benchmark's own reward + db-check oracle. It is
+the strongest kind of oracle this repo holds — an oracle that can see us
+lose, and did (10/28 vs 25/28). Two honest caveats: it is a month stale,
+and it measures the *wire agent* against airline tools, not the growth
+machine against a declared world — the arc where kopium's difference is
+the point has no foreign baseline and can't have one (the baseline can't
+express the task).
+
+The live-run layer is where the oracle gap actually lives: challenge
+done-gates are mechanical in spec but eyeballed in practice; the disk
+verdict is `cat` + judgment; a dead upstream stream lands in the
+transcript as "the model did not emit Koru" — a mislabeled failure no
+gate can distinguish from real silence; and nothing checks whether what
+the model *says* is true (the `HandleNotHeld` confabulation was caught
+by a human reading, not a checker). A `live-check.py` that eats a
+transcript and emits the verdict — finish per turn, DEFINED/dispatch/
+redefine lines, secrets absent, resource balance zero, model-cited
+refusal names checked against the taxonomy — converts all of that from
+reading into an exit code.
 
 ## Publishing
 
