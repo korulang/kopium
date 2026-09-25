@@ -28,9 +28,11 @@ class GateSession:
         if not self.alive:
             return "ERROR", "gate process died"
         assert self.proc.stdin is not None and self.proc.stdout is not None
-        payload = source.replace("\r\n", "\n")
-        if not payload.endswith("\n"):
-            payload += "\n"
+        # A wire turn is the whole reply, one item per line, terminated by
+        # a blank line — the gate reads until that terminator and `run`
+        # segments the turn. Without it a multi-line reply desyncs the
+        # protocol: each line answered by a later send().
+        payload = source.replace("\r\n", "\n").rstrip("\n") + "\n\n"
         try:
             self.proc.stdin.write(payload.encode())
             self.proc.stdin.flush()
@@ -40,6 +42,16 @@ class GateSession:
         if not raw:
             return "ERROR", "gate produced no output"
         stdout = raw.decode(errors="replace").strip()
+        if stdout == "STEPS-BEGIN":
+            lines: list[str] = []
+            while True:
+                raw = self.proc.stdout.readline()
+                if not raw:
+                    return "ERROR", "gate produced no STEPS-END"
+                line = raw.decode(errors="replace").rstrip("\n").rstrip("\r")
+                if line == "STEPS-END":
+                    return "STEPS", "\n".join(lines)
+                lines.append(line)
         status, _, detail = stdout.partition(" ")
         return status, detail.strip()
 

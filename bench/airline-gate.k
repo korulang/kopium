@@ -18,7 +18,8 @@ proc event-name|zig {
 tor handle { br: *std/bridge:Bridge, source: string }
 handle = std/bridge:run(br, source)
 | result r |> std/interpreter:value.stringify(r.value): j |> event-name(source): n |> std/io:print.ln("OK {{ n:s }} {{ j:s }}")
-| unhandled-branch _ |> std/io:print.ln("  UNHANDLED (discard)")
+| unhandled-branch ub |> event-name(source): n |> std/io:print.ln("OK {{ n:s }} {{ ub.payload:s }}")
+| partial p |> app/gate_intake:emit-framed(tag: "STEPS", text: p.report)
 | event-denied ev |> std/io:print.ln("REJECT {{ ev:s }}")
 | parse-error p |> std/io:print.ln("REJECT {{ p.message:s }}")
 | validation-error v |> std/io:print.ln("ERROR {{ v:s }}")

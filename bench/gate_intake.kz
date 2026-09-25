@@ -1,5 +1,9 @@
-// A definition is two statements in one run() source (session.k).
-// readln's buffer dies on the next read, so we copy before the body line.
+// A wire turn is one flow (frag-partial-programs): the caller writes the
+// whole reply — possibly several items, one per line — terminated by a
+// blank line, and `run` segments it into items. `intake` therefore reads
+// until a blank line for any non-command first line; a `.`-command is
+// single-line by construction and returns immediately. readln's buffer
+// dies on the next read, so we copy before the continuation lines.
 
 const std = @import("std");
 
@@ -12,28 +16,30 @@ var intake_buf: [8192]u8 = undefined;
 
 ~proc intake|zig {
     const t = std.mem.trim(u8, first, " \t\r");
-    if (!std.mem.startsWith(u8, t, "tor ")) {
+    if (t.len == 0 or t[0] == '.') {
         return .{ .ready = first };
     }
     if (first.len + 1 >= $mod.intake_buf.len) {
-        return .{ .failed = "definition too long" };
+        return .{ .failed = "turn too long" };
     }
     @memcpy($mod.intake_buf[0..first.len], first);
     var i: usize = first.len;
     $mod.intake_buf[i] = '\n';
     i += 1;
     const stdin = std.fs.File.stdin();
-    const start = i;
+    var line_start = i;
     while (i < $mod.intake_buf.len) {
         var b: [1]u8 = undefined;
         const n = stdin.read(b[0..]) catch return .{ .failed = "Failed to read stdin" };
-        if (n == 0) {
-            if (i == start) return .{ .incomplete = .{} };
-            break;
-        }
+        if (n == 0) break;
         if (b[0] == '\n') {
-            if (i > start and $mod.intake_buf[i - 1] == '\r') i -= 1;
-            break;
+            var end = i;
+            if (end > line_start and $mod.intake_buf[end - 1] == '\r') end -= 1;
+            if (end == line_start) break;
+            $mod.intake_buf[i] = '\n';
+            i += 1;
+            line_start = i;
+            continue;
         }
         $mod.intake_buf[i] = b[0];
         i += 1;

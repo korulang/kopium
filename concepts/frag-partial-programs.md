@@ -188,3 +188,14 @@ binding") to refuse a goal it could have met by re-emitting the same call.
 An observability gap at the growth boundary produces confabulated law:
 whatever the dispatch layer knows and the wire does not say, the model will
 explain wrongly and then obey its own explanation.
+
+2026-09-26 — the contract reached the bench transport, and it was already
+broken there. `gate_intake` fed `run()` one line at a time while the
+post-flip grammar teaches multi-line turns; a multi-line reply desynced
+the line-protocol permanently (each line answered by a later `send()`),
+and `partial` could never fire. The fix is the ruling applied to the
+transport: the turn is the unit — intake reads until a blank-line
+terminator, `run` segments, `partial` serializes as framed STEPS, and the
+agent maps step ordinals back to verb names to emit parallel tool calls
+in one message. Measured live: multi-item turns return per-step reports
+with no desync, defines and mixed success/refusal both report cleanly.

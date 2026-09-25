@@ -299,6 +299,86 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             return result
         raise TimeoutError("llm call stalled after 3 attempts")
 
+    # Conditioning junk the model leaks before the wire: reasoning tags and
+    # markdown fences. Both are reply decoration, not invocation — strip
+    # them so the gate judges the wire, not the wrapper. Prose stays
+    # unparsed and still refuses: the gate is the judge, this is hygiene.
+    @staticmethod
+    def _clean_reply(text: str) -> str:
+        reply = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        reply = re.sub(r"<[^>]*>", "", reply)
+        reply = reply.strip()
+        if reply.startswith("```"):
+            reply = re.sub(r"```(?:[a-z]*)\n?", "", reply).strip()
+            reply = reply.split("```")[0].strip()
+        # Blank lines are the turn terminator on the wire, not content —
+        # a blank inside the reply would cut the flow early.
+        return "\n".join(l for l in reply.splitlines() if l.strip())
+
+    # Mirror of segmentTurn's boundary rules: an item opens at a non-blank
+    # line that is not a `|` arm and not a `tor` define's impl head. Each
+    # item contributes one entry — its verb name, or None for defines and
+    # unparseable lines — so report ordinals index this list directly.
+    @staticmethod
+    def _item_names(reply: str) -> list[Optional[str]]:
+        names: list[Optional[str]] = []
+        define_name: Optional[str] = None
+        for raw in reply.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            if define_name is not None:
+                if line.startswith("|") or re.match(
+                    re.escape(define_name) + r"[\s=]", line
+                ):
+                    continue
+                define_name = None
+            if line.startswith("tor "):
+                m = re.match(r"tor\s+([A-Za-z_][\w-]*)", line)
+                define_name = m.group(1) if m else ""
+                names.append(None)
+                continue
+            if line.startswith("|"):
+                continue
+            m = re.match(r"([A-Za-z_][A-Za-z0-9_-]*)\s*\(", line)
+            names.append(m.group(1) if m else None)
+        return names
+
+    # A multi-item turn returns STEPS-BEGIN/<report>/STEPS-END — one line per
+    # item: `step n/m result: {json}` or `step n/m <error-kind>: <msg>`.
+    # Step ordinals index the turn's items, which _item_names pairs back to
+    # verb names. Every ran step that produced a value becomes a ToolCall —
+    # parallel calls in one message, the same shape stock agents emit
+    # (tau2's executor runs them all).
+    def _from_steps(self, reply: str, report: str) -> AssistantMessage:
+        names = self._item_names(reply)
+        calls: list[ToolCall] = []
+        spoken: list[str] = []
+        for line in report.splitlines():
+            m = re.match(r"step (\d+)/(\d+) result: (.*)", line)
+            if not m:
+                continue
+            n = int(m.group(1))
+            name = names[n - 1] if n - 1 < len(names) else None
+            if not name:
+                continue
+            args = self._args_from_value(m.group(3))
+            if name in _SPOKEN:
+                spoken.append(str(args.get("text", "")))
+            else:
+                tau_name = self.cfg.koru_to_tau.get(name, name)
+                calls.append(
+                    ToolCall(id=f"koru_{self.call_count}_{n}", name=tau_name, arguments=args)
+                )
+        if calls:
+            return AssistantMessage.text("", tool_calls=calls)
+        if spoken:
+            return AssistantMessage.text(" ".join(spoken))
+        return AssistantMessage.text(
+            "I'm sorry, I'm having trouble processing that right now. "
+            "Could you tell me again what you need?"
+        )
+
     # ------------------------------------------------------------ the loop
     def generate_next_message(
         self, message: UserMessage, state: KopiumAgentState
@@ -314,52 +394,37 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         else:
             state.messages.append(message)
 
-        # 1. Ask the model for ONE line of Koru. No tools are offered — the
-        #    only "tool schema" the model sees is the register block render.
-        response = self._llm(state.system_messages + state.messages)
-        reply = (response.content or "").strip()
-
-        # Strip incidental fences the model volunteers.
-        if reply.startswith("```"):
-            reply = re.sub(r"```(?:[a-z]*)\n?", "", reply).strip()
-            reply = reply.split("```")[0].strip()
-        # NO empty-reply fallback: an empty model reply is a real signal
-        # (the model produced no invocation). Feed it to the gate, which
-        # rejects it, and let the one-retry teaching path below recover it —
-        # manufacturing an in-vocabulary "I need a moment." stall instead
-        # would hide failure as progress and burn the turn.
-
-        # 2. The Koru gate decides. A REJECT means the line was not Koru or not
-        #    in the vocabulary — the interpreter refusing exactly as designed.
-        #    But a drift is not a customer-facing event: it is an internal
-        #    mistake the model should get ONE chance to fix before we burn the
-        #    turn on a spoken refusal. Retry once with the rejection as the
-        #    instruction, because in-vocabulary drift is the one failure mode
-        #    the register block can only detect, not prevent.
-        status, detail = self._gate(reply)
-        if status == "DEFINED":
-            self._refresh_vocab(state)
-            out = AssistantMessage.text(f"defined {detail}")
-            state.messages.append(out)
-            return out, state
-        if status != "OK":
-            state.messages.append(
-                UserMessage.text(
-                    f"[internal] Your last reply was not accepted: {detail}. "
-                    f"Reply with invocations from your vocabulary — one per line."
-                )
-            )
+        # 1. Ask the model for wire Koru. No tools are offered — the only
+        #    "tool schema" the model sees is the register block render.
+        #    Measured 2026-09-25 (smoke, tasks 1/2): the dominant failure is
+        #    the model drifting off-wire — <think> tags, prose — and each
+        #    refusal burned a whole turn AND leaked gate jargon to the user.
+        #    So: strip conditioning junk before the gate, and let the
+        #    rejection teach inside the turn up to 3 times rather than once.
+        status = detail = ""
+        for attempt in range(3):
             response = self._llm(state.system_messages + state.messages)
-            reply = (response.content or "").strip()
-            if reply.startswith("```"):
-                reply = re.sub(r"```(?:[a-z]*)\n?", "", reply).strip()
-                reply = reply.split("```")[0].strip()
+            reply = self._clean_reply(response.content or "")
             status, detail = self._gate(reply)
             if status == "DEFINED":
                 self._refresh_vocab(state)
                 out = AssistantMessage.text(f"defined {detail}")
                 state.messages.append(out)
                 return out, state
+            if status == "OK":
+                break
+            if status == "STEPS":
+                if "defined:" in detail:
+                    self._refresh_vocab(state)
+                out = self._from_steps(reply, detail)
+                state.messages.append(out)
+                return out, state
+            state.messages.append(
+                UserMessage.text(
+                    f"[internal] Your last reply was not accepted: {detail}. "
+                    f"Reply with invocations from your vocabulary — one per line."
+                )
+            )
 
         if status == "OK":
             event_name, _, value_json = detail.partition(" ")
@@ -374,10 +439,13 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                     "", tool_calls=[ToolCall(id=f"koru_{self.call_count}_{event_name}", name=tau_name, arguments=args)]
                 )
         else:
-            # Second rejection: the model cannot find the vocabulary. Say so —
-            # tau3 scores refusals as correct when the policy demands one, and
-            # a breakdown that says nothing is worse than an honest one.
-            out = AssistantMessage.text(f"I cannot do that: {detail}")
+            # Three rejections in a turn: the model cannot find the wire.
+            # Refuse plainly — gate internals ("not an invocation: ...") are
+            # a wire-side concern, not something the user should ever see.
+            out = AssistantMessage.text(
+                "I'm sorry, I'm having trouble processing that right now. "
+                "Could you tell me again what you need?"
+            )
 
         state.messages.append(out)
         return out, state
