@@ -107,6 +107,17 @@ and the loop never bottoms out while the corpus has gaps the suite
 doesn't see. When the queue empties the generator has *converged* — a
 measurable end-state, not a vibe.
 
+## Open edge: the oracle must be pinned, not ambient
+
+Measured 2026-09-25: a concurrent session's mid-flight `src/` edit made
+every emitted backend fail (`'mods' shadows`), so `test`/`board` results
+during that window graded a half-built compiler — and the pre-push hook
+inherited the same contamination. The board "cannot be argued with" only
+when the toolchain underneath it is stable. **Compiler minting** — a
+`koruc` built from a pinned commit, used for the duration of a replay —
+is the missing piece, and it is its own session's work, not a detail in
+this challenge's brief.
+
 ## The heredity leg (pending — not a gate yet)
 
 DefinedFlows is session-scoped by construction: `bridge.kz` allocates the
