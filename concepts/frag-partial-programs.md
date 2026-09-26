@@ -208,3 +208,12 @@ plan stranded in `reasoning_content`. Remembering the wire source instead
 collapsed it to 2/13 with zero desyncs. Corollary worth keeping: an agent
 whose memory is a different language than its utterance will eventually
 speak the wrong one to itself.
+
+2026-09-26, second entry — the prompt was the ban this time. The bench
+system prompt still taught "emits EXACTLY ONE invocation" while the
+grammar had already made multi-line turns legal; the model serially
+probed five reservations at ~2min each and capped at 20 without acting,
+while the stock arm batched all five lookups in one tool-call message
+and finished. Teaching the batch flipped the same task to 1.0 in 8
+calls at 66s. Composition being legal on the wire is not enough — if the
+prompt forbids it, the capability might as well not exist.

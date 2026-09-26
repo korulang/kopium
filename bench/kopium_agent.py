@@ -44,6 +44,7 @@ from tau2.data_model.message import (
     UserMessage,
     ToolCall,
     ToolMessage,
+    MultiToolMessage,
 )
 from tau2.environment.toolkit import Tool
 from tau2.utils.llm_utils import generate
@@ -203,19 +204,23 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         )
         return (
             f"You are a customer service agent speaking the Koru wire language. "
-            f"This is a STATE LOOP: each of your turns emits EXACTLY ONE Koru "
-            f"invocation, the system runs it, and the outcome comes back as "
-            f"`[tool result] ...`. Read the last result, decide the next single "
-            f"verb, and repeat until the task is done.\n\n"
+            f"This is a STATE LOOP: each of your turns emits wire — one Koru "
+            f"invocation per line — and the outcome comes back as "
+            f"`[tool result] ...`. INDEPENDENT reads belong in ONE turn: "
+            f"checking five reservations is five lines in one reply, not five "
+            f"turns. Dependent steps stay serial — never emit a call that needs "
+            f"another call's result in the same turn. Read, decide, act, or "
+            f"refuse via say(text: ...).\n\n"
             f"## Koru (derived from this session's Bridge — 440_017)\n"
             f"{grammar}\n\n"
-            f"## Happy path — chain reads first, then act\n"
-            f"Multi-step tasks are done as a sequence of single-verb turns, "
-            f"using each `[tool result]` to pick the next verb. Example "
-            f"(cancellation):\n"
-            f"  user: I need to cancel my reservation.\n"
-            f"  you:   get-user-details(user_id: \"...\")\n"
-            f"  you:   get-reservation-details(reservation_id: \"...\")\n"
+            f"## Happy path — batch the reads, then act\n"
+            f"When several lookups are independent (e.g. inspecting each "
+            f"reservation a user holds), put them ALL in one reply:\n"
+            f"  you:   get-reservation-details(reservation_id: \"R1\")\n"
+            f"         get-reservation-details(reservation_id: \"R2\")\n"
+            f"         get-reservation-details(reservation_id: \"R3\")\n"
+            f"All three results come back together. Then, when you hold what "
+            f"you need, act:\n"
             f"  you:   cancel-reservation(reservation_id: \"...\")\n"
             f"Do NOT jump straight to a write. Read the state you need, let the "
             f"policy decide, then act — or refuse via say(text: ...).\n\n"
@@ -413,7 +418,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         if calls:
             return AssistantMessage.text("", tool_calls=calls)
         if spoken:
-            return AssistantMessage.text(" ".join(spoken))
+            return AssistantMessage.text(" ".join(s for s in spoken if s))
         return AssistantMessage.text(
             "I'm sorry, I'm having trouble processing that right now. "
             "Could you tell me again what you need?"
@@ -430,6 +435,10 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         # [tool result] convention does.
         if isinstance(message, ToolMessage):
             shown = f"[tool result] {message.content}"
+            state.messages.append(UserMessage.text(shown))
+        elif isinstance(message, MultiToolMessage):
+            # A multi-item turn's results arrive together, one per step.
+            shown = "".join(f"[tool result] {tm.content}\n" for tm in message.tool_messages)
             state.messages.append(UserMessage.text(shown))
         else:
             state.messages.append(message)
@@ -499,6 +508,14 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             # Three rejections in a turn: the model cannot find the wire.
             # Refuse plainly — gate internals ("not an invocation: ...") are
             # a wire-side concern, not something the user should ever see.
+            out = AssistantMessage.text(
+                "I'm sorry, I'm having trouble processing that right now. "
+                "Could you tell me again what you need?"
+            )
+
+        # tau2 requires content or tool_calls — an empty say() or an empty
+        # spoken join would build an invalid message.
+        if not out.content and not out.tool_calls:
             out = AssistantMessage.text(
                 "I'm sorry, I'm having trouble processing that right now. "
                 "Could you tell me again what you need?"
