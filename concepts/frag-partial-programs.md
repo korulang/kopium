@@ -199,3 +199,12 @@ terminator, `run` segments, `partial` serializes as framed STEPS, and the
 agent maps step ordinals back to verb names to emit parallel tool calls
 in one message. Measured live: multi-item turns return per-step reports
 with no desync, defines and mixed success/refusal both report cleanly.
+
+2026-09-26 — the wire is the agent's channel end to end, including its own
+history. The bench translated wire replies into `AssistantMessage(tool_calls)`
+with empty content and fed THAT back as the model's memory; v4-flash
+read the shape and mimicked it — ~12 content=null replies per task, the
+plan stranded in `reasoning_content`. Remembering the wire source instead
+collapsed it to 2/13 with zero desyncs. Corollary worth keeping: an agent
+whose memory is a different language than its utterance will eventually
+speak the wrong one to itself.

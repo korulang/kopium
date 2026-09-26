@@ -28,7 +28,9 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import re
+import sys
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -162,8 +164,18 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 extra_rules=self.cfg.extra_rules,
             )
         self.llm = llm
-        self.llm_args = {"timeout": 180, **(llm_args or {})}
+        # reasoning_effort=none: v4-flash intermittently returns content=null
+        # with output burned on reasoning_content mid-conversation (measured
+        # 2026-09-26: ~15/22 replies empty at effort=low; 0/8 at none under
+        # matched long-context conditions). Disabling the reasoning channel
+        # forces the answer into content where the wire can read it.
+        self.llm_args = {
+            "timeout": 180,
+            "reasoning_effort": "none",
+            **(llm_args or {}),
+        }
         self.call_count = 0
+        self.salvage_count = 0
         self._session: Optional[GateSession] = None
 
     # ------------------------------------------------------- the vocabulary
@@ -245,7 +257,11 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
     # -------------------------------------------------------------- the gate
     def _gate(self, source: str) -> tuple[str, str]:
         """Run one Koru line through the long-lived gate. Same Bridge."""
-        return self._ensure_session().send(source)
+        status, detail = self._ensure_session().send(source)
+        if os.environ.get("KOPIUM_GATE_DEBUG"):
+            src = " ".join(source.split())[:160]
+            print(f"[gate] {status} | {detail[:200]} <- {src}", file=sys.stderr)
+        return status, detail
 
     def close_gate(self) -> None:
         if self._session is not None:
@@ -314,6 +330,30 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         # Blank lines are the turn terminator on the wire, not content —
         # a blank inside the reply would cut the flow early.
         return "\n".join(l for l in reply.splitlines() if l.strip())
+
+    # Reasoning-channel salvage. reasoning_content lives on the raw provider
+    # message; a line counts as wire only if it is invocation / `tor` head /
+    # `|` arm / impl head — anything else means the channel held deliberation,
+    # and deliberation never reaches the gate.
+    @staticmethod
+    def _reasoning_of(response) -> str:
+        try:
+            return (response.raw_data or {}).get("choices", [{}])[0] \
+                .get("message", {}).get("reasoning_content") or ""
+        except (AttributeError, TypeError):
+            return ""
+
+    @staticmethod
+    def _is_wire_line(line: str) -> bool:
+        line = line.strip()
+        if not line:
+            return False
+        if line.startswith("tor ") or line.startswith("|"):
+            return True
+        if re.match(r"[A-Za-z_][\w-]*\s*\(", line):
+            return True
+        # impl head of a define: `name = body`
+        return bool(re.match(r"[A-Za-z_][\w-]*\s*=", line))
 
     # Mirror of segmentTurn's boundary rules: an item opens at a non-blank
     # line that is not a `|` arm and not a `tor` define's impl head. Each
@@ -405,11 +445,28 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         for attempt in range(3):
             response = self._llm(state.system_messages + state.messages)
             reply = self._clean_reply(response.content or "")
-            status, detail = self._gate(reply)
+            if not reply:
+                # v4-flash quirk, measured 2026-09-26: under long context the
+                # answer sometimes lands in reasoning_content with content
+                # null (shot 3/6 repro: reasoning WAS the wire line). Salvage
+                # only when the reasoning IS a clean wire turn — every line
+                # invocation/arm/define — else deliberation would dispatch.
+                rc = self._clean_reply(self._reasoning_of(response))
+                if rc and all(self._is_wire_line(l) for l in rc.splitlines()):
+                    reply = rc
+                    self.salvage_count += 1
+            if not reply:
+                # Nothing on the wire — don't spend a gate round-trip.
+                status, detail = "REJECT", "the reply was empty"
+                if os.environ.get("KOPIUM_GATE_DEBUG"):
+                    raw = (response.content or "")[:200].replace("\n", " ")
+                    print(f"[gate] EMPTY raw={raw!r}", file=sys.stderr)
+            else:
+                status, detail = self._gate(reply)
             if status == "DEFINED":
                 self._refresh_vocab(state)
                 out = AssistantMessage.text(f"defined {detail}")
-                state.messages.append(out)
+                state.messages.append(AssistantMessage.text(reply))
                 return out, state
             if status == "OK":
                 break
@@ -417,7 +474,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 if "defined:" in detail:
                     self._refresh_vocab(state)
                 out = self._from_steps(reply, detail)
-                state.messages.append(out)
+                state.messages.append(AssistantMessage.text(reply))
                 return out, state
             state.messages.append(
                 UserMessage.text(
@@ -447,5 +504,10 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 "Could you tell me again what you need?"
             )
 
-        state.messages.append(out)
+        # The model's memory is the wire it emitted, not the tau2 message we
+        # translated it into — remembering `AssistantMessage(tool_calls=...)`
+        # with empty content taught v4-flash to answer with empty content
+        # (measured 2026-09-26: ~12 empty replies/task under long context,
+        # 0/8 in a history that kept the wire).
+        state.messages.append(AssistantMessage.text(reply if reply else out.content or ""))
         return out, state

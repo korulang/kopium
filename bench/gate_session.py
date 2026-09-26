@@ -33,6 +33,11 @@ class GateSession:
         # segments the turn. Without it a multi-line reply desyncs the
         # protocol: each line answered by a later send().
         payload = source.replace("\r\n", "\n").rstrip("\n") + "\n\n"
+        if payload == "\n\n":
+            # An empty first line is `ready` immediately — sending the
+            # terminator too would leave a stray blank line in the pipe
+            # that the NEXT send reads as its own turn (measured desync).
+            payload = "\n"
         try:
             self.proc.stdin.write(payload.encode())
             self.proc.stdin.flush()
