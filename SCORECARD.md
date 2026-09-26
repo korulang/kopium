@@ -29,6 +29,33 @@ construction:
 The gap is named: **parity-evidence.** Everything below the line is the
 case for; the gate is the case for continuing at all.
 
+### Verdict — measured 2026-09-26: the gate failed
+
+Refresh (refresh1 + refresh1b shards, aborted at 14 scored tasks once the
+direction was unambiguous): **koru 7/14 vs stock 12/14** — tracking the
+stale 10/28 shape, nowhere near the 25/28 bar. The wire flip did not move
+the shared axis. The 4 run_compare shards were killed mid-flight; rows
+already flushed live in `results/compare_refresh1b_sh*.csv`.
+
+Two confounds on the measurement itself, both now named:
+
+- **Koru token/cost columns in all prior compare CSVs were phantom.**
+  `KopiumAgent` emitted `AssistantMessage`s with `usage=None`; tau2's
+  `get_token_usage`/`get_cost` therefore counted only the shared user
+  simulator. The "~6x koru efficiency" those cells implied never existed.
+  Fixed in `f0ba70b` (usage+cost summed across the retry loop onto the
+  returned message); all pre-fix token/cost cells on this page read as
+  **unmeasured**.
+- **Provider weather corrupted several koru rows** (stall-storms mid-task;
+  task 4 capped at 2.7h, task 1 lost to ~50min dead air, later re-flown
+  green by shard 1). The gap survives the correction — clean tasks
+  (12, 14, 15, 24) went 0.0 where stock rows are 1.0.
+
+Per the gate's own text: the remaining claim is **category-level**
+(capability grammar, possession lifecycle, live vocabulary growth — the
+measured column below), and benchmark competitiveness is not the
+justification for further tau2 spend.
+
 The comparison set:
 
 - **function-calling** — OpenAI/Anthropic-style tool calls: JSON schema
