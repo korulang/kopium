@@ -1,0 +1,6 @@
+name: confirmation
+kind: inferred
+shape: categorical
+face: in
+membrane: false
+note: a measurement landed on the side a standing belief predicted — evidence gained, no belief rewritten. Distinct from `correction` (a prior belief was wrong) and `gap-closed` (a known hole filled): confirmation adds weight, not new structure.
