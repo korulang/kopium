@@ -452,7 +452,24 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         #    rejection teach inside the turn up to 3 times rather than once.
         status = detail = ""
         for attempt in range(3):
-            response = self._llm(state.system_messages + state.messages)
+            try:
+                response = self._llm(state.system_messages + state.messages)
+            except TimeoutError:
+                # Provider stall, not a wire failure — degrade like an empty
+                # reply so the turn's retry loop absorbs it and the task
+                # survives (measured 2026-09-26 refresh1: 3 consecutive
+                # stalls crashed task 1 outright).
+                if os.environ.get("KOPIUM_GATE_DEBUG"):
+                    print(f"[gate] STALL attempt {attempt + 1}/3", file=sys.stderr)
+                status, detail = "REJECT", "the llm call stalled"
+                reply = ""
+                state.messages.append(
+                    UserMessage.text(
+                        f"[internal] Your last reply was not accepted: {detail}. "
+                        f"Reply with invocations from your vocabulary — one per line."
+                    )
+                )
+                continue
             reply = self._clean_reply(response.content or "")
             if not reply:
                 # v4-flash quirk, measured 2026-09-26: under long context the

@@ -7,6 +7,9 @@ tools) on the same tasks, same seed, same model. Writes a CSV.
   e.g. run_compare.py 0 50            # airline tasks 0..49
        run_compare.py 0 12 --suffix quick
        run_compare.py --ids 0,10,26  --suffix refusal   # explicit tasks
+       run_compare.py 0 29 --suffix refresh \
+           --stock-from results/compare_full50_taught.csv \
+           --stock-from results/compare_smoke_r.csv    # later files win
 
 Output: bench/results/compare_<suffix>.csv
   task, koru_reward, koru_db, koru_calls, koru_prompt_tokens,
@@ -102,6 +105,31 @@ def main() -> None:
     guard_margin = float(sys.argv[sys.argv.index("--guard-margin") + 1]) if "--guard-margin" in sys.argv else 0.30
     guard_enabled = "--no-guard" not in sys.argv
 
+    # Reuse stock-arm results from prior CSVs — the stock harness and model
+    # are unchanged, so re-running it burns tokens for numbers we hold.
+    # Later files override earlier ones (freshest last on the command line).
+    stock_reuse: dict[str, dict] = {}
+    while "--stock-from" in sys.argv:
+        i = sys.argv.index("--stock-from")
+        sys.argv.pop(i)
+        src = Path(sys.argv.pop(i))
+        if not src.is_absolute():
+            src = (HERE / src).resolve()
+        with open(src) as rf:
+            for r in csv.DictReader(rf):
+                if not r.get("stock_reward"):
+                    continue
+                stock_reuse[r["task"]] = {
+                    "reward": float(r["stock_reward"]),
+                    "db": r["stock_db"] == "True",
+                    "calls": r["stock_calls"] or None,
+                    "ptok": int(r["stock_prompt_tokens"] or 0),
+                    "ctok": int(r["stock_completion_tokens"] or 0),
+                    "cost": float(r["stock_cost"] or 0),
+                    "wall": float(r["stock_wall_s"] or 0),
+                    "src": src.name,
+                }
+
     domain = "airline"
     if "--ids" in sys.argv:
         ids = sys.argv[sys.argv.index("--ids") + 1].split(",")
@@ -137,12 +165,19 @@ def main() -> None:
                 kr, kdb, kcalls, kcost, ktok, kwall = None, None, None, None, (None, None), None
                 notes = f"koru err: {e}"
                 print(f"    koru ERROR: {e}", flush=True)
-            try:
-                (sr, sdb, scalls, scost, stok, swall) = run_one(LLMAgent, task, domain)
-            except Exception as e:  # noqa: BLE001
-                sr, sdb, scalls, scost, stok, swall = None, None, None, None, (None, None), None
-                notes += f" | stock err: {e}"
-                print(f"    stock ERROR: {e}", flush=True)
+            if tid in stock_reuse:
+                s = stock_reuse[tid]
+                sr, sdb, scalls = s["reward"], s["db"], s["calls"]
+                stok = (s["ptok"], s["ctok"])
+                scost, swall = s["cost"], s["wall"]
+                notes += f" | stock: reused {s['src']}"
+            else:
+                try:
+                    (sr, sdb, scalls, scost, stok, swall) = run_one(LLMAgent, task, domain)
+                except Exception as e:  # noqa: BLE001
+                    sr, sdb, scalls, scost, stok, swall = None, None, None, None, (None, None), None
+                    notes += f" | stock err: {e}"
+                    print(f"    stock ERROR: {e}", flush=True)
             row = [tid, kr, kdb, kcalls, *ktok, round(kcost, 4) if kcost else None, round(kwall, 1) if kwall else None,
                    sr, sdb, scalls, *stok, round(scost, 4) if scost else None, round(swall, 1) if swall else None,
                    notes]
