@@ -300,8 +300,10 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
     # loop where it's swallowed as a transient error (both measured
     # 2026-09-25 on task 1: 30+ min wedged in an SSL read). The watchdog
     # must live outside the call: run generate in a daemon thread, give up
-    # after 300s, and retry. The abandoned thread leaks its socket but the
-    # task proceeds.
+    # after 120s, and retry — a mid-stream stall essentially never resumes
+    # (measured 2026-09-26 refresh1b: zero recoveries across 6+ stalls),
+    # so a short abandon beats soaking in dead air. The abandoned thread
+    # leaks its socket but the task proceeds.
     def _llm(self, messages):
         for _ in range(3):
             pool = ThreadPoolExecutor(max_workers=1)
@@ -312,7 +314,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 **self.llm_args,
             )
             try:
-                result = fut.result(timeout=300)
+                result = fut.result(timeout=120)
             except FutureTimeout:
                 pool.shutdown(wait=False)
                 continue
@@ -451,9 +453,25 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         #    So: strip conditioning junk before the gate, and let the
         #    rejection teach inside the turn up to 3 times rather than once.
         status = detail = ""
+        # Token/cost accounting across the whole turn, not just the accepted
+        # attempt: every litellm call in the retry loop burns real spend, and
+        # none of it was reaching res.messages (the translated `out` carried
+        # usage=None, so the CSV's koru token/cost columns measured only the
+        # user simulator — a ~6x phantom efficiency). Sum all attempts.
+        turn_usage: dict = {"prompt_tokens": 0, "completion_tokens": 0}
+        turn_cost = 0.0
+        saw_usage = False
+        saw_cost = False
         for attempt in range(3):
             try:
                 response = self._llm(state.system_messages + state.messages)
+                if response.usage:
+                    turn_usage["prompt_tokens"] += response.usage.get("prompt_tokens", 0)
+                    turn_usage["completion_tokens"] += response.usage.get("completion_tokens", 0)
+                    saw_usage = True
+                if response.cost is not None:
+                    turn_cost += response.cost
+                    saw_cost = True
             except TimeoutError:
                 # Provider stall, not a wire failure — degrade like an empty
                 # reply so the turn's retry loop absorbs it and the task
@@ -492,6 +510,8 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             if status == "DEFINED":
                 self._refresh_vocab(state)
                 out = AssistantMessage.text(f"defined {detail}")
+                out.usage = turn_usage if saw_usage else None
+                out.cost = turn_cost if saw_cost else None
                 state.messages.append(AssistantMessage.text(reply))
                 return out, state
             if status == "OK":
@@ -500,6 +520,8 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 if "defined:" in detail:
                     self._refresh_vocab(state)
                 out = self._from_steps(reply, detail)
+                out.usage = turn_usage if saw_usage else None
+                out.cost = turn_cost if saw_cost else None
                 state.messages.append(AssistantMessage.text(reply))
                 return out, state
             state.messages.append(
@@ -544,4 +566,6 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         # (measured 2026-09-26: ~12 empty replies/task under long context,
         # 0/8 in a history that kept the wire).
         state.messages.append(AssistantMessage.text(reply if reply else out.content or ""))
+        out.usage = turn_usage if saw_usage else None
+        out.cost = turn_cost if saw_cost else None
         return out, state
