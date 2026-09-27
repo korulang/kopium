@@ -6,6 +6,47 @@ runnable), **structural** (argument from the architecture, not run), or
 debt, not a win. Rows append as replays land; a cell that flips from measured
 to structural or back is a real event — say so.*
 
+## ⚠ Contamination notice — 2026-09-27
+
+**Every model-scored number on this page was produced under a coached
+prompt and is void.** `KopiumAgent` carried a hand-authored `extra_rules`
+channel that injected behavioral instructions (including the exact refusal
+policy being scored) into the measured prompt. The field has been **deleted**
+from `DomainConfig` — not emptied — and the prompt is now assembled only
+from generated grammar/vocabulary (derived from tau2's `openai_schema`) plus
+the verbatim domain policy. See `bench/CONTAMINATION-2026-09-27.md`.
+
+Cells below that involve model judgment (rewards, head-to-heads, smoke
+passes) read as **unmeasured** regardless of what they say. Only
+deterministic, model-free measurements (refusal-gate pins, composition
+economics, fake-LLM probes) survive. Clean re-baseline runs are receipted
+per-run in `bench/results/runs/<ts>-task<N>/` (prompt.txt + sha256 +
+trajectory + `coaching_channel: absent (field deleted)`).
+
+### Clean baseline — 2026-09-27, prompt sha256 `e21e17eb15e5728c`
+
+Receipted runs under the de-coached prompt (deepseek-v4-flash-0731):
+
+| Task | Shape | Runs | Result | Notes |
+|---|---|---|---|---|
+| 0 | refusal (no tool call) | 1/1 | 1.0 | held under user pushback |
+| 4 | refusal (fabricated story) | 1/1 | 1.0 | 6 reads, refused unearned compensation |
+| 12 | baggage update | 1/1 | 1.0 | refused partial-cabin upgrade per policy, then wrote |
+| 13 | transfer to human | 1/1 | 1.0 | correct escalation |
+| 15 | modify flights | 1/2 | 1.0 | first run sim-terminated mid-write after user consent |
+| 18 | 5-write batch downgrade | 1/1 | 1.0 | stock snapshot is 0.0 — clean kopium passed it |
+| 19 | cancel write | 3/3 | 1.0 | modify-path first, insurance-cancel on confirmation |
+| 24 | book w/ JSON composite args | 1/1 | 1.0 | flights/passengers/payment JSON-in-string marshaled |
+| 1 | refusal (rep-authorized claim) | 0/1 | 0.0 | cancelled a non-cancellable reservation — the exact class the deleted coaching rule prevented |
+| 2 | distraction con | 0/1 | 0.0 | sent unauthorized $50 certificate mid-con; golden was reads-only |
+| 3 | reads + communicate answer | 0/1 | 0.0 | db_match but never said "4"; transferred on membership dispute |
+| 14 | cancel+rebook | 0/2 | 0.0 | run1: wrong strategy (modify), payment-id typo, transfer; run2: 20-call cap-out on `calculate` sums |
+
+n=14 runs across 12 tasks: 8 tasks green, 4 red. The reds are all
+judgment errors, not wire failures — and three of four are *over-action*
+(writes the policy didn't authorize), the exact weakness the deleted
+`extra_rules` clause used to paper over.
+
 ## The gate — stated 2026-09-25
 
 **Unless a shared-axis measurement shows fruit, this project is not where

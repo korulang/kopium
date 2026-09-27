@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# pre-commit — prompt-integrity wall for the measured arm.
+#
+# Mirrors the koru repo's invariant gate: a `check:`-class row that runs
+# deterministically and blocks. Fires ONLY when the staged diff touches
+# the surface the measured prompt is assembled from — kopium_agent.py
+# (prompt assembly + runtime notes), gate_session.py (grammar render),
+# the tors generators, the generated vocab docs, the gate/tool .k/.kz
+# sources, the runners, and the guard itself (a weakened guard is the
+# contamination channel reborn — bench/CONTAMINATION-2026-09-27.md).
+#
+# A guard that cannot run BLOCKS: never a silent skip.
+# Install: cp hooks/pre-commit .git/hooks/pre-commit
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+PY="${KOPIUM_BENCH_PY:-/Users/larsde/src/tau2-bench/.venv/bin/python}"
+
+WATCHED='bench/(kopium_agent|gate_session|prompt_guard|gen_.*_tors|run_.*)\.py$|bench/.*gate.*|bench/.*_tools\.kz$|bench/.*_vocab_doc\.md$'
+
+if ! git diff --cached --name-only | grep -qE "$WATCHED"; then
+    exit 0
+fi
+
+echo "pre-commit: prompt surface staged — running prompt_guard" >&2
+exec "$PY" "$ROOT/bench/prompt_guard.py"

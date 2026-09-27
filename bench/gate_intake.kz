@@ -1,9 +1,11 @@
 // A wire turn is one flow (frag-partial-programs): the caller writes the
 // whole reply — possibly several items, one per line — terminated by a
 // blank line, and `run` segments it into items. `intake` therefore reads
-// until a blank line for any non-command first line; a `.`-command is
-// single-line by construction and returns immediately. readln's buffer
-// dies on the next read, so we copy before the continuation lines.
+// until a blank line for every first line; there is no command channel —
+// introspection is a wire verb (`vocabulary()`, `grammar()`), granted per
+// session, and anything else reaching `run` is the wire's own parse-error
+// to refuse. readln's buffer dies on the next read, so we copy before the
+// continuation lines.
 
 const std = @import("std");
 
@@ -16,7 +18,7 @@ var intake_buf: [8192]u8 = undefined;
 
 ~proc intake|zig {
     const t = std.mem.trim(u8, first, " \t\r");
-    if (t.len == 0 or t[0] == '.') {
+    if (t.len == 0) {
         return .{ .ready = first };
     }
     if (first.len + 1 >= $mod.intake_buf.len) {
@@ -46,20 +48,6 @@ var intake_buf: [8192]u8 = undefined;
     }
     if (i == $mod.intake_buf.len) return .{ .failed = "line too long" };
     return .{ .ready = $mod.intake_buf[0..i] };
-}
-
-// Host control plane — not a Koru invocation. The same Bridge that
-// `run`s also renders `vocabulary` (register + inventions).
-~pub tor kind { source: string }
-| vocabulary
-| grammar
-| run string
-
-~proc kind|zig {
-    const t = std.mem.trim(u8, source, " \t\r");
-    if (std.mem.eql(u8, t, ".vocabulary")) return .{ .vocabulary = .{} };
-    if (std.mem.eql(u8, t, ".grammar")) return .{ .grammar = .{} };
-    return .{ .run = source };
 }
 
 ~pub tor emit-framed { tag: string, text: string }

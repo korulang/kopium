@@ -26,8 +26,8 @@ const std = @import("std");
 
 ~proc create-task|zig {
     _ = description;
-    var buf: [1024]u8 = undefined;
-    const s = std.fmt.bufPrint(&buf, "{{\"user_id\": \"{s}\", \"title\": \"{s}\"}}", .{ user_id, title }) catch "{}";
+    const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
+    const s = std.fmt.bufPrint(&__S.buf, "{{\"user_id\": \"{s}\", \"title\": \"{s}\"}}", .{ user_id, title }) catch "{}";
     return s;
 }
 
@@ -40,24 +40,24 @@ const std = @import("std");
 ~pub tor update-task-status { task_id: string, status: string } -> string
 
 ~proc update-task-status|zig {
-    var buf: [1024]u8 = undefined;
-    const s = std.fmt.bufPrint(&buf, "{{\"task_id\": \"{s}\", \"status\": \"{s}\"}}", .{ task_id, status }) catch "{}";
+    const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
+    const s = std.fmt.bufPrint(&__S.buf, "{{\"task_id\": \"{s}\", \"status\": \"{s}\"}}", .{ task_id, status }) catch "{}";
     return s;
 }
 
 ~pub tor transfer-to-human-agents { summary: string } -> string
 
 ~proc transfer-to-human-agents|zig {
-    var buf: [1024]u8 = undefined;
-    const s = std.fmt.bufPrint(&buf, "{{\"summary\": \"{s}\"}}", .{ summary }) catch "{}";
+    const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
+    const s = std.fmt.bufPrint(&__S.buf, "{{\"summary\": \"{s}\"}}", .{ summary }) catch "{}";
     return s;
 }
 
 ~pub tor say { text: string } -> string
 
 ~proc say|zig {
-    var buf: [1024]u8 = undefined;
-    const s = std.fmt.bufPrint(&buf, "{{\"text\": \"{s}\"}}", .{text}) catch "{}";
+    const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
+    const s = std.fmt.bufPrint(&__S.buf, "{{\"text\": \"{s}\"}}", .{text}) catch "{}";
     return s;
 }
 

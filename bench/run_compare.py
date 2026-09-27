@@ -10,6 +10,7 @@ tools) on the same tasks, same seed, same model. Writes a CSV.
        run_compare.py 0 29 --suffix refresh \
            --stock-from results/compare_full50_taught.csv \
            --stock-from results/compare_smoke_r.csv    # later files win
+       ... --koru-from results/compare_smoke_koru.csv  # same, for the koru arm
 
 Output: bench/results/compare_<suffix>.csv
   task, koru_reward, koru_db, koru_calls, koru_prompt_tokens,
@@ -105,30 +106,35 @@ def main() -> None:
     guard_margin = float(sys.argv[sys.argv.index("--guard-margin") + 1]) if "--guard-margin" in sys.argv else 0.30
     guard_enabled = "--no-guard" not in sys.argv
 
-    # Reuse stock-arm results from prior CSVs — the stock harness and model
-    # are unchanged, so re-running it burns tokens for numbers we hold.
-    # Later files override earlier ones (freshest last on the command line).
+    # Reuse results from prior CSVs, per arm — the unit of invalidation is
+    # a row, not the run. --stock-from reuses the unchanged stock harness;
+    # --koru-from reuses koru rows the caller judges still valid (e.g. a
+    # smoke run under the same agent code). Later files override earlier
+    # ones (freshest last on the command line).
     stock_reuse: dict[str, dict] = {}
-    while "--stock-from" in sys.argv:
-        i = sys.argv.index("--stock-from")
-        sys.argv.pop(i)
-        src = Path(sys.argv.pop(i))
-        if not src.is_absolute():
-            src = (HERE / src).resolve()
-        with open(src) as rf:
-            for r in csv.DictReader(rf):
-                if not r.get("stock_reward"):
-                    continue
-                stock_reuse[r["task"]] = {
-                    "reward": float(r["stock_reward"]),
-                    "db": r["stock_db"] == "True",
-                    "calls": r["stock_calls"] or None,
-                    "ptok": int(r["stock_prompt_tokens"] or 0),
-                    "ctok": int(r["stock_completion_tokens"] or 0),
-                    "cost": float(r["stock_cost"] or 0),
-                    "wall": float(r["stock_wall_s"] or 0),
-                    "src": src.name,
-                }
+    koru_reuse: dict[str, dict] = {}
+    for flag, dest in (("--stock-from", stock_reuse), ("--koru-from", koru_reuse)):
+        while flag in sys.argv:
+            i = sys.argv.index(flag)
+            sys.argv.pop(i)
+            src = Path(sys.argv.pop(i))
+            if not src.is_absolute():
+                src = (HERE / src).resolve()
+            arm = "stock" if dest is stock_reuse else "koru"
+            with open(src) as rf:
+                for r in csv.DictReader(rf):
+                    if not r.get(f"{arm}_reward"):
+                        continue
+                    dest[r["task"]] = {
+                        "reward": float(r[f"{arm}_reward"]),
+                        "db": r[f"{arm}_db"] == "True",
+                        "calls": r[f"{arm}_calls"] or None,
+                        "ptok": int(r[f"{arm}_prompt_tokens"] or 0),
+                        "ctok": int(r[f"{arm}_completion_tokens"] or 0),
+                        "cost": float(r[f"{arm}_cost"] or 0),
+                        "wall": float(r[f"{arm}_wall_s"] or 0),
+                        "src": src.name,
+                    }
 
     domain = "airline"
     if "--ids" in sys.argv:
@@ -157,14 +163,21 @@ def main() -> None:
             tid = task.id
             print(f"--- {tid} (t+{time.time():.0f})", flush=True)
             notes = ""
-            try:
-                (kr, kdb, kcalls, kcost, ktok, kwall) = run_one(
-                    KopiumAgent, task, domain, gate=str(HERE / "airline-gate-binary")
-                )
-            except Exception as e:  # noqa: BLE001
-                kr, kdb, kcalls, kcost, ktok, kwall = None, None, None, None, (None, None), None
-                notes = f"koru err: {e}"
-                print(f"    koru ERROR: {e}", flush=True)
+            if tid in koru_reuse:
+                k = koru_reuse[tid]
+                kr, kdb, kcalls = k["reward"], k["db"], k["calls"]
+                ktok = (k["ptok"], k["ctok"])
+                kcost, kwall = k["cost"], k["wall"]
+                notes = f"koru: reused {k['src']}"
+            else:
+                try:
+                    (kr, kdb, kcalls, kcost, ktok, kwall) = run_one(
+                        KopiumAgent, task, domain, gate=str(HERE / "airline-gate-binary")
+                    )
+                except Exception as e:  # noqa: BLE001
+                    kr, kdb, kcalls, kcost, ktok, kwall = None, None, None, None, (None, None), None
+                    notes = f"koru err: {e}"
+                    print(f"    koru ERROR: {e}", flush=True)
             if tid in stock_reuse:
                 s = stock_reuse[tid]
                 sr, sdb, scalls = s["reward"], s["db"], s["calls"]

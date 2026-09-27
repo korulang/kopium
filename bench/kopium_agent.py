@@ -61,8 +61,10 @@ class DomainConfig:
     gate_binary: Path
     # Koru tor name -> tau3 tool name. `say` stays a Koru word.
     koru_to_tau: dict[str, str] = field(default_factory=dict)
-    # Extra policy rules for the system prompt (domain-specific, prose).
-    extra_rules: list[str] = field(default_factory=list)
+    # No extra_rules, ever: a measured arm must be structurally incapable
+    # of consuming hand-written behavioral instructions. Prose that tells
+    # the model when to act is coaching, and every clause written to fix an
+    # observed failure trains the test set (CONTAMINATION-2026-09-27.md).
 
 
 # ---------------------------------------------------------------------------
@@ -79,15 +81,6 @@ MOCK_CONFIG = DomainConfig(
         "update-task-status": "update_task_status",
         "transfer-to-human-agents": "transfer_to_human_agents",
     },
-    extra_rules=[
-        "Check what has already been done before acting. When a task is "
-        "already created or resolved in the tool results, do NOT call the "
-        "tool again — confirm to the user via say(text: ...).",
-        "Never repeat a tool call that already succeeded with the same "
-        "purpose.",
-        "Only pass arguments the user actually gave you. Never invent an "
-        "optional argument (like a description the user never mentioned).",
-    ],
 )
 
 AIRLINE_CONFIG = DomainConfig(
@@ -109,16 +102,6 @@ AIRLINE_CONFIG = DomainConfig(
         "transfer-to-human-agents": "transfer_to_human_agents",
         "calculate": "calculate",
     },
-    extra_rules=[
-        "The cancellation API does NOT check whether cancellation is allowed. "
-        "YOU must apply the policy before calling cancel-reservation. When the "
-        "policy forbids it (more than 24 hours after booking, no insurance "
-        "covering the reason, portion already flown), refuse via say(text: ...) "
-        "and do NOT call cancel-reservation.",
-        "Structured arguments (flights, passengers, payment_methods) are JSON: "
-        "write them as a single string argument containing a JSON array/object.",
-        "Only pass arguments the user actually gave you.",
-    ],
 )
 
 _CONFIGS = {"mock": MOCK_CONFIG, "airline": AIRLINE_CONFIG}
@@ -126,6 +109,14 @@ _CONFIGS = {"mock": MOCK_CONFIG, "airline": AIRLINE_CONFIG}
 # `say` is the voice channel in every domain: a plain spoken message, never a
 # tau3 write tool.
 _SPOKEN = {"say"}
+
+# Host verbs are introspection on the wire — `vocabulary()`, `grammar()`,
+# `bind(...)`. They resolve at the gate and must NEVER marshal southbound
+# as ToolCalls (tau2's env would error "unknown tool"). Their result is
+# data for the model, delivered as a context note, and a turn that is
+# ONLY introspection owes the user nothing yet — the model retries inside
+# the same turn with the render in context.
+_LOCAL = {"vocabulary", "grammar", "bind"}
 
 
 class KopiumAgentState:
@@ -162,7 +153,6 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 name=self.cfg.name,
                 gate_binary=gate_binary,
                 koru_to_tau=self.cfg.koru_to_tau,
-                extra_rules=self.cfg.extra_rules,
             )
         self.llm = llm
         # reasoning_effort=none: v4-flash intermittently returns content=null
@@ -178,6 +168,22 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         self.call_count = 0
         self.salvage_count = 0
         self._session: Optional[GateSession] = None
+        # Injected-result naming: every tool result that arrives southbound
+        # re-enters the session as a bound Koru value `t{N}` — the model's
+        # context shows `[t3] = {datum}` and `t3.field` resolves on the wire.
+        self._bound_count = 0
+        # Call-id -> the wire source line that produced it. When the env's
+        # result comes back (ToolMessage.id echoes ToolCall.id) the binding
+        # renders as `[tN = call-text] {datum}` — the link between datum and
+        # call is structural, not positional, so a batched read can't weld
+        # one reservation's fields onto another's id (measured 2026-09-27:
+        # task 19 confabulated "K67C4W is EWR↔IAH round trip" from three
+        # bare [tN] lines in one message).
+        self._call_labels: dict[str, str] = {}
+        # Effects the marshal could not carry — speech that rode beside
+        # calls, earlier calls inside a chain — become "[…]" context notes
+        # on the next turn. Honest feedback, never a silent drop.
+        self._notes: list[str] = []
 
     # ------------------------------------------------------- the vocabulary
     def _ensure_session(self) -> GateSession:
@@ -197,46 +203,25 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             raise RuntimeError("bridge grammar missing wire rules (440_017)")
         if "Your vocabulary:" not in grammar:
             raise RuntimeError("bridge grammar missing vocabulary (440_017)")
-        rules = "\n".join(f"- {r}" for r in self.cfg.extra_rules)
-        literal_rules = (
-            "- If you cannot or must not do what the user asks, call "
-            "say(text: ...) with the honest reason, and call NO tool."
-        )
+        # The tool contract doc is a GENERATED artifact (gen_*_tors.py emits
+        # it from the same openai_schema the stock arm reads) — spliced
+        # verbatim, never hand-edited. A domain without a generator has no
+        # doc and gets none.
+        doc_path = self.cfg.gate_binary.with_name(f"{self.cfg.name}_vocab_doc.md")
+        doc = doc_path.read_text().strip() if doc_path.exists() else ""
         return (
             f"You are a customer service agent speaking the Koru wire language. "
             f"This is a STATE LOOP: each of your turns emits wire — one Koru "
-            f"invocation per line — and the outcome comes back as "
-            f"`[tool result] ...`. INDEPENDENT reads belong in ONE turn: "
-            f"checking five reservations is five lines in one reply, not five "
-            f"turns. Dependent steps stay serial — never emit a call that needs "
-            f"another call's result in the same turn. Read, decide, act, or "
-            f"refuse via say(text: ...).\n\n"
+            f"invocation per line — and tool outcomes come back as "
+            f"`[tN = call] {{datum}}`: a bound Koru value, not text — the "
+            f"label names the call that produced it, and `t3.user_id` "
+            f"dereferences that datum on the wire. Independent calls may "
+            f"share one turn — each runs, each reports; a call that needs "
+            f"another call's result waits for the next turn.\n\n"
             f"## Koru (derived from this session's Bridge — 440_017)\n"
-            f"{grammar}\n\n"
-            f"## Happy path — batch the reads, then act\n"
-            f"When several lookups are independent (e.g. inspecting each "
-            f"reservation a user holds), put them ALL in one reply:\n"
-            f"  you:   get-reservation-details(reservation_id: \"R1\")\n"
-            f"         get-reservation-details(reservation_id: \"R2\")\n"
-            f"         get-reservation-details(reservation_id: \"R3\")\n"
-            f"All three results come back together. Then, when you hold what "
-            f"you need, act:\n"
-            f"  you:   cancel-reservation(reservation_id: \"...\")\n"
-            f"Do NOT jump straight to a write. Read the state you need, let the "
-            f"policy decide, then act — or refuse via say(text: ...).\n\n"
-            f"Booking is also a chain — gather the flight, then book with "
-            f"structured args as a single JSON string:\n"
-            f"  you: search-direct-flight(origin: \"JFK\", destination: \"SEA\", "
-            f"date: \"2024-06-01\")\n"
-            f"  you: book-reservation(user_id: \"U1\", origin: \"JFK\", "
-            f"destination: \"SEA\", flight_type: \"one-way\", cabin: \"economy\", "
-            f"flights: \"[{{\\\"flight_number\\\": \\\"HAT123\\\"}}]\", "
-            f"passengers: \"[{{\\\"name\\\": \\\"Mei Garcia\\\"}}]\", "
-            f"payment_methods: \"[{{\\\"id\\\": \\\"PM1\\\"}}]\", "
-            f"insurance: \"false\")\n"
-            f"The reads give you the ids to fill the write. Structured args are "
-            f"JSON-as-string; use escaped quotes inside.\n\n"
-            f"## Growth — teaching the session a new verb\n"
+            f"{grammar}\n"
+            + (f"\n{doc}\n" if doc else "")
+            + f"\n## Growth — teaching the session a new verb\n"
             f"A definition is the one reply that is TWO lines: the first "
             f"line starts with `tor ` and declares the verb and its params, "
             f"the second line is its body over verbs you already hold. The "
@@ -244,8 +229,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             f"turn's vocabulary lists it beside the compiled verbs. Example:\n"
             f"  tor greet {{ msg: string }}\n"
             f"  greet = say(text: msg)\n\n"
-            f"## Domain policy\n{self.domain_policy}\n\n"
-            f"## Rules\n{rules}\n{literal_rules}"
+            f"## Domain policy\n{self.domain_policy}"
         )
 
     def _refresh_vocab(self, state: KopiumAgentState) -> None:
@@ -259,6 +243,38 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             messages=list(message_history) if message_history else [],
         )
 
+    # Progressive disclosure, minimal form: the rejection IS the disclosure
+    # channel, and until now it carried almost no grammar — "not accepted:
+    # {detail}" with the rejected reply never shown back. On REJECT we now
+    # echo the reply and the grammar fragment: the failed verb's signature
+    # when it parses to a known head, else the verb-name list.
+    def _vocabulary_hint(self, reply: str) -> str:
+        try:
+            vocab = self._ensure_session().vocabulary()
+        except Exception:
+            return ""
+        sigs = [l.strip() for l in vocab.splitlines()
+                if l.strip() and not l.startswith("VOCAB")]
+        names = ", ".join(s.split("(")[0] for s in sigs)
+        heads = [m.group(1) for line in reply.splitlines()
+                 if (m := re.match(r"\s*([A-Za-z_][\w-]*)", line))]
+        for h in heads:
+            if not any(s.startswith(h + "(") for s in sigs):
+                return f"`{h}` is not a verb in your vocabulary. Your verbs: {names}.\n"
+        if heads:
+            s = next(s for s in sigs if s.startswith(heads[0] + "("))
+            return f"`{heads[0]}` takes `{s}`.\n"
+        return f"Your verbs: {names}.\n"
+
+    @staticmethod
+    def _rejection_note(detail: str, reply: str, hint: str) -> str:
+        shown = f"You wrote:\n{reply}\n" if reply else ""
+        return (
+            f"[internal] Your last reply was not accepted: {detail}.\n"
+            f"{shown}{hint}"
+            f"Reply with invocations from your vocabulary — one per line."
+        )
+
     # -------------------------------------------------------------- the gate
     def _gate(self, source: str) -> tuple[str, str]:
         """Run one Koru line through the long-lived gate. Same Bridge."""
@@ -267,6 +283,20 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             src = " ".join(source.split())[:160]
             print(f"[gate] {status} | {detail[:200]} <- {src}", file=sys.stderr)
         return status, detail
+
+    def _bind_result(self, content: str) -> Optional[str]:
+        """Hand a tool result back to the session as bound value `t{N}`.
+        Returns the name so the context render can name it; None when the
+        gate refused — the render then falls back to the unbound datum,
+        which is honest (a `tN` that doesn't resolve would be a lie)."""
+        self._bound_count += 1
+        name = f"t{self._bound_count}"
+        try:
+            return self._ensure_session().bind(name, content)
+        except Exception:
+            if os.environ.get("KOPIUM_GATE_DEBUG"):
+                print(f"[gate] bind({name}) failed", file=sys.stderr)
+            return None
 
     def close_gate(self) -> None:
         if self._session is not None:
@@ -294,6 +324,13 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         if isinstance(inner, dict):
             return inner
         return {}
+
+    # The gate's tor declarations carry tau2's real types (i64 for the int
+    # params; arrays ride as JSON inside string params and the procs splice
+    # them as raw JSON), so args arrive here already Python-typed: int stays
+    # int, list stays list. A literal that cannot parse to the declared type
+    # is refused at the gate with a teaching error before it ever reaches
+    # this boundary.
 
     # A held-open stream that stops mid-response defeats litellm's request
     # timeout, and a signal-based interrupt lands INSIDE litellm's retry
@@ -364,11 +401,14 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
 
     # Mirror of segmentTurn's boundary rules: an item opens at a non-blank
     # line that is not a `|` arm and not a `tor` define's impl head. Each
-    # item contributes one entry — its verb name, or None for defines and
-    # unparseable lines — so report ordinals index this list directly.
+    # item records its ordered chain verbs — the head plus every `|>`
+    # arm tail — because a step's wire result is always the chain's LAST
+    # invocation, while the report's verb name is the head. Pairing by
+    # position, not by the printed name, is what keeps `say |> cancel`
+    # from being marshalled as speech carrying cancel's arguments.
     @staticmethod
-    def _item_names(reply: str) -> list[Optional[str]]:
-        names: list[Optional[str]] = []
+    def _item_chains(reply: str) -> list[dict]:
+        items: list[dict] = []
         define_name: Optional[str] = None
         for raw in reply.splitlines():
             line = raw.strip()
@@ -383,44 +423,136 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
             if line.startswith("tor "):
                 m = re.match(r"tor\s+([A-Za-z_][\w-]*)", line)
                 define_name = m.group(1) if m else ""
-                names.append(None)
+                items.append({"verbs": [], "source": ""})
                 continue
             if line.startswith("|"):
+                arm = re.search(r"\|>\s*([A-Za-z_][\w-]*)\s*\(", line)
+                if items and arm:
+                    items[-1]["verbs"].append(arm.group(1))
+                    items[-1]["source"] += " " + line
                 continue
-            m = re.match(r"([A-Za-z_][A-Za-z0-9_-]*)\s*\(", line)
-            names.append(m.group(1) if m else None)
-        return names
+            m = re.match(r"([A-Za-z_][\w-]*)\s*\(", line)
+            verbs = [m.group(1)] if m else []
+            verbs += re.findall(r"\|>\s*([A-Za-z_][\w-]*)\s*\(", line)
+            items.append({"verbs": verbs, "source": line})
+        return items
+
+    # Speech that rode inside a chain before a call (`say |> cancel`): the
+    # text never reached the user. Recover it from the item's source — the
+    # report only carries the tail's result.
+    @staticmethod
+    def _say_texts(source: str) -> list[str]:
+        texts = []
+        for m in re.finditer(r'say\s*\(\s*text\s*:\s*"((?:[^"\\]|\\.)*)"', source):
+            try:
+                texts.append(json.loads('"' + m.group(1) + '"'))
+            except ValueError:
+                texts.append(m.group(1))
+        return texts
+
+    @staticmethod
+    def _result_text(value_json: str) -> str:
+        """A host verb's OK payload carries its render inside the Value
+        envelope's `value` string."""
+        try:
+            inner = json.loads(value_json).get("value")
+        except json.JSONDecodeError:
+            return value_json
+        return inner if isinstance(inner, str) else json.dumps(inner)
+
+    def _note_speech_dropped(self, text: str) -> None:
+        self._notes.append(
+            "[speech not delivered] the user never heard this — a turn's "
+            "speech and its calls cannot travel together; the calls ran. "
+            f"Say it again now, with the results: {text!r}"
+        )
+
+    def _note_calls_dropped(self, verbs: list[str]) -> None:
+        self._notes.append(
+            "[calls not run] a chain's earlier calls did not execute — only "
+            "the last step of a flow reaches the outside: "
+            f"{', '.join(verbs)}. Re-issue the ones you still need."
+        )
 
     # A multi-item turn returns STEPS-BEGIN/<report>/STEPS-END — one line per
     # item: `step n/m result: {json}` or `step n/m <error-kind>: <msg>`.
-    # Step ordinals index the turn's items, which _item_names pairs back to
-    # verb names. Every ran step that produced a value becomes a ToolCall —
-    # parallel calls in one message, the same shape stock agents emit
-    # (tau2's executor runs them all).
-    def _from_steps(self, reply: str, report: str) -> AssistantMessage:
-        names = self._item_names(reply)
+    # Step ordinals index the turn's items, which _item_chains pairs back to
+    # verb chains. Every item's LAST verb is what its result carries —
+    # a non-say tail becomes a ToolCall, a say tail becomes speech.
+    def _from_steps(self, reply: str, report: str) -> Optional[AssistantMessage]:
+        chains = self._item_chains(reply)
         calls: list[ToolCall] = []
         spoken: list[str] = []
         for line in report.splitlines():
-            m = re.match(r"step (\d+)/(\d+) result: (.*)", line)
+            m = re.match(r"step (\d+)/(\d+) ([\w-]+): (.*)$", line)
             if not m:
                 continue
             n = int(m.group(1))
-            name = names[n - 1] if n - 1 < len(names) else None
-            if not name:
-                continue
-            args = self._args_from_value(m.group(3))
-            if name in _SPOKEN:
-                spoken.append(str(args.get("text", "")))
-            else:
-                tau_name = self.cfg.koru_to_tau.get(name, name)
-                calls.append(
-                    ToolCall(id=f"koru_{self.call_count}_{n}", name=tau_name, arguments=args)
+            kind = m.group(3)
+            payload = m.group(4)
+            item = chains[n - 1] if n - 1 < len(chains) else None
+            if kind == "defined":
+                continue  # session-side effect; the caller refreshes vocab
+            if kind != "result":
+                # A refused item inside a turn that otherwise ran. The
+                # gate's rejection must reach the model as a note —
+                # otherwise a prose line beside a real call evaporates
+                # silently and the model keeps writing prose (measured
+                # 2026-09-27 task 19: prose-then-call STEPS taught the
+                # habit; all-prose turns then surfaced as bare apologies).
+                src = (item["source"].strip() if item else "")[:120]
+                self._notes.append(
+                    f"[step {n} refused] {kind}: {payload} — "
+                    f"\"{src}\" never ran. Anything you want the user to "
+                    'hear goes through say(text: "...").'
                 )
+                continue
+            bm = re.match(r"(.*) bound: (\S+)$", payload)
+            value_json = bm.group(1) if bm else payload
+            verbs = item["verbs"] if item else []
+            tail = verbs[-1] if verbs else None
+            if not tail:
+                continue
+            args = self._args_from_value(value_json)
+            dropped = [v for v in verbs[:-1] if v not in _SPOKEN and v not in _LOCAL]
+            if dropped:
+                self._note_calls_dropped(dropped)
+            if tail in _SPOKEN:
+                spoken.append(str(args.get("text", "")))
+            elif tail in _LOCAL:
+                # Introspection never marshals southbound — its render is
+                # data for the model, delivered as a context note.
+                self._notes.append(
+                    f"[{tail}] {self._result_text(value_json)}"
+                )
+                for text in self._say_texts(item["source"] if item else ""):
+                    self._note_speech_dropped(text)
+            else:
+                for text in self._say_texts(item["source"] if item else ""):
+                    self._note_speech_dropped(text)
+                tau_name = self.cfg.koru_to_tau.get(tail, tail)
+                call_id = f"koru_{self.call_count}_{n}"
+                calls.append(ToolCall(id=call_id, name=tau_name, arguments=args))
+                self._call_labels[call_id] = (item["source"] if item else tail).strip()[:160]
+        # Speech + tools in one turn: a half-duplex message carries one or
+        # the other, never both. The calls execute NOW — deferring them
+        # behind the speech strands writes when the user stops on hearing
+        # the confirmation. The speech is NOT silently dropped: the next
+        # context tells the model the user never heard it and re-shows
+        # the text, so the report lands the following turn, carrying real
+        # results. Nothing swallowed, nothing faked.
         if calls:
+            for s in spoken:
+                if s:
+                    self._note_speech_dropped(s)
             return AssistantMessage.text("", tool_calls=calls)
         if spoken:
             return AssistantMessage.text(" ".join(s for s in spoken if s))
+        # Nothing leaves the turn — pure introspection/defines. None tells
+        # the caller to deliver the notes and let the model emit again
+        # inside this turn's budget.
+        if self._notes:
+            return None
         return AssistantMessage.text(
             "I'm sorry, I'm having trouble processing that right now. "
             "Could you tell me again what you need?"
@@ -433,17 +565,44 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         self.call_count += 1
 
         # tau3 alternates user turns with tool results. A ToolMessage is DB
-        # output, not something the user said: label it the way the wire's
-        # [tool result] convention does.
+        # output, not something the user said — and not opaque text either:
+        # each result is bound into the session as `t{N}` BEFORE the model
+        # sees it, so the context line names a value the wire can actually
+        # dereference (`t1.user_id`) rather than a JSON blob to re-type.
         if isinstance(message, ToolMessage):
-            shown = f"[tool result] {message.content}"
+            name = self._bind_result(message.content)
+            label = self._call_labels.get(getattr(message, "id", None) or "")
+            if name:
+                src = f" = {label}" if label else ""
+                shown = f"[{name}{src}] {message.content}"
+            else:
+                shown = f"[tool result] {message.content}"
             state.messages.append(UserMessage.text(shown))
         elif isinstance(message, MultiToolMessage):
             # A multi-item turn's results arrive together, one per step.
-            shown = "".join(f"[tool result] {tm.content}\n" for tm in message.tool_messages)
-            state.messages.append(UserMessage.text(shown))
+            # Each line names BOTH the binding and the call that produced
+            # it — the datum→call link is written in the label, so the
+            # model never has to correlate three blobs positionally.
+            lines = []
+            for tm in message.tool_messages:
+                name = self._bind_result(tm.content)
+                label = self._call_labels.get(getattr(tm, "id", None) or "")
+                if name:
+                    src = f" = {label}" if label else ""
+                    lines.append(f"[{name}{src}] {tm.content}")
+                else:
+                    lines.append(f"[tool result] {tm.content}")
+            state.messages.append(UserMessage.text("\n".join(lines) + "\n"))
         else:
             state.messages.append(message)
+
+        # Effects the marshal could not carry last turn — undelivered
+        # speech, un-dispatched chain calls — are surfaced now as context
+        # notes, same channel as rejection feedback.
+        if self._notes:
+            for note in self._notes:
+                state.messages.append(UserMessage.text(note))
+            self._notes = []
 
         # 1. Ask the model for wire Koru. No tools are offered — the only
         #    "tool schema" the model sees is the register block render.
@@ -463,6 +622,16 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         saw_usage = False
         saw_cost = False
         for attempt in range(3):
+            dump_dir = os.environ.get("KOPIUM_CONTEXT_DUMP")
+            if dump_dir:
+                # Snapshot the exact context the model sees at this attempt —
+                # enables post-hoc replay probes without re-running the task.
+                dump = [{"kind": type(m).__name__,
+                         "content": getattr(m, "content", None)}
+                        for m in state.system_messages + state.messages]
+                Path(dump_dir).mkdir(parents=True, exist_ok=True)
+                Path(dump_dir, f"ctx_{self.call_count:02d}_{attempt}.json").write_text(
+                    json.dumps(dump, indent=1))
             try:
                 response = self._llm(state.system_messages + state.messages)
                 if response.usage:
@@ -483,8 +652,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 reply = ""
                 state.messages.append(
                     UserMessage.text(
-                        f"[internal] Your last reply was not accepted: {detail}. "
-                        f"Reply with invocations from your vocabulary — one per line."
+                        self._rejection_note(detail, reply, "")
                     )
                 )
                 continue
@@ -515,33 +683,87 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
                 state.messages.append(AssistantMessage.text(reply))
                 return out, state
             if status == "OK":
+                # A lone introspection call (`vocabulary()`, `bind(...)`,
+                # `grammar()`) never leaves the gate — its render is data
+                # for the model, not a message for the user. Deliver it as
+                # a context note and let the model answer in this turn.
+                _vn, _vb, _vj = GateSession.parse_ok(detail)
+                _ch = self._item_chains(reply)
+                _vs = _ch[0]["verbs"] if _ch else []
+                if (_vs[-1] if _vs else _vn) in _LOCAL:
+                    state.messages.append(AssistantMessage.text(reply))
+                    self._notes.append(
+                        f"[{_vs[-1] if _vs else _vn}] "
+                        f"{self._result_text(_vj)}"
+                    )
+                    dropped = [v for v in _vs[:-1]
+                               if v not in _SPOKEN and v not in _LOCAL]
+                    if dropped:
+                        self._note_calls_dropped(dropped)
+                    if _ch:
+                        for s in self._say_texts(_ch[0]["source"]):
+                            self._note_speech_dropped(s)
+                    for note in self._notes:
+                        state.messages.append(UserMessage.text(note))
+                    self._notes = []
+                    continue
                 break
             if status == "STEPS":
                 if "defined:" in detail:
                     self._refresh_vocab(state)
                 out = self._from_steps(reply, detail)
+                if out is None:
+                    # The whole turn was introspection — nothing for the
+                    # user or the env. Deliver the renders as context notes
+                    # and let the model answer inside this turn's budget.
+                    state.messages.append(AssistantMessage.text(reply))
+                    for note in self._notes:
+                        state.messages.append(UserMessage.text(note))
+                    self._notes = []
+                    continue
                 out.usage = turn_usage if saw_usage else None
                 out.cost = turn_cost if saw_cost else None
                 state.messages.append(AssistantMessage.text(reply))
                 return out, state
             state.messages.append(
                 UserMessage.text(
-                    f"[internal] Your last reply was not accepted: {detail}. "
-                    f"Reply with invocations from your vocabulary — one per line."
+                    self._rejection_note(detail, reply, self._vocabulary_hint(reply))
                 )
             )
 
         if status == "OK":
-            event_name, _, value_json = detail.partition(" ")
-            if event_name in _SPOKEN:
+            event_name, _bound, value_json = GateSession.parse_ok(detail)
+            # An armed single-item turn (`say |> cancel`) reports the HEAD
+            # verb while the value is the chain's TAIL result — classify by
+            # the tail the same way _from_steps does, or a "speak then act"
+            # line marshals as speech carrying the action's arguments.
+            chains = self._item_chains(reply)
+            verbs = chains[0]["verbs"] if chains else []
+            name = verbs[-1] if verbs else event_name
+            dropped = [v for v in verbs[:-1] if v not in _SPOKEN and v not in _LOCAL]
+            if dropped:
+                self._note_calls_dropped(dropped)
+            if name in _LOCAL:
+                # Reachable only when every retry attempt was introspection
+                # — the loop consumed the budget delivering renders.
+                out = AssistantMessage.text(
+                    "I'm sorry, I'm having trouble processing that right now. "
+                    "Could you tell me again what you need?"
+                )
+            elif name in _SPOKEN:
                 args = self._args_from_value(value_json)
                 text = str(args.get("text", ""))
                 out = AssistantMessage.text(text)
             else:
-                tau_name = self.cfg.koru_to_tau.get(event_name, event_name)
+                if chains:
+                    for s in self._say_texts(chains[0]["source"]):
+                        self._note_speech_dropped(s)
+                tau_name = self.cfg.koru_to_tau.get(name, name)
                 args = self._args_from_value(value_json)
+                call_id = f"koru_{self.call_count}_{name}"
+                self._call_labels[call_id] = reply.strip()[:160]
                 out = AssistantMessage.text(
-                    "", tool_calls=[ToolCall(id=f"koru_{self.call_count}_{event_name}", name=tau_name, arguments=args)]
+                    "", tool_calls=[ToolCall(id=call_id, name=tau_name, arguments=args)]
                 )
         else:
             # Three rejections in a turn: the model cannot find the wire.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -60,41 +61,49 @@ class GateSession:
         status, _, detail = stdout.partition(" ")
         return status, detail.strip()
 
-    def _framed(self, command: str, tag: str) -> str:
-        if not self.alive:
-            raise RuntimeError("gate process died")
-        assert self.proc.stdin is not None and self.proc.stdout is not None
+    @staticmethod
+    def parse_ok(detail: str) -> tuple[str, str, str]:
+        """`OK <verb> bound=<name> <result-json>` → (verb, bound name, json).
+        `bound` is "" only if the gate's auto-bind ran out of memory."""
+        verb, _, rest = detail.partition(" ")
+        bound = ""
+        if rest.startswith("bound="):
+            bound, _, rest = rest[len("bound="):].partition(" ")
+        return verb, bound, rest
+
+    def bind(self, name: str, value: str) -> str:
+        """Inject a datum into the session env — the result-injection verb.
+        The value is a rendered datum (JSON object → named fields), and the
+        name is referenceable on every later turn (`t1.user_id`). Returns
+        the REQUESTED name — the OK line's `bound=r{N}` is the auto-bind of
+        the bind call's own ack value, not where the datum lives; handing
+        it back made the context render `[r2]` for a value bound as `t1`."""
+        status, detail = self.send(
+            f'bind(name: "{name}", value: {json.dumps(value)})'
+        )
+        if status != "OK":
+            raise RuntimeError(f"bind({name}) -> {status} {detail}")
+        return name
+
+    def _host_verb(self, name: str) -> str:
+        """A host verb on the wire — `vocabulary()`/`grammar()` dispatch like
+        any call; the render arrives inside the OK line's result JSON."""
+        status, detail = self.send(f"{name}()")
+        if status != "OK":
+            raise RuntimeError(f"{name}() -> {status} {detail}")
+        _, _, payload = self.parse_ok(detail)
         try:
-            self.proc.stdin.write((command + "\n").encode())
-            self.proc.stdin.flush()
-        except BrokenPipeError as e:
-            raise RuntimeError("gate process died") from e
-        begin, end = f"{tag}-BEGIN", f"{tag}-END"
-        lines: list[str] = []
-        began = False
-        while True:
-            raw = self.proc.stdout.readline()
-            if not raw:
-                raise RuntimeError(f"gate produced no {tag.lower()}")
-            line = raw.decode(errors="replace").rstrip("\n").rstrip("\r")
-            if not began:
-                if line.startswith("ERROR"):
-                    raise RuntimeError(line)
-                if line != begin:
-                    raise RuntimeError(f"expected {begin}, got {line!r}")
-                began = True
-                continue
-            if line == end:
-                return "\n".join(lines)
-            lines.append(line)
+            return json.loads(payload)["value"]
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            raise RuntimeError(f"{name}() returned unparseable result: {detail!r}") from e
 
     def vocabulary(self) -> str:
-        """`std/bridge:vocabulary` on this Bridge — register plus inventions."""
-        return self._framed(".vocabulary", "VOCAB")
+        """`vocabulary()` on this Bridge — register, host verbs, inventions."""
+        return self._host_verb("vocabulary")
 
     def grammar(self) -> str:
-        """`std/bridge:grammar` — wire rules, compiled verbs, inventions (440_017)."""
-        return self._framed(".grammar", "GRAMMAR")
+        """`grammar()` — wire rules, compiled verbs, inventions (440_017)."""
+        return self._host_verb("grammar")
 
     def close(self) -> None:
         if self.proc.stdin:

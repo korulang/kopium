@@ -14,6 +14,10 @@ block so the model CAN call them — and must choose not to.
 
 from __future__ import annotations
 
+import datetime
+import hashlib
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -22,6 +26,7 @@ from tau2.runner import build_environment, build_user, get_tasks, run_simulation
 from tau2.evaluator.evaluator import EvaluationType
 
 from kopium_agent import KopiumAgent, AIRLINE_CONFIG
+import prompt_guard
 
 HERE = Path(__file__).parent
 GATE = HERE / "airline-gate-binary"
@@ -35,6 +40,10 @@ def main() -> None:
 
     if not GATE.exists():
         sys.exit(f"airline gate missing: build it in {HERE} with koruc airline-gate.k")
+
+    # A contaminated prompt refuses to be measured — guard before spend.
+    prompt_guard.check_no_extra_rules()
+    prompt_guard.check_prompt_shape("airline")
 
     env = build_environment("airline")
     tasks = get_tasks("airline", task_ids=[task_id])
@@ -50,17 +59,50 @@ def main() -> None:
     crit = task.evaluation_criteria.model_dump()
     actions = [a["name"] for a in (crit.get("actions") or [])]
 
-    print(f"task      : {task.id}")
-    print(f"golden    : {actions or '(no tool calls - the refusal)'}")
-    print(f"asked     : {str(inst)[:140]}")
-    print()
-
     agent = KopiumAgent(
         tools=env.get_tools(),
         domain_policy=env.get_policy(),
         domain="airline", gate_binary=GATE,
         llm=llm,
     )
+
+    # ------------------------------- run receipt -----------------------------
+    # Every measured run prints and stores exactly what the model saw plus the
+    # code state that produced it. No number gets quoted without this header.
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_dir = HERE / "results" / "runs" / f"{stamp}-task{task.id}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    prompt = agent._system_prompt()
+    (run_dir / "prompt.txt").write_text(prompt)
+    git_head = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True
+    ).stdout.strip()
+    git_dirty = subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True
+    ).stdout.strip()
+    receipt = {
+        "task": task.id,
+        "model": llm,
+        "git_head": git_head,
+        "git_dirty_files": [l[3:] for l in git_dirty.splitlines()],
+        "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest()[:16],
+        "prompt_file": str(run_dir / "prompt.txt"),
+        "coaching_channel": (
+            "PRESENT" if hasattr(agent.cfg, "extra_rules") else "absent (field deleted)"
+        ),
+    }
+    (run_dir / "receipt.json").write_text(json.dumps(receipt, indent=1))
+    print("=" * 60)
+    print("RUN RECEIPT")
+    for k, v in receipt.items():
+        print(f"  {k}: {v}")
+    print("=" * 60)
+
+    print(f"task      : {task.id}")
+    print(f"golden    : {actions or '(no tool calls - the refusal)'}")
+    print(f"asked     : {str(inst)[:140]}")
+    print()
+
     user = build_user("user_simulator", env, task, llm=llm)
     orch = Orchestrator(
         domain="airline",
@@ -82,14 +124,21 @@ def main() -> None:
     print(f"agent calls: {agent.call_count}")
     print()
     print("trajectory:")
+    traj_lines = []
     for i, m in enumerate(res.messages):
         tcs = getattr(m, "tool_calls", None) or []
         if tcs:
             for tc in tcs:
-                print(f"  [{i}] TOOL {tc.name}({tc.arguments})")
+                line = f"  [{i}] TOOL {tc.name}({tc.arguments})"
+                print(line)
+                traj_lines.append(line)
             continue
         c = (str(m.content) or "")[:160]
-        print(f"  [{i}] {type(m).__name__}: {c}")
+        line = f"  [{i}] {type(m).__name__}: {c}"
+        print(line)
+        traj_lines.append(line)
+    (run_dir / "trajectory.txt").write_text("\n".join(traj_lines) + "\n")
+    print(f"\nrun dir   : {run_dir}")
 
 
 if __name__ == "__main__":
