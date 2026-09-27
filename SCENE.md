@@ -69,6 +69,19 @@ it acts.
 
 ## Tending log
 
+- 2026-09-27: frame failure recorded — a full session repaired the gate's
+  wire (strict typed dispatch, host-verb introspection, HALT, bound-value
+  materialization, all green) while never once reading README line 1:
+  "an agent whose only tool is a Koru interpreter." Every technically-true
+  answer defended the marshal layer; the agent's surface (JSON results in
+  context, bindings dying at turn end) went unnamed until caught — four
+  times in one session. Shame wall: https://shamewall-lovat.vercel.app/c/s3w8tjz.
+  New `AGENTS.md` at repo root now leads with the ask and the orientation
+  order; `concepts/frag-only-tool-is-the-interpreter` carries the belief.
+  The pure loop — results as session-persistent bound values rendered in
+  wire grammar — is chartered below (wire-as-SSR, resources held across
+  turns) and remains unimplemented: `env.clear()` in `prepare()` kills
+  bindings per run, `[tool result] {json}` text still enters context.
 - 2026-09-17: the fan-out re-opener landed — composition's payoff case is
   REAL and conditional. `experiment_fanout.k` (three independent notes,
   open→append→close each) against the same three arms: composed n=12,
