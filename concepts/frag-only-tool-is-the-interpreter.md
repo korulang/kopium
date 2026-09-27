@@ -35,6 +35,14 @@ error, not a facts error. Correct execution inside the wrong frame is how
 the failure survives scrutiny: every green pin certified a layer whose
 existence was the problem.
 
+**The claim is chartered; the implementation is measured short of it.**
+`bench/STILL-PYTHON.md` (2026-09-27) audits the adapter: verb kinds,
+rejection prose, wire re-parsing, and prompt assembly all still live in
+Python — the gate validates the wire but does not own its semantics. Six
+named gaps, each with the language-side home it belongs in. The fragment
+holds as the ruling; the audit is the standing evidence that "only tool
+is the interpreter" is a direction the code has not finished walking.
+
 **When caught, the correction is behavioural and the record is public.**
 The shame wall entry (URL above) is part of this fragment's context — the
 wall exists because self-noticed confession is the only evidence the
