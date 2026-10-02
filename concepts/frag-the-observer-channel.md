@@ -35,10 +35,18 @@ signal only as failure deepens, and no rung rescues the run.
 
 ## Open questions
 
-- Models keep voting for a raw-text note form the grammar does not have
-  (`note:` trailing text to end of line). Whether "a verb takes trailing
-  text" becomes a wire-grammar shape is Lars's syntax call — the runtime
-  carve is the bridge, not the answer.
+- The observed "misspellings" were type inference, not bad quoting: models
+  treated `text:` as a text-typed position. The wire's value grammar is
+  meant to be directed by the declared field type — `name<x>` already does
+  this (a minted-handle type admits only minted handles) — so `expr:
+  Expression` and `source: Source` are the same declaration shape as
+  `var: string`, and each type names its position's wire form: quoted
+  literal, raw text to end of line, Koru expression over the session's
+  bindings. The flat head-arg validator is bootstrap scaffolding that never
+  learned to consult the declared type; the open question is which field
+  types drive which wire shapes, not whether "a verb takes trailing text"
+  becomes a bespoke grammar rule. Lars's call — the ruling is about the
+  type grammar.
 - A permanently-free observer lane can theoretically loop forever (the
   strike bound never engages on pure-note turns); unproven whether that
   needs its own bound once raw-text lands.
