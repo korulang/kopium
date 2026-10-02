@@ -59,6 +59,15 @@ def check_shim_stays_a_marshal() -> None:
             fail(f"shim references {token} — a named coaching/mapping channel")
     if re.search(r"except[^:]*:\s*(return|pass|continue)\b", code):
         fail("shim swallows an exception — loud failure or nothing")
+    # No authored strings may cross the wire inbound: every _send payload is
+    # a transport shape whose only literals are the kind enum — content is
+    # always passthrough (message.content, domain_policy), never a literal.
+    for m in re.finditer(r"_send\(\{(.*?)\}\)", code, re.DOTALL):
+        for lit in re.findall(r'"([^"]*)"', m.group(1)):
+            if lit not in ("", "kind", "init", "user", "result", "id",
+                           "content", "text", "policy"):
+                fail(f"shim _send carries a literal {lit!r} — payloads are "
+                     "transport enums and passthrough fields only")
     print("  [ok] shim is a marshal: no model call, no names, no regex, no fallback")
 
 

@@ -1,0 +1,424 @@
+// gen_airline.kz — the airline register-block generator, in Koru.
+//
+// Reads bench/airline_schema.json — tau2's openai_schema marshaled to JSON
+// by dump_airline_schema.py (transport only: it serializes what tau2
+// already hands stock agents and makes no vocabulary decision). Every
+// semantic choice lives HERE: the schema-type -> wire-type mapping
+// (composites become Source — captured raw JSON admitted bare or
+// "quoted"; a string param named `expression` becomes Expression — math
+// text admitted bare), the underscore->hyphen name map, write-vs-read
+// costs, doc wording, the register block, the emitted proc plumbing.
+//
+// name<x> possession types are deliberately NOT emitted — the
+// transliterated arm mints no handles; that layer is hand-authored in
+// airline_native.kz, where the phantoms ARE the experiment.
+//
+// Run: ./gen_airline.sh  (dump + koruc + run)
+// Output: airline_tools.kz + airline_vocab_doc.md — GENERATED files.
+
+~import std/io
+~import std/fs
+~import koru/yyjson
+
+const std = @import("std");
+const yyj = @import("root").koru_koru.koru_yyjson;
+const A = std.heap.page_allocator;
+
+// Accumulators — emit-one appends per tool; assemble joins into files.
+var tors_out: std.ArrayList(u8) = .{};
+var docs_out: std.ArrayList(u8) = .{};
+var reg_out: std.ArrayList(u8) = .{};
+var tools_n: usize = 0;
+
+fn jstr(v: ?*yyj.Value) []const u8 {
+    const p = yyj.c.yyjson_get_str(v) orelse return "";
+    return p[0..yyj.c.yyjson_get_len(v)];
+}
+
+fn jget(v: ?*yyj.Value, key: []const u8) ?*yyj.Value {
+    return yyj.c.yyjson_obj_getn(v, key.ptr, key.len);
+}
+
+fn jhas(v: ?*yyj.Value, key: []const u8) bool {
+    return jget(v, key) != null;
+}
+
+fn put(list: *std.ArrayList(u8), s: []const u8) void {
+    list.appendSlice(A, s) catch @panic("gen_airline: OOM");
+}
+
+fn putf(list: *std.ArrayList(u8), comptime fmt: []const u8, args: anytype) void {
+    const s = std.fmt.allocPrint(A, fmt, args) catch @panic("gen_airline: OOM");
+    list.appendSlice(A, s) catch @panic("gen_airline: OOM");
+}
+
+fn hyphenate(n: []const u8, buf: []u8) []const u8 {
+    if (n.len > buf.len) @panic("gen_airline: tool name exceeds scratch");
+    @memcpy(buf[0..n.len], n);
+    for (buf[0..n.len]) |*c| {
+        if (c.* == '_') c.* = '-';
+    }
+    return buf[0..n.len];
+}
+
+// The wire-type ruling: JSON-schema type -> declared Koru field type.
+// Composite params (arrays, objects, $ref/anyOf shapes) are Source — the
+// wire captures raw text, so `flights: [{...}]` writes bare. A string
+// param named `expression` is Expression — bare math text. Scalars keep
+// their strict types: bare prose on a `string` field still refuses.
+const Kind = enum { str, int, num, boolean, source, expr };
+
+fn fieldKind(name: []const u8, prop: *yyj.Value) Kind {
+    const t = jstr(jget(prop, "type"));
+    const composite = t.len == 0 or std.mem.eql(u8, t, "array") or
+        std.mem.eql(u8, t, "object") or jhas(prop, "anyOf") or
+        jhas(prop, "$ref");
+    if (composite) return .source;
+    if (std.mem.eql(u8, t, "string"))
+        return if (std.mem.eql(u8, name, "expression")) .expr else .str;
+    if (std.mem.eql(u8, t, "integer")) return .int;
+    if (std.mem.eql(u8, t, "number")) return .num;
+    if (std.mem.eql(u8, t, "boolean")) return .boolean;
+    std.debug.print("gen_airline: unmapped schema type '{s}' on param '{s}'\n", .{ t, name });
+    @panic("gen_airline: unmapped schema type");
+}
+
+fn koruType(k: Kind) []const u8 {
+    return switch (k) {
+        .str => "string",
+        .int => "i64",
+        .num => "f64",
+        .boolean => "bool",
+        .source => "Source",
+        .expr => "Expression",
+    };
+}
+
+fn inRequired(req: ?*yyj.Value, key: []const u8) bool {
+    const r = req orelse return false;
+    var it: yyj.c.yyjson_arr_iter = undefined;
+    if (!yyj.c.yyjson_arr_iter_init(r, &it)) return false;
+    while (yyj.c.yyjson_arr_iter_next(&it)) |rv| {
+        if (std.mem.eql(u8, jstr(rv), key)) return true;
+    }
+    return false;
+}
+
+// Expand a $ref'd composite into its declared fields — the nested shape the
+// stock arm's schema renders, flattened to one line.
+fn emitShape(name: []const u8, prop: *yyj.Value, defs: ?*yyj.Value) bool {
+    var ref = jstr(jget(prop, "$ref"));
+    if (ref.len == 0) {
+        const items = jget(prop, "items") orelse return false;
+        const anyof = jget(items, "anyOf") orelse return false;
+        var it: yyj.c.yyjson_arr_iter = undefined;
+        if (!yyj.c.yyjson_arr_iter_init(anyof, &it)) return false;
+        while (yyj.c.yyjson_arr_iter_next(&it)) |arm| {
+            const r = jstr(jget(arm, "$ref"));
+            if (r.len != 0) {
+                ref = r;
+                break;
+            }
+        }
+    }
+    if (!std.mem.startsWith(u8, ref, "#/$defs/")) return false;
+    const d = defs orelse return false;
+    const shape = jget(d, ref["#/$defs/".len..]) orelse return false;
+    const sprops = jget(shape, "properties") orelse return false;
+    putf(&docs_out, "  {s}: Source — JSON array/object, bare or \"quoted\" — {{", .{name});
+    var oi: yyj.c.yyjson_obj_iter = undefined;
+    var first = true;
+    if (yyj.c.yyjson_obj_iter_init(sprops, &oi)) {
+        while (yyj.c.yyjson_obj_iter_next(&oi)) |kv| {
+            const fname = jstr(kv);
+            const spec = yyj.c.yyjson_obj_iter_get_val(kv);
+            if (!first) put(&docs_out, "; ");
+            first = false;
+            putf(&docs_out, "{s}: {s}", .{ fname, jstr(jget(spec, "type")) });
+            const fdesc = std.mem.trim(u8, jstr(jget(spec, "description")), " \n\t");
+            if (fdesc.len != 0) putf(&docs_out, " — {s}", .{fdesc});
+        }
+    }
+    put(&docs_out, "}\n");
+    return true;
+}
+
+const Field = struct { name: []const u8, kind: Kind, prop: *yyj.Value };
+
+// One tool -> tor decl + proc + register line + doc block. Every byte of
+// the emitted contract is derived from the schema in `v`; the only added
+// constants are the name map, the cost rule, and the type mapping above.
+fn emitTool(v: *yyj.Value) void {
+    const name = jstr(jget(v, "name"));
+    const func = jget(v, "function") orelse @panic("gen_airline: tool missing 'function'");
+    const write = if (jget(v, "write")) |w| yyj.c.yyjson_is_true(w) else false;
+    var nb: [128]u8 = undefined;
+    const kname = hyphenate(name, &nb);
+
+    const params = jget(func, "parameters") orelse @panic("gen_airline: schema missing 'parameters'");
+    const props = jget(params, "properties") orelse @panic("gen_airline: schema missing 'properties'");
+    const req = jget(params, "required");
+    const defs = jget(params, "$defs");
+
+    var fields: [32]Field = undefined;
+    var nf: usize = 0;
+    var oi: yyj.c.yyjson_obj_iter = undefined;
+    if (!yyj.c.yyjson_obj_iter_init(props, &oi)) @panic("gen_airline: 'properties' not an object");
+    while (yyj.c.yyjson_obj_iter_next(&oi)) |kv| {
+        const key = jstr(kv);
+        if (std.mem.eql(u8, key, "self")) continue;
+        const pv = yyj.c.yyjson_obj_iter_get_val(kv) orelse continue;
+        // The wire has no optional params — declaring one required would
+        // make the gate STRICTER than the stock arm's schema. Fail loud.
+        if (!inRequired(req, key)) {
+            std.debug.print("gen_airline: {s}.{s} is optional — the wire cannot declare it\n", .{ name, key });
+            @panic("gen_airline: optional param — extend the grammar first");
+        }
+        fields[nf] = .{ .name = key, .kind = fieldKind(key, pv), .prop = pv };
+        nf += 1;
+    }
+
+    // tor decl
+    if (nf == 0) {
+        putf(&tors_out, "~pub tor {s} {{}} -> string\n\n", .{kname});
+    } else {
+        putf(&tors_out, "~pub tor {s} {{ ", .{kname});
+        for (fields[0..nf], 0..) |f, i| {
+            if (i != 0) put(&tors_out, ", ");
+            putf(&tors_out, "{s}: {s}", .{ f.name, koruType(f.kind) });
+        }
+        put(&tors_out, " } -> string\n\n");
+    }
+
+    // proc — serializes inputs to the tau2 JSON args object, emits the
+    // outbound CALL line under this tor's own tau2 name, blocks for the
+    // result. Source fields splice `.text` raw so real arrays reach tau2.
+    putf(&tors_out, "~proc {s}|zig {{\n    const __W = @import(\"root\").koru_app.koru_tau_wire;\n", .{kname});
+    if (nf == 0) {
+        putf(&tors_out, "    return __W.callIO(\"{s}\", \"{{}}\");\n}}\n\n", .{name});
+    } else {
+        var buf: usize = 1024;
+        for (fields[0..nf]) |f| {
+            if (f.kind == .source) buf = 4096;
+        }
+        if (nf > 4 and buf < 2048) buf = 2048;
+        putf(&tors_out, "    const __S = struct {{ threadlocal var buf: [{d}]u8 = undefined; }};\n", .{buf});
+        var fmtbuf: std.ArrayList(u8) = .{};
+        var argbuf: std.ArrayList(u8) = .{};
+        var ei: usize = 0;
+        for (fields[0..nf], 0..) |f, i| {
+            if (i != 0) {
+                put(&fmtbuf, ", ");
+                put(&argbuf, ", ");
+            }
+            switch (f.kind) {
+                // Quoted params go through __jsonEsc — a raw splice writes
+                // a runtime newline/quote into the JSON unescaped and the
+                // marshal's inner parse fails (measured 2026-09-27: say()
+                // with \n\n in text marshalled to an empty user message).
+                .str, .expr => {
+                    putf(&tors_out, "    var __e{d}: [{d}]u8 = undefined;\n    const {s}_v = __jsonEsc({s}, &__e{d});\n", .{ ei, buf, f.name, f.name, ei });
+                    ei += 1;
+                    putf(&fmtbuf, "\\\"{s}\\\": \\\"{{s}}\\\"", .{f.name});
+                    putf(&argbuf, "{s}_v", .{f.name});
+                },
+                .source => {
+                    putf(&fmtbuf, "\\\"{s}\\\": {{s}}", .{f.name});
+                    putf(&argbuf, "{s}.text", .{f.name});
+                },
+                else => {
+                    putf(&fmtbuf, "\\\"{s}\\\": {{{s}}}", .{ f.name, if (f.kind == .boolean) "s" else "d" });
+                    putf(&argbuf, "{s}", .{f.name});
+                },
+            }
+        }
+        putf(&tors_out, "    const __args = std.fmt.bufPrint(&__S.buf,\n        \"{{{{{s}}}}}\",\n        .{{ {s} }}) catch @panic(\"kopium: {s} args exceed scratch\");\n    return __W.callIO(\"{s}\", __args);\n}}\n\n", .{ fmtbuf.items, argbuf.items, name, name });
+    }
+
+    // register line — WRITE tools cost more (commitment vs read).
+    putf(&reg_out, "    {s}({d})\n", .{ kname, if (write) @as(u8, 10) else 1 });
+
+    // doc block — derived from schema; declared wire types shown for the
+    // captured fields (Source/Expression), schema types for scalars.
+    const desc = std.mem.trim(u8, jstr(jget(func, "description")), " \n\t");
+    putf(&docs_out, "{s} — {s}\n", .{ kname, desc });
+    for (fields[0..nf]) |f| {
+        switch (f.kind) {
+            .source => {
+                if (!emitShape(f.name, f.prop, defs)) {
+                    const t = jstr(jget(f.prop, "type"));
+                    putf(&docs_out, "  {s}: Source — JSON {s}, bare or \"quoted\"", .{ f.name, if (t.len != 0) t else "value" });
+                    const pd = std.mem.trim(u8, jstr(jget(f.prop, "description")), " \n\t");
+                    if (pd.len != 0) putf(&docs_out, " — {s}", .{pd});
+                    put(&docs_out, "\n");
+                }
+            },
+            .expr => {
+                putf(&docs_out, "  {s}: Expression — bare math/expression text", .{f.name});
+                const pd = std.mem.trim(u8, jstr(jget(f.prop, "description")), " \n\t");
+                if (pd.len != 0) putf(&docs_out, " — {s}", .{pd});
+                put(&docs_out, "\n");
+            },
+            else => {
+                putf(&docs_out, "  {s}: {s}", .{ f.name, jstr(jget(f.prop, "type")) });
+                const en = jget(f.prop, "enum");
+                if (en != null) {
+                    put(&docs_out, " — one of ");
+                    var eit: yyj.c.yyjson_arr_iter = undefined;
+                    var efirst = true;
+                    if (yyj.c.yyjson_arr_iter_init(en, &eit)) {
+                        while (yyj.c.yyjson_arr_iter_next(&eit)) |ev| {
+                            if (!efirst) put(&docs_out, " | ");
+                            efirst = false;
+                            put(&docs_out, jstr(ev));
+                        }
+                    }
+                }
+                const pd = std.mem.trim(u8, jstr(jget(f.prop, "description")), " \n\t");
+                if (pd.len != 0) putf(&docs_out, " — {s}", .{pd});
+                put(&docs_out, "\n");
+            },
+        }
+    }
+    put(&docs_out, "\n");
+}
+
+~pub tor emit-one { v: *koru/yyjson:Value }
+
+~proc emit-one|zig {
+    emitTool(v);
+    tools_n += 1;
+}
+
+// Assemble the two output files from the accumulators — the file header,
+// the voice channel, the per-tool text, and the register block.
+~pub tor assemble {} -> { kz: string, doc: string, n: i64 }
+
+~proc assemble|zig {
+    var kz_final: std.ArrayList(u8) = .{};
+    put(&kz_final, GENERATED_HEADER);
+    put(&kz_final, SAY_TOR);
+    put(&kz_final, tors_out.items);
+    put(&kz_final, "~std/runtime:register(scope: \"airline\") {\n    say(1)\n");
+    put(&kz_final, reg_out.items);
+    put(&kz_final, "}\n");
+    var doc_final: std.ArrayList(u8) = .{};
+    put(&doc_final, DOC_PREAMBLE);
+    put(&doc_final, docs_out.items);
+    return .{ .kz = kz_final.items, .doc = doc_final.items, .n = @intCast(tools_n) };
+}
+
+const GENERATED_HEADER =
+    \\// airline_tools.kz — GENERATED by bench/gen_airline.kz from tau2's
+    \\// openai_schema (marshaled to bench/airline_schema.json by
+    \\// bench/dump_airline_schema.py — transport only, no decisions).
+    \\// Do not hand-edit: the gate's declared surface is the stock arm's
+    \\// schema read by construction; drift is a generator bug, not a
+    \\// transcription to fix. Regenerate: ./gen_airline.sh
+    \\//
+    \\// Field types are type-directed: scalars map straight (integer ->
+    \\// i64, number -> f64, boolean -> bool); composite params are Source
+    \\// — the wire captures raw JSON text, admitted bare (flights: [{...}])
+    \\// or "quoted"; a string param named `expression` is Expression —
+    \\// math text admitted bare. Source fields splice `.text` raw into the
+    \\// args JSON so real arrays reach tau2's typed executor.
+    \\//
+    \\// Each proc IS the southbound effect: it emits the outbound CALL
+    \\// line with its own tau2 schema name baked in and blocks on stdin
+    \\// for the matching result, which becomes the proc's return value
+    \\// (auto-bound r{N} by the bridge). The wire protocol itself lives in
+    \\// app/tau_wire.
+    \\
+    \\~import std/runtime
+    \\~import app/tau_wire
+    \\
+    \\const std = @import("std");
+    \\
+    \\// JSON-escape a runtime string for splicing inside a quoted JSON
+    \\// field. The wire parser resolves the model's escapes to real bytes;
+    \\// without this, a newline or quote lands inside the result JSON
+    \\// unescaped and the inner payload is not valid JSON (the marshal's
+    \\// parse then yields {}).
+    \\fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
+    \\    var i: usize = 0;
+    \\    for (s) |c| {
+    \\        if (c < 0x20 or c == '"' or c == '\\') {
+    \\            var tmp: [8]u8 = undefined;
+    \\            const rep: []const u8 = switch (c) {
+    \\                '"' => "\\\"",
+    \\                '\\' => "\\\\",
+    \\                '\n' => "\\n",
+    \\                '\r' => "\\r",
+    \\                '\t' => "\\t",
+    \\                else => std.fmt.bufPrint(&tmp, "\\u{x:0>4}", .{c}) catch @panic("kopium: escape scratch overflow"),
+    \\            };
+    \\            if (i + rep.len > buf.len) @panic("kopium: arg string exceeds JSON scratch");
+    \\            @memcpy(buf[i..][0..rep.len], rep);
+    \\            i += rep.len;
+    \\        } else {
+    \\            if (i >= buf.len) @panic("kopium: arg string exceeds JSON scratch");
+    \\            buf[i] = c;
+    \\            i += 1;
+    \\        }
+    \\    }
+    \\    return buf[0..i];
+    \\}
+    \\
+    \\
+;
+
+// The voice channel is ours, not tau2's — every domain's refusal surface.
+// `text` is Source: prose to the user admits bare (say: hello) or "quoted".
+const SAY_TOR =
+    \\// ============================================================================
+    \\// THE VOICE CHANNEL — the refusal surface (Koru's own, not a tau2 tool)
+    \\// ============================================================================
+    \\
+    \\~pub tor say { text: Source } -> string
+    \\
+    \\~proc say|zig {
+    \\    return @import("root").koru_app.koru_tau_wire.sayIO(text.text);
+    \\}
+    \\
+    \\
+;
+
+// The doc carries the tool contract only — introspection verbs
+// (vocabulary/grammar/bind/note) are appended by vocab-doc from the
+// bridge's own field table, so the two can never drift.
+const DOC_PREAMBLE =
+    \\# Tool contract — generated from the declared schema
+    \\
+    \\Every entry below is translated verbatim from the tool schema the
+    \\stock interface advertises (descriptions, types, enums, nested field
+    \\shapes). Two field types capture text: `Source` takes a JSON
+    \\array/object — bare (`flights: [{...}]`) or "quoted"; `Expression`
+    \\takes bare math text (`calculate(expression: 2 + 2)`). Scalar strings
+    \\still need "double quotes".
+    \\
+    \\say(text: Source) — the voice channel: what the user hears. Bare
+    \\prose or "quoted"; `say: <text>` is the short form.
+    \\
+    \\
+;
+
+// Drive: schema in, two files out.
+~std/io:read-file(path: "airline_schema.json")
+| ok content |> koru/yyjson:parse(text: content)
+    | ok doc |> koru/yyjson:root(doc): root_v
+        |> koru/yyjson:object.get(doc, v: root_v, key: "tools")
+        | found tools_v |> koru/yyjson:array.each(doc, v: tools_v)
+            ! item tv |> emit-one(v: tv)
+            | done |> assemble(): outs
+                |> koru/yyjson:close(doc)
+                |> std/io:free(content)
+                |> std/fs:write(path: "airline_tools.kz", content: outs.kz)
+                | written |> std/fs:write(path: "airline_vocab_doc.md", content: outs.doc)
+                    | written |> std/io:eprint.ln("gen_airline: {{ outs.n:d }} tors + say -> airline_tools.kz + airline_vocab_doc.md")
+                    | failed m |> std/io:eprint.ln("gen_airline: doc write failed {{ m:s }}")
+                | failed m |> std/io:eprint.ln("gen_airline: tools write failed {{ m:s }}")
+            | not-an-array |> koru/yyjson:close(doc) |> std/io:free(content) |> std/io:eprint.ln("gen_airline: 'tools' not an array")
+        | not-found |> koru/yyjson:close(doc) |> std/io:free(content) |> std/io:eprint.ln("gen_airline: schema has no 'tools'")
+    | err e |> std/io:free(content) |> std/io:eprint.ln("gen_airline: schema parse failed {{ e.msg:s }}")
+| not-found |> std/io:eprint.ln("gen_airline: airline_schema.json missing — run dump_airline_schema.py")
+| failed m |> std/io:eprint.ln("gen_airline: schema read failed {{ m:s }}")

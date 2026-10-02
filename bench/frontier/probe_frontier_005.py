@@ -62,7 +62,7 @@ def main() -> int:
     print(f"chain     {st_chain} {d_chain}")
     print(f"truncated {st_trunc} {d_trunc}")
     print(f"legit     {st_ok} {d_ok}")
-    if st_prose != "REJECT" or "prose" not in d_prose:
+    if st_prose != "REJECT" or "not wire" not in d_prose:
         print(f"FAIL: {PIN} broken — prose passed the wire gate")
         return 1
     if st_trail != "REJECT" or "nothing follows" not in d_trail:

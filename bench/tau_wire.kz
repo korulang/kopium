@@ -296,17 +296,19 @@ fn callIO(tau_name: []const u8, args_json: []const u8) []const u8 {
 | failed string
 
 ~proc vocab-doc|zig {
-    const rt = @import("root").koru_std.koru_runtime;
-    if (std.mem.eql(u8, scope, "airline")) {
+    const kb = @import("root").koru_std.koru_bridge;
+    // The contract text source differs per arm — airline's per-param doc
+    // is generated from tau2's schema (gen_airline.kz); other scopes render
+    // their grammar from the register block. Everything after is common:
+    // the derived introspection render, then the describe-handles probe.
+    const g = if (std.mem.eql(u8, scope, "airline")) blk: {
         const f = std.fs.cwd().openFile("airline_vocab_doc.md", .{}) catch
-            return .{ .failed = "airline_vocab_doc.md missing — run gen_airline_tors.py" };
+            return .{ .failed = "airline_vocab_doc.md missing — run ./gen_airline.sh" };
         defer f.close();
         const d = f.readToEndAlloc(std.heap.page_allocator, 1 << 20) catch
             return .{ .failed = "airline_vocab_doc.md unreadable" };
-        return .{ .ok = d };
-    }
-    const kb = @import("root").koru_std.koru_bridge;
-    const g = switch (rt.scope_grammar_event.handler(.{ .name = scope })) {
+        break :blk d;
+    } else switch (@import("root").koru_std.koru_runtime.scope_grammar_event.handler(.{ .name = scope })) {
         .ok => |t| t,
         .not_found => return .{ .failed = "scope has no registered vocabulary" },
     };

@@ -10,7 +10,7 @@
 // forges a third, so the concurrency of the claim is under test too:
 //
 //   0. open(path_a), open(path_b)   -> mint TWO real opaque handles
-//   1. loop N: close(forged)        -> MUST refuse HandleNotHeld (never minted;
+//   1. loop N: close(forged)        -> MUST refuse possession (never minted;
 //      the forged names are 6-hex, guaranteed distinct from the live ids)
 //   2. close(<real a>), close(<real b>) -> BOTH MUST accept: pool holds them
 // If any forged accept, or either real close refuses, possession is broken.
@@ -123,7 +123,7 @@ proc hammer|zig {
         });
         switch (r2) {
             .dispatch_error => |e| {
-                if (std.mem.indexOf(u8, e.message, "HandleNotHeld") != null) forged_refused += 1;
+                if (std.mem.indexOf(u8, e.message, "names nothing the session holds") != null) forged_refused += 1;
             },
             else => {},
         }

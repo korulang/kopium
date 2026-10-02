@@ -204,7 +204,7 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
 | dispatch-error e |> std/io:print.blk {
         REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran
     } |> std/fmt:fmt.blk {
-        [tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run. HandleNotHeld means you named a handle this session never issued — check which handles you actually opened.
+        [tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run.
     }: mb |> observe(text: mb)
 | unhandled-branch ub |> std/io:print.blk {
         UNHANDLED: branch '{{ ub.branch:s }}' fired with {{ ub.payload:s }}; held {{ ub.handles:s }}

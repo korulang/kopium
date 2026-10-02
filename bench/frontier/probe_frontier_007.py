@@ -34,12 +34,18 @@ unrelated define is observable nowhere in the old verdict's bytes.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gate_session import GateSession
+
+def _vnorm(v: str) -> str:
+    """Verdict detail modulo the auto-binding counter — bound=rN
+    ticks once per turn by design; the pin is the verdict value."""
+    return re.sub(r" bound=r\d+", "", v)
 
 GATE = Path(__file__).parent.parent / "mock-gate-binary"
 GREET = "tor greet { msg: string }\ngreet = say(text: msg)"
@@ -82,7 +88,7 @@ def main() -> int:
     if "summary" not in vf or "bye" not in vf or "text" in vf:
         print(f"FAIL: {PIN} unmeasured — farewell did not run its own body")
         return 1
-    if cg2 != "OK" or vg2 != vg:
+    if cg2 != "OK" or _vnorm(vg2) != _vnorm(vg):
         print(f"FAIL: {PIN} broken — unrelated define perturbed the neighbor verdict")
         return 1
     print(f"PASS: {PIN} holds on the bench path")

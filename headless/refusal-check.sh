@@ -7,7 +7,7 @@
 # in prose decays without a red anywhere. This gate pins both walls to the
 # canned session (zero tokens, fully deterministic):
 #
-#   turn 3  forged handle  -> REFUSED HandleNotHeld, proc never runs
+#   turn 3  forged handle  -> REFUSED possession denial, proc never runs
 #   turn 6  undeclared verb -> DENIED at the vocabulary wall
 #   hang-up compiler-written close still discharges the held note
 #
@@ -36,7 +36,8 @@ pin() {
     fi
 }
 
-pin "REFUSED: HandleNotHeld — 'close' never ran"
+pin "names nothing the session holds"
+pin "'close' never ran"
 pin "DENIED — 'sync' is not in this agent's scope"
 # The hang-up discharge: handles are OPAQUE (Lars ruling 09-07/08), so the
 # pin matches any 6-hex mint — the claim is that the held note is released,

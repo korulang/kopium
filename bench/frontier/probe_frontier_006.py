@@ -30,12 +30,18 @@ detail tracks the caller, not the definition.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gate_session import GateSession
+
+def _vnorm(v: str) -> str:
+    """Verdict detail modulo the auto-binding counter — bound=rN
+    ticks once per turn by design; the pin is the verdict value."""
+    return re.sub(r" bound=r\d+", "", v)
 
 GATE = Path(__file__).parent.parent / "mock-gate-binary"
 GREET = "tor greet { msg: string }\ngreet = say(text: msg)"
@@ -69,7 +75,7 @@ def main() -> int:
     if c2 != "OK" or "bye" not in v2 or "hi" in v2:
         print(f"FAIL: {PIN} broken — bye dispatch kept hi residue")
         return 1
-    if c3 != "OK" or v3 != v1:
+    if c3 != "OK" or _vnorm(v3) != _vnorm(v1):
         print(f"FAIL: {PIN} broken — same argument re-dispatched a different detail")
         return 1
     print(f"PASS: {PIN} holds on the bench path")

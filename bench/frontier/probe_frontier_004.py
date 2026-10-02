@@ -27,12 +27,18 @@ names coexist): the SAME name with the SAME argument never wavers.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gate_session import GateSession
+
+def _vnorm(v: str) -> str:
+    """Verdict detail modulo the auto-binding counter — bound=rN
+    ticks once per turn by design; the pin is the verdict value."""
+    return re.sub(r" bound=r\d+", "", v)
 
 GATE = Path(__file__).parent.parent / "mock-gate-binary"
 GREET = "tor greet { msg: string }\ngreet = say(text: msg)"
@@ -62,10 +68,10 @@ def main() -> int:
     if c1 != "OK" or "text" not in v1:
         print(f"FAIL: first dispatch is not the say verdict — {PIN} unmeasured")
         return 1
-    if c2 != "OK" or v2 != v1:
+    if c2 != "OK" or _vnorm(v2) != _vnorm(v1):
         print(f"FAIL: {PIN} broken — second verdict differs from the first")
         return 1
-    if c3 != "OK" or v3 != v1:
+    if c3 != "OK" or _vnorm(v3) != _vnorm(v1):
         print(f"FAIL: {PIN} broken — third verdict differs from the first")
         return 1
     print(f"PASS: {PIN} holds on the bench path")

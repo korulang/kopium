@@ -190,7 +190,7 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
     |> std/fmt:ln("[tool result] defined: '{{ d:s }}' is now a verb in this session's vocabulary — you can call it on a later turn."): mi
     |> observe(mi.text)
 | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
-    |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run. HandleNotHeld means you named a handle this session never issued — check which handles you actually opened."): mb
+    |> std/fmt:ln("[tool result] REFUSED: {{ e.message:s }}. '{{ e.event_name:s }}' did NOT run."): mb
     |> observe(mb.text)
 | unhandled-branch ub |> std/io:print.ln("  UNHANDLED: branch '{{ ub.branch:s }}' fired with {{ ub.payload:s }}; held {{ ub.handles:s }}")
     |> std/fmt:ln("[tool result] Your fragment ran but did not handle the outcome '{{ ub.branch:s }}' (it returned {{ ub.payload:s }}). The session still holds {{ ub.handles:s }} — those are yours to use on the next turn. Read the outcome and continue, or close what you opened."): mu
