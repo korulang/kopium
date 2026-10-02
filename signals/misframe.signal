@@ -1,0 +1,6 @@
+name: misframe
+kind: inferred
+shape: categorical
+face: in
+membrane: true
+note: a recorded belief asked the wrong question — content survives, frame is corrected
