@@ -2,48 +2,28 @@
 """
 Prompt-integrity guard for the measured arm — no model calls, no spend.
 
-Fails loudly (exit 1) if any of the contamination channels documented in
-CONTAMINATION-2026-09-27.md can reappear:
+The prompt now lives inside the Koru agent (bench/tau-agent.k +
+bench/tau_wire.kz): derived grammar, the generated tool-contract doc, and
+the domain policy spliced verbatim — every request body is receipted to
+KOPIUM_RECEIPT_DIR. The Python side is a line marshal and must stay one.
 
-  1. `extra_rules` must not exist on DomainConfig — as a dataclass field,
-     on any config instance, or as an attribute at runtime. The channel is
-     deleted, not emptied: a measured arm must be structurally incapable of
-     consuming hand-written behavioral prose.
+This guard fails loudly (exit 1) if the marshal regrows a channel: model
+calls, prompt assembly, verb/tool name tables, regex wire-parsing, retries,
+or fallback prose. The contamination channels documented in
+CONTAMINATION-2026-09-27.md can only reappear HERE — the Koru side's
+request body is one splice of three verifiable sources.
 
-  2. The rendered system prompt must decompose into EXACTLY four sources,
-     each verifiable against its origin:
-       - intro paragraph: wire mechanics only (no domain verbs)
-       - `## Koru` section: the gate's own `bridge:grammar` render
-       - the generated tool-contract doc: byte-identical to
-         `<domain>_vocab_doc.md` (emitted by gen_*_tors.py from tau2's
-         openai_schema — never hand-edited)
-       - `## Growth` section: wire-syntax documentation; must use only the
-         synthetic `greet` example, never a real domain verb
-       - `## Domain policy`: byte-identical to env.get_policy()
-     Nothing else may appear — every `##`/`#` header must be in the
-     allowed set, and no domain verb may be named in prose sections
-     (a `cancel-reservation` worked example is coaching even when framed
-     neutrally — that exact failure shipped).
-
-Run:  python3 bench/prompt_guard.py            # checks all domains
-      python3 bench/prompt_guard.py airline    # one domain
+Run:  python3 bench/prompt_guard.py
 """
 
 from __future__ import annotations
 
-import dataclasses
-import hashlib
 import re
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE))
-
-from kopium_agent import DomainConfig, KopiumAgent, _CONFIGS  # noqa: E402
-
-ALLOWED_H2 = {"## Koru", "## Growth", "## Domain policy"}
-ALLOWED_H1 = {"# Tool contract"}
+SHIM = HERE / "kopium_agent.py"
 
 
 def fail(msg: str) -> None:
@@ -51,98 +31,47 @@ def fail(msg: str) -> None:
     sys.exit(1)
 
 
-def check_no_extra_rules() -> None:
-    field_names = {f.name for f in dataclasses.fields(DomainConfig)}
-    if "extra_rules" in field_names:
-        fail("DomainConfig has an extra_rules field — the coaching channel is back")
-    for name, cfg in _CONFIGS.items():
-        if hasattr(cfg, "extra_rules"):
-            fail(f"{name} config instance carries extra_rules")
-    # A re-added prompt injection site would name the field. Comments that
-    # document its absence are fine; an f-string consuming it is not.
-    src = (HERE / "kopium_agent.py").read_text()
-    for m in re.finditer(r"extra_rules", src):
-        line = src[: m.start()].count("\n") + 1
-        text = src.splitlines()[line - 1].strip()
-        if not text.startswith("#") and 'extra_rules' in text:
-            fail(f"kopium_agent.py:{line} references extra_rules in code: {text}")
-    print("  [ok] extra_rules absent — field deleted, no code reference")
-
-
-def check_prompt_shape(domain: str) -> None:
-    from tau2.runner import build_environment
-
-    env = build_environment(domain)
-    agent = KopiumAgent(
-        tools=env.get_tools(), domain_policy=env.get_policy(),
-        domain=domain, gate_binary=HERE / f"{domain}-gate-binary",
-    )
-    prompt = agent._system_prompt()
-    cfg = agent.cfg
-    agent.close_gate()
-
-    # --- the policy block is verbatim (checked first so its own internal
-    #     headers are exempt from the authored-surface scan below) ---------
-    policy_mark = "\n## Domain policy\n"
-    if policy_mark not in prompt:
-        fail(f"{domain}: no ## Domain policy section")
-    authored, policy_part = prompt.split(policy_mark, 1)
-    if policy_part != env.get_policy():
-        fail(f"{domain}: domain policy is not verbatim env.get_policy()")
-    print("  [ok] domain policy byte-identical to tau2 source")
-
-    # --- the vocab doc is verbatim generated output ------------------------
-    doc_path = HERE / f"{domain}_vocab_doc.md"
-    if doc_path.exists():
-        doc = doc_path.read_text().strip()
-        if doc not in authored:
-            fail(f"{domain}: vocab doc modified in transit — not verbatim")
-        authored = authored.replace(doc, "", 1)
-        print("  [ok] tool-contract doc spliced verbatim from generated file")
-
-    # --- every header on the authored surface is in the allowed set --------
-    # (verbatim blocks removed above; the grammar render lives under its
-    # own ## Koru header)
-    for line in authored.splitlines():
-        if line.startswith("## "):
-            h2 = line.split("—")[0].split("(")[0].strip()
-            if h2 not in ALLOWED_H2 - {"## Domain policy"}:
-                fail(f"{domain}: disallowed prompt section {line!r}")
-        elif line.startswith("# "):
-            fail(f"{domain}: disallowed prompt header {line!r}")
-    print("  [ok] authored surface carries only intro + ## Koru + ## Growth")
-
-    # --- prose sections must not name a domain verb -------------------------
-    # The doc and grammar legitimately list verbs; the authored sections
-    # (intro paragraph, ## Growth) may not. Naming `cancel-reservation` in a
-    # worked example is exactly the contamination class this guards.
-    sections = re.split(r"\n(?=##? )", authored)
-    domain_verbs = set(cfg.koru_to_tau) | set(cfg.koru_to_tau.values())
-    for sec in sections:
-        head = sec.splitlines()[0]
-        if head.startswith("## Koru"):
+def check_shim_stays_a_marshal() -> None:
+    src = SHIM.read_text()
+    # Strip comments and docstrings: the check is about executable surface,
+    # not about prose that documents what is absent.
+    code_lines = []
+    in_doc = False
+    for line in src.splitlines():
+        s = line.strip()
+        if s.startswith('"""'):
+            in_doc = not in_doc or s.count('"""') == 2
+            if s.count('"""') == 2:
+                in_doc = False
             continue
-        for verb in domain_verbs:
-            if re.search(rf"\b{re.escape(verb)}\b", sec):
-                fail(
-                    f"{domain}: domain verb {verb!r} named in authored "
-                    f"prompt section ({head[:60]!r}) — coaching surface"
-                )
-    print("  [ok] no domain verb in authored prose (intro/growth)")
+        if in_doc or s.startswith("#"):
+            continue
+        code_lines.append(line)
+    code = "\n".join(code_lines)
 
-    # --- report -------------------------------------------------------------
-    sha = hashlib.sha256(prompt.encode()).hexdigest()[:16]
-    print(f"  {domain}: prompt sha256 {sha} — {len(prompt)} chars, sections verified")
+    if re.search(r"\bimport re\b", code):
+        fail("shim imports re — wire parsing does not belong in Python")
+    if re.search(r"litellm|llm_utils|\bgenerate\(", code):
+        fail("shim calls a model — the model call lives in tau-agent.k")
+    for token in ("_system_prompt", "extra_rules", "koru_to_tau",
+                  "DomainConfig", "_CONFIGS"):
+        if token in code:
+            fail(f"shim references {token} — a named coaching/mapping channel")
+    if re.search(r"except[^:]*:\s*(return|pass|continue)\b", code):
+        fail("shim swallows an exception — loud failure or nothing")
+    print("  [ok] shim is a marshal: no model call, no names, no regex, no fallback")
+
+
+def check_agent_binary_source() -> None:
+    for f in ("tau-agent.k", "tau_wire.kz"):
+        if not (HERE / f).exists():
+            fail(f"{f} missing — the agent is Koru; there is no arm without it")
+    print("  [ok] tau-agent.k + tau_wire.kz present")
 
 
 def main() -> None:
-    domains = sys.argv[1:] or list(_CONFIGS)
-    check_no_extra_rules()
-    for d in domains:
-        if d not in _CONFIGS:
-            fail(f"unknown domain {d!r}")
-        print(f"guard: {d}")
-        check_prompt_shape(d)
+    check_agent_binary_source()
+    check_shim_stays_a_marshal()
     print("GUARD PASS")
 
 

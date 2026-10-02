@@ -1,0 +1,708 @@
+// tau_wire.kz — the tau2 wire protocol, Koru side.
+//
+// Line-delimited JSON on the process's stdin/stdout; everything else (logs,
+// usage notes) goes to stderr only. Inbound: {"kind":"init","policy":...},
+// {"kind":"user","text":...}, {"kind":"result","id":...,"content":...}.
+// Outbound — emitted from INSIDE the dispatched procs, mid-`run`, never from
+// Python: {"kind":"say","text":...} (say's proc then blocks for the user's
+// next line) and {"kind":"call","id":...,"name":<tau2 schema name>,
+// "arguments":{...}} (the proc then blocks for the matching "result").
+// Every outbound line carries "usage" and "cost": the spend of all model
+// calls since the previous outbound line (retries included), accumulated
+// here by add-usage from the SSE terminal payloads.
+//
+// The user's reply read by a say() proc is queued in `pending`; the main
+// flow drains it into the transcript as real user messages before the next
+// model call. EOF sets saw_eof — callers exit, discharging the bridge
+// normally.
+
+const std = @import("std");
+
+// ============================================================================
+// STATE — process-lifetime counters and buffers. Session state lives in the
+// program's stores; this is transport, not conversation.
+// ============================================================================
+
+var auth_buf: [1024]u8 = undefined;
+var auth_len: usize = 0;
+
+var policy_buf: [65536]u8 = undefined;
+var policy_len: usize = 0;
+
+var doc_buf: [131072]u8 = undefined;
+var doc_len: usize = 0;
+
+// Model spend since the last outbound line.
+var usage_p: i64 = 0;
+var usage_c: i64 = 0;
+var usage_cost: f64 = 0;
+var usage_cost_seen: bool = false;
+// Whether the in-flight model call's SSE terminal payload carried usage.
+var call_usage_seen: bool = false;
+
+var call_seq: u64 = 0;
+var receipt_seq: u64 = 0;
+
+var saw_eof: bool = false;
+
+var inbound_buf: [262144]u8 = undefined;
+
+// User replies captured by say() procs mid-run, FIFO.
+const PENDING_CAP = 16;
+const PENDING_SZ = 16384;
+var pending_buf: [PENDING_CAP][PENDING_SZ]u8 = undefined;
+var pending_len: [PENDING_CAP]usize = [_]usize{0} ** PENDING_CAP;
+var pending_head: usize = 0;
+var pending_tail: usize = 0;
+
+// ============================================================================
+// ZIG HELPERS
+// ============================================================================
+
+fn jsonEscape(alloc: std.mem.Allocator, out: *std.ArrayListUnmanaged(u8), text: []const u8) void {
+    for (text) |ch| {
+        switch (ch) {
+            '"' => out.appendSlice(alloc, "\\\"") catch @panic("kopium: OOM"),
+            '\\' => out.appendSlice(alloc, "\\\\") catch @panic("kopium: OOM"),
+            '\n' => out.appendSlice(alloc, "\\n") catch @panic("kopium: OOM"),
+            '\t' => out.appendSlice(alloc, "\\t") catch @panic("kopium: OOM"),
+            '\r' => out.appendSlice(alloc, "\\r") catch @panic("kopium: OOM"),
+            else => {
+                if (ch >= 0x20) out.append(alloc, ch) catch @panic("kopium: OOM");
+            },
+        }
+    }
+}
+
+// `,"usage":{"prompt_tokens":N,"completion_tokens":N},"cost":X|null` then
+// reset the counters — the spend rides on the line it bought.
+fn appendUsage(alloc: std.mem.Allocator, out: *std.ArrayListUnmanaged(u8)) void {
+    var tmp: [192]u8 = undefined;
+    const cost: []const u8 = if (usage_cost_seen)
+        std.fmt.bufPrint(&tmp, "{d}", .{usage_cost}) catch "0"
+    else
+        "null";
+    const s = std.fmt.allocPrint(alloc,
+        ",\"usage\":{{\"prompt_tokens\":{d},\"completion_tokens\":{d}}},\"cost\":{s}",
+        .{ usage_p, usage_c, cost }) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, s) catch @panic("kopium: OOM");
+    usage_p = 0;
+    usage_c = 0;
+    usage_cost = 0;
+    usage_cost_seen = false;
+}
+
+fn writeOut(line: []const u8) void {
+    const stdout = std.fs.File.stdout();
+    stdout.writeAll(line) catch @panic("kopium: stdout write failed");
+    stdout.writeAll("\n") catch @panic("kopium: stdout write failed");
+}
+
+// One blocking inbound line. null on EOF (saw_eof set). Overlong lines and
+// read failures are loud — there is no degraded path on the wire.
+fn readInboundLine() ?[]const u8 {
+    const stdin = std.fs.File.stdin();
+    var i: usize = 0;
+    while (i < inbound_buf.len) {
+        var b: [1]u8 = undefined;
+        const n = stdin.read(b[0..]) catch @panic("kopium: stdin read failed");
+        if (n == 0) {
+            if (i > 0) return inbound_buf[0..i];
+            saw_eof = true;
+            return null;
+        }
+        if (b[0] == '\n') {
+            if (i > 0 and inbound_buf[i - 1] == '\r') i -= 1;
+            return inbound_buf[0..i];
+        }
+        inbound_buf[i] = b[0];
+        i += 1;
+    }
+    @panic("kopium: inbound line too long");
+}
+
+// The JSON engine is koru/yyjson — no second parser lives here. These read
+// a string field off one inbound line into page_allocator memory.
+const yj = @import("root").koru_koru.koru_yyjson;
+
+fn jsonStrOpt(line: []const u8, key: []const u8) ?[]const u8 {
+    const doc = yj.c.yyjson_read(@constCast(line.ptr), line.len, 0) orelse
+        return null;
+    defer yj.c.yyjson_doc_free(doc);
+    const root = yj.c.yyjson_doc_get_root(doc);
+    const v = yj.c.yyjson_obj_getn(root, key.ptr, key.len) orelse return null;
+    if (!yj.c.yyjson_is_str(v)) return null;
+    const p = yj.c.yyjson_get_str(v);
+    const len = yj.c.yyjson_get_len(v);
+    return std.heap.page_allocator.dupe(u8, p[0..len]) catch @panic("kopium: OOM");
+}
+
+fn jsonStr(line: []const u8, key: []const u8) ?[]const u8 {
+    return jsonStrOpt(line, key) orelse {
+        if (yj.c.yyjson_read(@constCast(line.ptr), line.len, 0) == null)
+            @panic("kopium: inbound line is not JSON");
+        return null;
+    };
+}
+
+fn fieldKind(line: []const u8) []const u8 {
+    return jsonStr(line, "kind") orelse @panic("kopium: inbound line has no kind");
+}
+
+fn pushPending(text: []const u8) void {
+    const next = (pending_tail + 1) % PENDING_CAP;
+    if (next == pending_head) @panic("kopium: pending-user queue full");
+    if (text.len > PENDING_SZ) @panic("kopium: user message too long");
+    @memcpy(pending_buf[pending_tail][0..text.len], text);
+    pending_len[pending_tail] = text.len;
+    pending_tail = next;
+}
+
+// ============================================================================
+// PROC-SIDE I/O — called from inside dispatched procs, mid-run.
+// ============================================================================
+
+// say(text:) — emit the SAY line, then block for the next inbound line,
+// which is the user's reply. The reply is queued for the main loop AND
+// returned as this proc's value (auto-bound r{N} like every result).
+fn sayIO(text: []const u8) []const u8 {
+    n_say += 1;
+    const alloc = std.heap.page_allocator;
+    var out = std.ArrayListUnmanaged(u8){};
+    out.appendSlice(alloc, "{\"kind\":\"say\",\"text\":\"") catch @panic("kopium: OOM");
+    jsonEscape(alloc, &out, text);
+    out.appendSlice(alloc, "\"") catch @panic("kopium: OOM");
+    appendUsage(alloc, &out);
+    out.appendSlice(alloc, "}") catch @panic("kopium: OOM");
+    writeOut(out.items);
+    const line = readInboundLine() orelse return "";
+    const kind = fieldKind(line);
+    if (std.mem.eql(u8, kind, "user")) {
+        const t = jsonStr(line, "text") orelse @panic("kopium: user line without text");
+        pushPending(t);
+        return t;
+    }
+    if (std.mem.eql(u8, kind, "result"))
+        @panic("kopium: a result line reached say() — protocol desync");
+    @panic("kopium: unknown inbound kind");
+}
+
+// Every tool tor — emit the CALL line with the tau2 schema name baked in,
+// then block for the matching result and return its content as the proc's
+// value. The bridge auto-binds it r{N}; a JSON-object datum gains fields,
+// so r{N}.user_id resolves on later turns.
+fn callIO(tau_name: []const u8, args_json: []const u8) []const u8 {
+    n_call += 1;
+    const alloc = std.heap.page_allocator;
+    call_seq += 1;
+    const id = std.fmt.allocPrint(alloc, "k{d}", .{call_seq}) catch @panic("kopium: OOM");
+    var out = std.ArrayListUnmanaged(u8){};
+    out.appendSlice(alloc, "{\"kind\":\"call\",\"id\":\"") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, id) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, "\",\"name\":\"") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, tau_name) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, "\",\"arguments\":") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, args_json) catch @panic("kopium: OOM");
+    appendUsage(alloc, &out);
+    out.appendSlice(alloc, "}") catch @panic("kopium: OOM");
+    writeOut(out.items);
+    const line = readInboundLine() orelse return "";
+    const kind = fieldKind(line);
+    if (!std.mem.eql(u8, kind, "result"))
+        @panic("kopium: call expected a result line");
+    const rid = jsonStr(line, "id") orelse @panic("kopium: result line without id");
+    if (!std.mem.eql(u8, rid, id))
+        @panic("kopium: result id does not match the outstanding call");
+    return jsonStr(line, "content") orelse @panic("kopium: result line without content");
+}
+
+// ============================================================================
+// TORS — flow-callable surface
+// ============================================================================
+
+// One inbound line, classified. `result` reaching the top level is a
+// protocol desync (results belong to a blocked call proc) — the flow dies.
+~pub tor inbound {}
+| init string
+| user string
+| result string
+| eof
+| bad string
+
+~proc inbound|zig {
+    const line = readInboundLine() orelse return .{ .eof = .{} };
+    const kind = fieldKind(line);
+    if (std.mem.eql(u8, kind, "init")) {
+        const p = jsonStr(line, "policy") orelse return .{ .bad = "init line without policy" };
+        return .{ .init = p };
+    }
+    if (std.mem.eql(u8, kind, "user")) {
+        const t = jsonStr(line, "text") orelse return .{ .bad = "user line without text" };
+        return .{ .user = t };
+    }
+    if (std.mem.eql(u8, kind, "result")) {
+        const c = jsonStr(line, "content") orelse return .{ .bad = "result line without content" };
+        return .{ .result = c };
+    }
+    return .{ .bad = kind };
+}
+
+~pub tor take-pending {}
+| some string
+| none
+
+~proc take-pending|zig {
+    if (pending_head == pending_tail) return .{ .none = .{} };
+    const s = pending_buf[pending_head][0..pending_len[pending_head]];
+    pending_head = (pending_head + 1) % PENDING_CAP;
+    return .{ .some = s };
+}
+
+~pub tor saw-eof {}
+| yes
+| no
+
+~proc saw-eof|zig {
+    if (saw_eof) return .{ .yes = .{} };
+    return .{ .no = .{} };
+}
+
+// The agent model id (OpenRouter slug, no litellm prefix) — the marshal
+// names it via KOPIUM_MODEL; unset is a harness misconfiguration.
+~pub tor model-name {} -> string
+
+~proc model-name|zig {
+    return std.posix.getenv("KOPIUM_MODEL") orelse
+        @panic("kopium: KOPIUM_MODEL unset — the marshal names the agent model");
+}
+
+// Which registered scope the bridge binds: "airline" (the transliterated
+// surface) or "airline-native" (the phantom-typed spine). KOPIUM_SCOPE;
+// unset is the transliterated arm, the historical default.
+~pub tor scope-name {} -> string
+
+~proc scope-name|zig {
+    return std.posix.getenv("KOPIUM_SCOPE") orelse "airline";
+}
+
+// The model-facing contract for the bound scope. The transliterated arm
+// reads the schema-derived doc (tau2's descriptions and enums are not in
+// the register block, so a file carries them). Every other scope renders
+// its own contract: scope-grammar emits the wire rules, THIS scope's verb
+// signatures (possession phantoms included), and the worked example the
+// register block's produce/consume edges derive — nothing hand-typed.
+~pub tor vocab-doc { br: *std/bridge:Bridge, scope: string }
+| ok string
+| failed string
+
+~proc vocab-doc|zig {
+    const rt = @import("root").koru_std.koru_runtime;
+    if (std.mem.eql(u8, scope, "airline")) {
+        const f = std.fs.cwd().openFile("airline_vocab_doc.md", .{}) catch
+            return .{ .failed = "airline_vocab_doc.md missing — run gen_airline_tors.py" };
+        defer f.close();
+        const d = f.readToEndAlloc(std.heap.page_allocator, 1 << 20) catch
+            return .{ .failed = "airline_vocab_doc.md unreadable" };
+        return .{ .ok = d };
+    }
+    const kb = @import("root").koru_std.koru_bridge;
+    const g = switch (rt.scope_grammar_event.handler(.{ .name = scope })) {
+        .ok => |t| t,
+        .not_found => return .{ .failed = "scope has no registered vocabulary" },
+    };
+    // scope-grammar knows nothing of the session grant — the introspection
+    // verbs (vocabulary/grammar/bind/note) live on the bridge. Advertise them
+    // in the doc only when the session actually grants them, so a prompt can
+    // never name a verb the wire would deny.
+    const g_full = if (br.introspection)
+        std.fmt.allocPrint(std.heap.page_allocator, "{s}\n{s}", .{ g, kb.introspection_verbs })
+            catch @panic("kopium: vocab-doc OOM")
+    else
+        g;
+    // Scopes may carry a `describe-handles` verb documenting what each minted
+    // tag holds — possession signatures name the obligation, not its content.
+    // Run it through the real bridge and append what it returns; a scope
+    // without one just gets the grammar. The run binds an rN — a boot-time
+    // binding, harmless.
+    const probe = @import("root").koru_std.koru_bridge.run_event.handler(.{
+        .br = br, .source = "describe-handles()",
+    });
+    return switch (probe) {
+        .result => |r| blk: {
+            const text = for (r.value.fields) |f| {
+                if (std.mem.eql(u8, f.name, "__type_ref") and f.value == .string_val)
+                    break f.value.string_val;
+            } else r.value.toJsonBuf();
+            break :blk .{ .ok = std.fmt.allocPrint(std.heap.page_allocator,
+                "{s}\n\nWhat your minted handles carry:\n{s}", .{ g_full, text })
+                catch @panic("kopium: vocab-doc OOM") };
+        },
+        else => .{ .ok = g_full },
+    };
+}
+
+// Which channel the model's reply rides: "content" (the default — wire text
+// in the message body) or "toolcall" — the request offers a single `koru`
+// tool and the reply's program arrives inside its argument string.
+~pub tor channel {}
+| toolcall
+| content
+
+~proc channel|zig {
+    if (std.mem.eql(u8, std.posix.getenv("KOPIUM_CHANNEL") orelse "content", "toolcall"))
+        return .{ .toolcall = .{} };
+    return .{ .content = .{} };
+}
+
+// The toolcall channel's fragment buffers: a reply may carry several koru
+// tool calls whose argument text streams interleaved — accumulate per call
+// index so parallel calls never splice each other's bytes. The buffer grows
+// on demand: a model that batches N calls in one reply is legal wire input,
+// never a panic.
+var toolfrag_buf: std.ArrayListUnmanaged(std.ArrayListUnmanaged(u8)) = .{};
+var toolfrag_hi: usize = 0;
+
+~pub tor toolfrag { index: i64, text: string }
+
+~proc toolfrag|zig {
+    if (index < 0) @panic("kopium: negative tool-call index");
+    const i: usize = @intCast(index);
+    const alloc = std.heap.page_allocator;
+    while (toolfrag_buf.items.len <= i) toolfrag_buf.append(alloc, .{}) catch @panic("kopium: OOM");
+    toolfrag_buf.items[i].appendSlice(alloc, text) catch @panic("kopium: OOM");
+    if (i + 1 > toolfrag_hi) toolfrag_hi = i + 1;
+}
+
+// End-of-turn: extract each accumulated call's `program` field (yyjson —
+// real unescaping) and join the programs with newlines into one multi-item
+// wire source. A call without a program contributes its raw args text so
+// the wire gate can reject it rather than dropping it.
+~pub tor tooltake {}
+| programs string
+| none
+
+~proc tooltake|zig {
+    const alloc = std.heap.page_allocator;
+    var out = std.ArrayListUnmanaged(u8){};
+    for (0..toolfrag_hi) |i| {
+        const args = toolfrag_buf.items[i].items;
+        const prog = if (args.len > 0) jsonStrOpt(args, "program") else null;
+        const piece = prog orelse args;
+        if (piece.len == 0) continue;
+        if (out.items.len > 0) out.append(alloc, '\n') catch @panic("kopium: OOM");
+        out.appendSlice(alloc, piece) catch @panic("kopium: OOM");
+    }
+    for (toolfrag_buf.items) |*b| b.clearRetainingCapacity();
+    toolfrag_hi = 0;
+    if (out.items.len == 0) return .{ .none = .{} };
+    return .{ .programs = out.items };
+}
+
+~pub tor set-policy { text: string }
+
+~proc set-policy|zig {
+    if (text.len > policy_buf.len) @panic("kopium: policy too long");
+    @memcpy(policy_buf[0..text.len], text);
+    policy_len = text.len;
+}
+
+~pub tor set-doc { text: string }
+
+~proc set-doc|zig {
+    if (text.len > doc_buf.len) @panic("kopium: vocab doc too long");
+    @memcpy(doc_buf[0..text.len], text);
+    doc_len = text.len;
+}
+
+~pub tor add-usage { p: i64, c: i64, cost: f64, has_cost: bool }
+
+~proc add-usage|zig {
+    usage_p += p;
+    usage_c += c;
+    if (has_cost) {
+        usage_cost += cost;
+        usage_cost_seen = true;
+    }
+    call_usage_seen = true;
+    total_p += p;
+    total_c += c;
+}
+
+// The rejection-retry bound. n is the count of consecutive rejected turns
+// so far; `bound` comes from the call site — loud death, not a scripted
+// apology.
+~pub tor bump-fail { n: i64, bound: i64 }
+| retry i64
+| edge i64
+| over
+
+~proc bump-fail|zig {
+    if (n + 1 >= bound) return .{ .over = .{} };
+    if (n + 1 >= bound - 2) return .{ .edge = n + 1 };
+    return .{ .retry = n + 1 };
+}
+
+// An unhandled-branch turn splits two ways: a named branch nobody armed is
+// an honest outcome the model may act on; an ordinary result whose arm word
+// was invented (| user u |> instead of | ok u |>) is a wire failure that must
+// count toward the rejection bound — otherwise the model retries the same
+// broken program forever and each retry re-dispatches.
+~pub tor arm-word { branch: string }
+| ordinary
+| named
+
+~proc arm-word|zig {
+    if (branch.len == 0) return .{ .ordinary = .{} };
+    return .{ .named = .{} };
+}
+
+// Per-call usage bookkeeping: a model call that completes without the SSE
+// terminal usage payload is unaccounted — count it, warn, and let the
+// session receipt show it rather than dying or pretending it was free.
+~pub tor mark-call-start {}
+
+~proc mark-call-start|zig {
+    call_usage_seen = false;
+    n_model_calls += 1;
+}
+
+var n_usage_missing: u64 = 0;
+
+~pub tor usage-check {}
+
+~proc usage-check|zig {
+    if (!call_usage_seen) {
+        n_usage_missing += 1;
+        std.debug.print("kopium: model call completed with no usage payload — tokens unaccounted\n", .{});
+    }
+}
+
+// Session counters — session.json is the per-run receipt: call counts,
+// rejection kinds, defines, and token sums across the whole conversation.
+var verdict_ran: bool = false;
+var n_model_calls: u64 = 0;
+var n_rejected: u64 = 0;
+var rej_parse: u64 = 0;
+var rej_denied: u64 = 0;
+var rej_validation: u64 = 0;
+var rej_shape: u64 = 0;
+var rej_exhausted: u64 = 0;
+var rej_scope: u64 = 0;
+var rej_residue: u64 = 0;
+var rej_unhandled: u64 = 0;
+var rej_partial: u64 = 0;
+var n_defines: u64 = 0;
+var n_say: u64 = 0;
+var n_call: u64 = 0;
+var n_residue: u64 = 0;
+var total_p: i64 = 0;
+var total_c: i64 = 0;
+
+~pub tor count-out { kind: string }
+
+~proc count-out|zig {
+    verdict_ran = true;
+    if (std.mem.eql(u8, kind, "define")) n_defines += 1;
+}
+
+~pub tor count-rejection { kind: string }
+
+~proc count-rejection|zig {
+    verdict_ran = false;
+    n_rejected += 1;
+    if (std.mem.eql(u8, kind, "parse-error")) rej_parse += 1;
+    if (std.mem.eql(u8, kind, "event-denied")) rej_denied += 1;
+    if (std.mem.eql(u8, kind, "validation-error")) rej_validation += 1;
+    if (std.mem.eql(u8, kind, "shape-error")) rej_shape += 1;
+    if (std.mem.eql(u8, kind, "exhausted")) rej_exhausted += 1;
+    if (std.mem.eql(u8, kind, "scope-not-found")) rej_scope += 1;
+    if (std.mem.eql(u8, kind, "residue")) rej_residue += 1;
+    if (std.mem.eql(u8, kind, "unhandled")) rej_unhandled += 1;
+    if (std.mem.eql(u8, kind, "partial")) rej_partial += 1;
+}
+
+// A partial turn that contained wire failures (parse/validation/denied/
+// dispatch steps) is a rejected reply — residue steps stay free, prose is
+// the sanctioned channel. Without this a program that fails the same way
+// every turn loops forever beside one succeeding call.
+~pub tor partial-verdict { wire_failures: i64 }
+| clean
+| dirty
+
+~proc partial-verdict|zig {
+    if (wire_failures > 0) return .{ .dirty = .{} };
+    return .{ .clean = .{} };
+}
+
+// A residue turn the agent aimed at the observer (`note(...)`/`note:` that
+// didn't parse as wire) is the elicited answer, not a rejected reply —
+// striking it would punish answering the question we asked. Plain prose
+// residue still strikes.
+~pub tor residue-verdict { observer: bool }
+| observer
+| strike
+
+~proc residue-verdict|zig {
+    if (observer) return .{ .observer = .{} };
+    return .{ .strike = .{} };
+}
+
+// Residue items the bridge bound (report lines and turn-level messages both
+// carry "residue bound: rN") — prose the model emitted that never became an
+// invocation. Measured separately from rejections: the turn's verdict is
+// unchanged, this just makes the prose tax visible in session.json.
+~pub tor count-residue { text: string }
+
+~proc count-residue|zig {
+    n_residue += std.mem.count(u8, text, "residue bound:");
+}
+
+// On EOF: the run's summary lands next to the call receipts. A loud death
+// leaves no session.json — absence IS the failed-run signal.
+~pub tor verdict {}
+| ran
+| rejected
+
+~proc verdict|zig {
+    if (verdict_ran) return .{ .ran = .{} };
+    return .{ .rejected = .{} };
+}
+
+~pub tor session-end {}
+
+~proc session-end|zig {
+    const dir = std.posix.getenv("KOPIUM_RECEIPT_DIR") orelse
+        @panic("kopium: KOPIUM_RECEIPT_DIR unset — receipts are mandatory");
+    const alloc = std.heap.page_allocator;
+    const path = std.fmt.allocPrint(alloc, "{s}/session.json", .{dir}) catch @panic("kopium: OOM");
+    const body = std.fmt.allocPrint(alloc,
+        "{{\"model_calls\":{d},\"rejected_turns\":{d},\"rejections_by_kind\":{{\"parse-error\":{d},\"event-denied\":{d},\"validation-error\":{d},\"shape-error\":{d},\"exhausted\":{d},\"scope-not-found\":{d},\"residue\":{d},\"unhandled\":{d},\"partial\":{d}}},\"defines\":{d},\"outbound_say\":{d},\"outbound_call\":{d},\"residue_items\":{d},\"prompt_tokens\":{d},\"completion_tokens\":{d},\"usage_missing\":{d}}}",
+        .{ n_model_calls, n_rejected, rej_parse, rej_denied, rej_validation,
+           rej_shape, rej_exhausted, rej_scope, rej_residue, rej_unhandled, rej_partial, n_defines, n_say, n_call,
+           n_residue, total_p, total_c, n_usage_missing }) catch @panic("kopium: OOM");
+    const f = std.fs.cwd().createFile(path, .{}) catch @panic("kopium: session.json create failed");
+    defer f.close();
+    f.writeAll(body) catch @panic("kopium: session.json write failed");
+    f.writeAll("\n") catch @panic("kopium: session.json write failed");
+}
+
+// Bearer for OpenRouter: env OPENROUTER_API_KEY, else the pi auth store.
+// Once, held here — transport, not session.
+~pub tor auth-ensure {}
+| ok
+| failed string
+
+~proc auth-ensure|zig {
+    if (auth_len > 0) return .{ .ok = .{} };
+    var key: []const u8 = "";
+    if (std.posix.getenv("OPENROUTER_API_KEY")) |k| {
+        key = k;
+    } else blk: {
+        const home = std.posix.getenv("HOME") orelse
+            return .{ .failed = "no OPENROUTER_API_KEY and no HOME" };
+        const path = std.fmt.allocPrint(std.heap.page_allocator,
+            "{s}/.pi/agent/auth.json", .{home}) catch @panic("kopium: OOM");
+        const f = std.fs.cwd().openFile(path, .{}) catch
+            return .{ .failed = "no OPENROUTER_API_KEY and no $HOME/.pi/agent/auth.json" };
+        defer f.close();
+        const content = f.readToEndAlloc(std.heap.page_allocator, 1 << 20) catch
+            return .{ .failed = "auth store read failed" };
+        const doc = yj.c.yyjson_read(@constCast(content.ptr), content.len, 0) orelse
+            return .{ .failed = "auth store is not JSON" };
+        defer yj.c.yyjson_doc_free(doc);
+        const root = yj.c.yyjson_doc_get_root(doc);
+        const or_entry = yj.c.yyjson_obj_get(root, "openrouter") orelse break :blk;
+        const kv = yj.c.yyjson_obj_get(or_entry, "key") orelse break :blk;
+        if (!yj.c.yyjson_is_str(kv)) break :blk;
+        const kp = yj.c.yyjson_get_str(kv);
+        key = std.heap.page_allocator.dupe(u8, kp[0..yj.c.yyjson_get_len(kv)]) catch
+            @panic("kopium: OOM");
+    }
+    if (key.len == 0) return .{ .failed = "no openrouter key in auth store" };
+    const s = std.fmt.allocPrint(std.heap.page_allocator, "Bearer {s}", .{key}) catch @panic("kopium: OOM");
+    if (s.len > auth_buf.len) @panic("kopium: bearer too long");
+    @memcpy(auth_buf[0..s.len], s);
+    auth_len = s.len;
+    return .{ .ok = .{} };
+}
+
+~pub tor auth {} -> string
+
+~proc auth|zig {
+    if (auth_len == 0) @panic("kopium: auth-ensure never ran");
+    return auth_buf[0..auth_len];
+}
+
+// Per-model-call receipt: the exact request body (which embeds the full
+// message list) under KOPIUM_RECEIPT_DIR, one file per call. Unset dir is
+// `skipped`, not an error — receipts are observability, not the path.
+~pub tor write-receipt { body: string }
+| written
+| skipped
+| failed string
+
+~proc write-receipt|zig {
+    const dir = std.posix.getenv("KOPIUM_RECEIPT_DIR") orelse return .{ .skipped = .{} };
+    receipt_seq += 1;
+    var pb: [1024]u8 = undefined;
+    const path = std.fmt.bufPrint(&pb, "{s}/call_{d:0>3}.json", .{ dir, receipt_seq }) catch
+        return .{ .failed = "receipt path too long" };
+    const f = std.fs.cwd().createFile(path, .{}) catch
+        return .{ .failed = "receipt create failed" };
+    defer f.close();
+    f.writeAll(body) catch return .{ .failed = "receipt write failed" };
+    return .{ .written = .{} };
+}
+
+~pub tor die { msg: string }
+
+~proc die|zig {
+    std.debug.print("kopium FATAL: {s}\n", .{msg});
+    std.process.exit(1);
+}
+
+// ============================================================================
+// THE REQUEST — system message = derived grammar + generated tool-contract
+// doc + domain policy, verbatim, newline-separated. Nothing authored sits on
+// this surface: if the model lacks something (how r{N} bindings resolve,
+// what say does), that gap belongs in std/bridge:grammar, not here.
+// ============================================================================
+
+~pub tor body { model: string, max_tokens: u32, temperature: string, grammar: string, history: string } -> string
+
+~proc body|zig {
+    const alloc = std.heap.page_allocator;
+    if (policy_len == 0) @panic("kopium: body() before init set the policy");
+    if (doc_len == 0) @panic("kopium: body() before the vocab doc was set");
+    const policy = policy_buf[0..policy_len];
+    const doc = doc_buf[0..doc_len];
+
+    var out = std.ArrayListUnmanaged(u8){};
+    out.appendSlice(alloc, "{\"model\":\"") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, model) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, "\",\"stream\":true,\"max_tokens\":") catch @panic("kopium: OOM");
+    const budget = std.fmt.allocPrint(alloc, "{d}", .{max_tokens}) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, budget) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, ",\"temperature\":") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, temperature) catch @panic("kopium: OOM");
+    const effort = std.posix.getenv("KOPIUM_REASONING") orelse "none";
+    out.appendSlice(alloc, ",\"reasoning\":{\"effort\":\"") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, effort) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
+    // The toolcall channel: one tool, `koru`, whose `program` argument IS the
+    // wire text. tool_choice required — every reply must arrive as a call.
+    if (std.mem.eql(u8, std.posix.getenv("KOPIUM_CHANNEL") orelse "content", "toolcall")) {
+        out.appendSlice(alloc, ",\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"koru\",\"description\":\"The Koru interpreter. The 'program' argument is one wire program in the grammar from the system message; its run report returns as this tool's result.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"program\":{\"type\":\"string\",\"description\":\"One wire program.\"}},\"required\":[\"program\"],\"additionalProperties\":false}}}],\"tool_choice\":\"required\"") catch @panic("kopium: OOM");
+    }
+    out.appendSlice(alloc, ",\"stream_options\":{\"include_usage\":true},\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
+    jsonEscape(alloc, &out, grammar);
+    jsonEscape(alloc, &out, "\n");
+    jsonEscape(alloc, &out, doc);
+    jsonEscape(alloc, &out, "\n");
+    jsonEscape(alloc, &out, policy);
+    out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, history) catch @panic("kopium: OOM");
+    out.appendSlice(alloc, "]") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, "}") catch @panic("kopium: OOM");
+    return out.toOwnedSlice(alloc) catch @panic("kopium: OOM");
+}

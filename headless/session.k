@@ -64,6 +64,7 @@ turn = app/model:intent(turn: n): why
         | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
         | unhandled-branch ub |> std/io:print.ln("  UNHANDLED: '{{ ub.branch:s }}' fired, held {{ ub.handles:s }} — carry it to the next turn")
         | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
+        | residue r |> std/io:print.ln("  the model emitted prose — bound as residue: {{ r.report:s }}")
         | parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
         | exhausted _ |> std/io:print.ln("  budget exhausted")
         | validation-error v |> std/io:print.ln("  invalid: {{ v:s }}")

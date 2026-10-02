@@ -9,10 +9,13 @@
 // The register block vets the verb and the flat scalars; the proc splices
 // JSON-carrying params raw so real arrays reach tau2's typed executor.
 //
-// Every tor returns its OWN PARSED INPUTS as a JSON string, so the gate's
-// OK line carries arguments WITHOUT Python re-parsing Koru.
+// Each proc IS the southbound effect: it emits the outbound CALL line with
+// its own tau2 schema name baked in and blocks on stdin for the matching
+// result, which becomes the proc's return value (auto-bound r{N} by the
+// bridge). The wire protocol itself lives in app/tau_wire.
 
 ~import std/runtime
+~import app/tau_wire
 
 const std = @import("std");
 
@@ -31,13 +34,13 @@ fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
                 '\n' => "\\n",
                 '\r' => "\\r",
                 '\t' => "\\t",
-                else => std.fmt.bufPrint(&tmp, "\\u{x:0>4}", .{c}) catch "",
+                else => std.fmt.bufPrint(&tmp, "\\u{x:0>4}", .{c}) catch @panic("kopium: escape scratch overflow"),
             };
-            if (i + rep.len > buf.len) break;
+            if (i + rep.len > buf.len) @panic("kopium: arg string exceeds JSON scratch");
             @memcpy(buf[i..][0..rep.len], rep);
             i += rep.len;
         } else {
-            if (i >= buf.len) break;
+            if (i >= buf.len) @panic("kopium: arg string exceeds JSON scratch");
             buf[i] = c;
             i += 1;
         }
@@ -52,16 +55,13 @@ fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
 ~pub tor say { text: string } -> string
 
 ~proc say|zig {
-    const __S = struct { threadlocal var buf: [2048]u8 = undefined; };
-    var __e0: [2048]u8 = undefined;
-    const text_v = __jsonEsc(text, &__e0);
-    const s = std.fmt.bufPrint(&__S.buf, "{{\"text\": \"{s}\"}}", .{text_v}) catch "{}";
-    return s;
+    return @import("root").koru_app.koru_tau_wire.sayIO(text);
 }
 
 ~pub tor book-reservation { user_id: string, origin: string, destination: string, flight_type: string, cabin: string, flights: string, passengers: string, payment_methods: string, total_baggages: i64, nonfree_baggages: i64, insurance: string } -> string
 
 ~proc book-reservation|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [4096]u8 = undefined; };
     var __e0: [4096]u8 = undefined;
     const user_id_v = __jsonEsc(user_id, &__e0);
@@ -75,83 +75,90 @@ fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
     const cabin_v = __jsonEsc(cabin, &__e4);
     var __e5: [4096]u8 = undefined;
     const insurance_v = __jsonEsc(insurance, &__e5);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"user_id\": \"{s}\", \"origin\": \"{s}\", \"destination\": \"{s}\", \"flight_type\": \"{s}\", \"cabin\": \"{s}\", \"flights\": {s}, \"passengers\": {s}, \"payment_methods\": {s}, \"total_baggages\": {d}, \"nonfree_baggages\": {d}, \"insurance\": \"{s}\"}}",
-        .{ user_id_v, origin_v, destination_v, flight_type_v, cabin_v, flights, passengers, payment_methods, total_baggages, nonfree_baggages, insurance_v }) catch "{}";
-    return s;
+        .{ user_id_v, origin_v, destination_v, flight_type_v, cabin_v, flights, passengers, payment_methods, total_baggages, nonfree_baggages, insurance_v }) catch @panic("kopium: book_reservation args exceed scratch");
+    return __W.callIO("book_reservation", __args);
 }
 
 ~pub tor calculate { expression: string } -> string
 
 ~proc calculate|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
     const expression_v = __jsonEsc(expression, &__e0);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"expression\": \"{s}\"}}",
-        .{ expression_v }) catch "{}";
-    return s;
+        .{ expression_v }) catch @panic("kopium: calculate args exceed scratch");
+    return __W.callIO("calculate", __args);
 }
 
 ~pub tor cancel-reservation { reservation_id: string } -> string
 
 ~proc cancel-reservation|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
     const reservation_id_v = __jsonEsc(reservation_id, &__e0);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\"}}",
-        .{ reservation_id_v }) catch "{}";
-    return s;
+        .{ reservation_id_v }) catch @panic("kopium: cancel_reservation args exceed scratch");
+    return __W.callIO("cancel_reservation", __args);
 }
 
 ~pub tor get-flight-status { flight_number: string, date: string } -> string
 
 ~proc get-flight-status|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
     const flight_number_v = __jsonEsc(flight_number, &__e0);
     var __e1: [1024]u8 = undefined;
     const date_v = __jsonEsc(date, &__e1);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"flight_number\": \"{s}\", \"date\": \"{s}\"}}",
-        .{ flight_number_v, date_v }) catch "{}";
-    return s;
+        .{ flight_number_v, date_v }) catch @panic("kopium: get_flight_status args exceed scratch");
+    return __W.callIO("get_flight_status", __args);
 }
 
 ~pub tor get-reservation-details { reservation_id: string } -> string
 
 ~proc get-reservation-details|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
     const reservation_id_v = __jsonEsc(reservation_id, &__e0);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\"}}",
-        .{ reservation_id_v }) catch "{}";
-    return s;
+        .{ reservation_id_v }) catch @panic("kopium: get_reservation_details args exceed scratch");
+    return __W.callIO("get_reservation_details", __args);
 }
 
 ~pub tor get-user-details { user_id: string } -> string
 
 ~proc get-user-details|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
     const user_id_v = __jsonEsc(user_id, &__e0);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"user_id\": \"{s}\"}}",
-        .{ user_id_v }) catch "{}";
-    return s;
+        .{ user_id_v }) catch @panic("kopium: get_user_details args exceed scratch");
+    return __W.callIO("get_user_details", __args);
 }
 
 ~pub tor list-all-airports {} -> string
 
 ~proc list-all-airports|zig {
-    return "{}";
+    const __W = @import("root").koru_app.koru_tau_wire;
+    return __W.callIO("list_all_airports", "{}");
 }
 
 ~pub tor search-direct-flight { origin: string, destination: string, date: string } -> string
 
 ~proc search-direct-flight|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
     const origin_v = __jsonEsc(origin, &__e0);
@@ -159,15 +166,16 @@ fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
     const destination_v = __jsonEsc(destination, &__e1);
     var __e2: [1024]u8 = undefined;
     const date_v = __jsonEsc(date, &__e2);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"origin\": \"{s}\", \"destination\": \"{s}\", \"date\": \"{s}\"}}",
-        .{ origin_v, destination_v, date_v }) catch "{}";
-    return s;
+        .{ origin_v, destination_v, date_v }) catch @panic("kopium: search_direct_flight args exceed scratch");
+    return __W.callIO("search_direct_flight", __args);
 }
 
 ~pub tor search-onestop-flight { origin: string, destination: string, date: string } -> string
 
 ~proc search-onestop-flight|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
     const origin_v = __jsonEsc(origin, &__e0);
@@ -175,53 +183,57 @@ fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
     const destination_v = __jsonEsc(destination, &__e1);
     var __e2: [1024]u8 = undefined;
     const date_v = __jsonEsc(date, &__e2);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"origin\": \"{s}\", \"destination\": \"{s}\", \"date\": \"{s}\"}}",
-        .{ origin_v, destination_v, date_v }) catch "{}";
-    return s;
+        .{ origin_v, destination_v, date_v }) catch @panic("kopium: search_onestop_flight args exceed scratch");
+    return __W.callIO("search_onestop_flight", __args);
 }
 
 ~pub tor send-certificate { user_id: string, amount: i64 } -> string
 
 ~proc send-certificate|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
     const user_id_v = __jsonEsc(user_id, &__e0);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"user_id\": \"{s}\", \"amount\": {d}}}",
-        .{ user_id_v, amount }) catch "{}";
-    return s;
+        .{ user_id_v, amount }) catch @panic("kopium: send_certificate args exceed scratch");
+    return __W.callIO("send_certificate", __args);
 }
 
 ~pub tor transfer-to-human-agents { summary: string } -> string
 
 ~proc transfer-to-human-agents|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
     const summary_v = __jsonEsc(summary, &__e0);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"summary\": \"{s}\"}}",
-        .{ summary_v }) catch "{}";
-    return s;
+        .{ summary_v }) catch @panic("kopium: transfer_to_human_agents args exceed scratch");
+    return __W.callIO("transfer_to_human_agents", __args);
 }
 
 ~pub tor update-reservation-baggages { reservation_id: string, total_baggages: i64, nonfree_baggages: i64, payment_id: string } -> string
 
 ~proc update-reservation-baggages|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
     const reservation_id_v = __jsonEsc(reservation_id, &__e0);
     var __e1: [1024]u8 = undefined;
     const payment_id_v = __jsonEsc(payment_id, &__e1);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\", \"total_baggages\": {d}, \"nonfree_baggages\": {d}, \"payment_id\": \"{s}\"}}",
-        .{ reservation_id_v, total_baggages, nonfree_baggages, payment_id_v }) catch "{}";
-    return s;
+        .{ reservation_id_v, total_baggages, nonfree_baggages, payment_id_v }) catch @panic("kopium: update_reservation_baggages args exceed scratch");
+    return __W.callIO("update_reservation_baggages", __args);
 }
 
 ~pub tor update-reservation-flights { reservation_id: string, cabin: string, flights: string, payment_id: string } -> string
 
 ~proc update-reservation-flights|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [4096]u8 = undefined; };
     var __e0: [4096]u8 = undefined;
     const reservation_id_v = __jsonEsc(reservation_id, &__e0);
@@ -229,22 +241,23 @@ fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
     const cabin_v = __jsonEsc(cabin, &__e1);
     var __e2: [4096]u8 = undefined;
     const payment_id_v = __jsonEsc(payment_id, &__e2);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\", \"cabin\": \"{s}\", \"flights\": {s}, \"payment_id\": \"{s}\"}}",
-        .{ reservation_id_v, cabin_v, flights, payment_id_v }) catch "{}";
-    return s;
+        .{ reservation_id_v, cabin_v, flights, payment_id_v }) catch @panic("kopium: update_reservation_flights args exceed scratch");
+    return __W.callIO("update_reservation_flights", __args);
 }
 
 ~pub tor update-reservation-passengers { reservation_id: string, passengers: string } -> string
 
 ~proc update-reservation-passengers|zig {
+    const __W = @import("root").koru_app.koru_tau_wire;
     const __S = struct { threadlocal var buf: [4096]u8 = undefined; };
     var __e0: [4096]u8 = undefined;
     const reservation_id_v = __jsonEsc(reservation_id, &__e0);
-    const s = std.fmt.bufPrint(&__S.buf,
+    const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\", \"passengers\": {s}}}",
-        .{ reservation_id_v, passengers }) catch "{}";
-    return s;
+        .{ reservation_id_v, passengers }) catch @panic("kopium: update_reservation_passengers args exceed scratch");
+    return __W.callIO("update_reservation_passengers", __args);
 }
 
 ~std/runtime:register(scope: "airline") {

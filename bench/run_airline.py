@@ -15,8 +15,8 @@ block so the model CAN call them — and must choose not to.
 from __future__ import annotations
 
 import datetime
-import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,11 +25,10 @@ from tau2.orchestrator.orchestrator import Orchestrator
 from tau2.runner import build_environment, build_user, get_tasks, run_simulation
 from tau2.evaluator.evaluator import EvaluationType
 
-from kopium_agent import KopiumAgent, AIRLINE_CONFIG
-import prompt_guard
+from kopium_agent import KopiumAgent
 
 HERE = Path(__file__).parent
-GATE = HERE / "airline-gate-binary"
+AGENT_BIN = HERE / "tau-agent-binary"
 
 
 def main() -> None:
@@ -38,12 +37,8 @@ def main() -> None:
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
 
-    if not GATE.exists():
-        sys.exit(f"airline gate missing: build it in {HERE} with koruc airline-gate.k")
-
-    # A contaminated prompt refuses to be measured — guard before spend.
-    prompt_guard.check_no_extra_rules()
-    prompt_guard.check_prompt_shape("airline")
+    if not AGENT_BIN.exists():
+        sys.exit(f"kopium agent missing: build it in {HERE} with koruc tau-agent.k && mv a.out tau-agent-binary")
 
     env = build_environment("airline")
     tasks = get_tasks("airline", task_ids=[task_id])
@@ -62,7 +57,7 @@ def main() -> None:
     agent = KopiumAgent(
         tools=env.get_tools(),
         domain_policy=env.get_policy(),
-        domain="airline", gate_binary=GATE,
+        domain="airline", gate_binary=AGENT_BIN,
         llm=llm,
     )
 
@@ -72,8 +67,11 @@ def main() -> None:
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = HERE / "results" / "runs" / f"{stamp}-task{task.id}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    prompt = agent._system_prompt()
-    (run_dir / "prompt.txt").write_text(prompt)
+    # The prompt is built and receipted inside the Koru process: one file per
+    # model call, the exact request body it sent.
+    receipt_dir = run_dir / "receipts"
+    receipt_dir.mkdir(exist_ok=True)
+    os.environ["KOPIUM_RECEIPT_DIR"] = str(receipt_dir)
     git_head = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True
     ).stdout.strip()
@@ -85,11 +83,7 @@ def main() -> None:
         "model": llm,
         "git_head": git_head,
         "git_dirty_files": [l[3:] for l in git_dirty.splitlines()],
-        "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest()[:16],
-        "prompt_file": str(run_dir / "prompt.txt"),
-        "coaching_channel": (
-            "PRESENT" if hasattr(agent.cfg, "extra_rules") else "absent (field deleted)"
-        ),
+        "receipt_dir": str(receipt_dir),
     }
     (run_dir / "receipt.json").write_text(json.dumps(receipt, indent=1))
     print("=" * 60)

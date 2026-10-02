@@ -259,6 +259,8 @@ act = std/store:query(session)
         |> announce(src, mb.text)
     | event-denied ev |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only the verbs in Your vocabulary above — open, append, close, say, and every verb you defined this session.\n\n"): mc
         |> announce(src, mc.text)
+    | residue r |> std/fmt:ln("[tool result] {{ r.report:s }}\n\n"): mr
+        |> announce(src, mr.text)
     | parse-error p |> std/fmt:ln("[tool result] that was not Koru: {{ p.message:s }}. Each line is one invocation; a definition is two lines, the first starting with `tor `.\n\n"): md
         |> announce(src, md.text)
     | partial p |> std/fmt:ln("[tool result] your turn ran as {{ p.total:d }} step(s); {{ p.ran:d }} completed. Step report:\n{{ p.report:s }}open resources: {{ p.handles:d }}.\n\n"): mpp

@@ -9,6 +9,7 @@ say(text: string) — the voice channel: what the user hears.
 vocabulary() — list the verbs currently in scope.
 grammar() — the wire's shape rules.
 bind(name:, value:) — bind a datum into the session.
+note(text:) — speaks to the observer, not the user: reasoning, plans, and "why I'm stuck" go here.
 
 book-reservation — Book a reservation.
   user_id: string — The ID of the user to book the reservation such as 'sara_doe_496'`.

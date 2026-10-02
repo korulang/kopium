@@ -17,6 +17,7 @@ drive = std/store:query(reply)
     | defined d |> std/io:print.ln("  defined {{ d:s }}")
     | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }}")
     | event-denied ev |> std/io:print.ln("  DENIED {{ ev:s }}")
+    | residue r |> std/io:print.ln("  residue: {{ r.report:s }}")
     | parse-error p |> std/io:print.ln("  not koru: {{ p.message:s }}")
     | exhausted _ |> _
     | validation-error _ |> _

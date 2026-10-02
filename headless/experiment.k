@@ -211,6 +211,7 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
 | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
     |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only the verbs in Your vocabulary above — open, append, close, read, edit, say, and every verb you defined this session."): mc
     |> observe(mc.text)
+| residue r |> std/io:print.ln("  residue: {{ r.report:s }}")
 | parse-error p |> std/io:print.blk {
         the model did not emit Koru: {{ p.message:s }}
     } |> std/fmt:fmt.blk {

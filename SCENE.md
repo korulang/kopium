@@ -69,6 +69,35 @@ it acts.
 
 ## Tending log
 
+- 2026-09-27 (evening): the airline tor surface is now GENERATED, not
+  transcribed — `bench/gen_airline_tors.py` reads tau2's `AirlineTools`
+  decorated methods and emits `bench/airline_tools.kz` from the same
+  `openai_schema` the stock arm consumes; drift is a generator input
+  problem, not a hand-mirror. Smoke-first verification then caught a
+  real wire defect a wide board would have buried: deepseek-flash
+  failed `say(text: <unquoted prose>)` 15/15 times in one task — the
+  reject `after a value comes ',' or ')'` named the parser's state, not
+  the fix. The wire rejection now names the field and teaches:
+  `after the value of 'text' comes ',' or ')' — text must be
+  "double-quoted"`. Same task re-run: `say` goes from 0% to ~90%
+  success, chained flows and `t{N}` derefs live. Reward still 0.0 —
+  legitimate: the nl_assertion required the agent to correct the user's
+  "Gold" claim with the datum `membership: regular` and the model
+  parroted the user instead. Model failure, not instrument. Snapshot
+  reuse confirmed built-in: `run_compare.py --stock-from/--koru-from`
+  cache static rows per task. Still gated before any wide run: usage/
+  cost stamping audit + a clean refusal task.
+- 2026-09-27 (later): the pure loop landed. `Bridge` owns a session env on
+  its own arena; `run` auto-binds every result `r{N}` and reports
+  `bound=<name>` on the wire; `bind(name:, value:)` is the host verb for
+  out-of-band data (harness injects real tool results as `t{N}`);
+  `validateFlow`/`checkFlowArgs` treat session names as bound. Cross-turn
+  dereference verified live: `say(text: r1.text)`, `send-certificate(
+  user_id: t1.user_id, ...)` resolve; `t9.user_id` refuses with the
+  teaching error. `vocabulary()`/`grammar()` disclose bound names.
+  `kopium_agent.py` renders results `[t3] {datum}` — Koru values, not
+  opaque `[tool result]` text. Pin `440_033` freezes the contract;
+  59-pin 430_/440_ sweep green.
 - 2026-09-27: frame failure recorded — a full session repaired the gate's
   wire (strict typed dispatch, host-verb introspection, HALT, bound-value
   materialization, all green) while never once reading README line 1:
@@ -79,9 +108,10 @@ it acts.
   New `AGENTS.md` at repo root now leads with the ask and the orientation
   order; `concepts/frag-only-tool-is-the-interpreter` carries the belief.
   The pure loop — results as session-persistent bound values rendered in
-  wire grammar — is chartered below (wire-as-SSR, resources held across
-  turns) and remains unimplemented: `env.clear()` in `prepare()` kills
-  bindings per run, `[tool result] {json}` text still enters context.
+  wire grammar — was chartered below (wire-as-SSR, resources held across
+  turns) and landed the same day (see the entry above): the bridge keeps a
+  session env, results auto-bind `r{N}`, `bind` injects out-of-band data,
+  and context renders `[tN] {datum}` — dereferenceable names, not text.
 - 2026-09-17: the fan-out re-opener landed — composition's payoff case is
   REAL and conditional. `experiment_fanout.k` (three independent notes,
   open→append→close each) against the same three arms: composed n=12,

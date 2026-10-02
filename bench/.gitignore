@@ -12,3 +12,10 @@ mock-gate-binary
 *-gate-binary
 *-vocab-binary
 results/
+tau-agent-binary
+*-binary
+verb-check-native
+docsize-binary
+tau-agent
+corpus-*.fixture.jsonl
+corpus-replay.fixture.jsonl

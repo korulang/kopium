@@ -172,7 +172,7 @@ def main() -> None:
             else:
                 try:
                     (kr, kdb, kcalls, kcost, ktok, kwall) = run_one(
-                        KopiumAgent, task, domain, gate=str(HERE / "airline-gate-binary")
+                        KopiumAgent, task, domain, gate=str(HERE / "tau-agent-binary")
                     )
                 except Exception as e:  # noqa: BLE001
                     kr, kdb, kcalls, kcost, ktok, kwall = None, None, None, None, (None, None), None

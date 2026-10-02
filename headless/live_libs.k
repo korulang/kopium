@@ -203,6 +203,7 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
 | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
     |> std/fmt:ln("[tool result] DENIED: '{{ ev:s }}' is not in your vocabulary. Use only the verbs in Your vocabulary above — read, edit, write, check, test, board, say, and every verb you defined this session."): mc
     |> observe(mc.text)
+| residue r |> std/io:print.ln("  the model emitted prose — bound as residue: {{ r.report:s }}")
 | parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
     |> std/fmt:ln("[tool result] That was not Koru: {{ p.message:s }}. Each line is one invocation; a definition is two lines, the first starting with `tor `."): md
     |> observe(md.text)

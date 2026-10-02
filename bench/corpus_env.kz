@@ -1,0 +1,8 @@
+// corpus_env.kz — getenv for the replay driver. Zig lives here because
+// .k files are pure Koru; the driver imports this module.
+
+const std = @import("std");
+
+~pub tor env-or { key: string, fallback: string } -> string
+
+~proc env-or|zig { return std.posix.getenv(key) orelse fallback; }
