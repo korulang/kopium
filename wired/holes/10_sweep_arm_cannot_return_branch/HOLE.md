@@ -42,12 +42,14 @@ user arm body into the synthesized sweepbody flow and marks the graft
 `is_transformed_subtree`; `shape_checker`'s continuation walk skips marked
 subtrees entirely. The arm body was simply never walked.
 
-**Fix:** the wall lives in the store transforms, pre-graft, while the user
-body is still visible. `refuseUncrossable` (`koru_std/store.uncrossable.kz`,
-beside the `Graft` struct it guards) walks the arm's continuation tree for
+**Fix:** the wall runs pre-graft, while the user body is still visible.
+`refuseUncrossable` (`src/ast.zig` — the boundary is a cross-cutting
+transform contract) walks the arm's continuation tree for
 `.branch_constructor` nodes (`=>` and bare-return `->` share the tag) —
-nested inside conditionals/foreach/switch as well as at the top level — and
-refuses `KORU102` before any graft:
+nested inside conditionals/foreach/switch as well as at the top level —
+and refuses `KORU102` before any graft. Store calls it through
+`refuseVoidArm` (`koru_std/store.uncrossable.kz`, beside the `Graft`
+struct it guards), which carries the `step`/`wait` exemption:
 
 ```
 error[KORU102]: std/store:query(box): `=>` inside a `! query` arm has
@@ -65,6 +67,11 @@ Walled families, all sharing the one helper:
 | `std/store:new` interceptors | `! inserted/removed/updated/cleared/discharge` | `690_358` |
 | `std/store:watch` (both collection paths) | `! <field>` | `690_359` |
 | `std/store:rule` / `preorder` | `! row`, `! preorder` | `690_360` |
+| `std/grid:sweep` | `! sweep` | `697_016` |
+| `std/channel` consumers | `! <kind>`, `! closed` | `699_035` |
+
+The grid and channel rows came out of sweeping `koru_std` for the same
+void-graft shape — both died the identical raw-Zig death until walled.
 
 Deliberately exempt: `! step` / `! wait` arms — a pump participant's `=>`
 constructs its own declared verdicts, which is how it answers the pump

@@ -3,9 +3,9 @@
 // The non-sweep sibling (`! beat _ => ran`) is pinned in koru by
 // 400_199_reject_construct_glyph_on_void_effect; THIS variant is pinned by
 // 690_357_construct_glyph_in_query_arm plus its sibling pins 690_358/59/60
-// (interceptor / watch / rule arms). The store transforms refuse KORU102
-// pre-graft via refuseUncrossable (koru_std/store.uncrossable.kz) —
-// see HOLE.md.
+// (interceptor / watch / rule arms; grid sweep and channel consumer arms
+// pinned at 697_016 / 699_035). The wall is `refuseUncrossable`
+// (src/ast.zig), pre-graft — see HOLE.md.
 //
 // Build: koruc probe.k
 // Result 2026-10-03: error[KORU102] — "std/store:query(box): `=>` inside a
