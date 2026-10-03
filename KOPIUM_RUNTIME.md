@@ -122,11 +122,20 @@ world: "/path/to/world")` — the vocabulary-parametric stance made literal: the
 parameter is a directory. Every new session starts with the agent's whole
 accumulated world.
 
-**The deep simplification:** the agent's growth mechanism uses the same verbs
-as its ordinary work. The agent already has open/append/close on files; define
-= append a flow to the world file. The object level (working with files) and
-the meta level (growing its own vocabulary) are the same primitives — the
-recursion is literal, and no meta-toolset exists.
+LANDED 2026-10-03 (koru `e7c50e9ac`, pinned `440_040`): mount loads every
+`*.k` in name order through the same `installDefine` path a fresh define
+takes; a define that lands writes `<world>/<name>.k` verbatim — one file
+per flow, readable and gardenable as a directory of programs. A corrupt
+genome panics at mount naming the file (`create`'s bare return cannot
+spell a refusal arm). Vocabulary persists; possession does not — the pool
+mints empty either way.
+
+**The deep simplification:** the agent's growth mechanism is the same verb
+as its ordinary work — `define` is the write path: one verb, two effects
+(install + persist), no meta-toolset. (Earlier text predicted agent-level
+open/append/close on a world file; the landed shape is simpler — the flow
+file is the unit, the define verb is the writer, and mount replays install
+rather than adding a second definition mechanism.)
 
 **The line that keeps it safe — definitions persist, possession does not:**
 

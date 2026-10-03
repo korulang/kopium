@@ -71,3 +71,19 @@ promotion is auto (all green-session definitions inherit), taste-gated
 (human promotes), or oracle-gated (per-verb episode evidence). The
 oracle-gated shape is the interesting one — a verb earns inheritance the
 way a test earns a pin.
+
+2026-10-03 — **heredity landed** (koru `e7c50e9ac`, pinned `440_040`):
+`create(world: <dir>)` mounts a directory of `*.k` files as the session's
+starting vocabulary, and every define that lands writes
+`<dir>/<name>.k` — verbatim definition source, one file per flow, so the
+genome is a directory of programs you can read, diff, and garden, not a
+serialized table. Restore replays the same `installDefine` path a fresh
+define takes, so mount is the same mechanism, not a second one. What the
+frag got right: "a vocabulary file per scope, loaded at bridge create" —
+the seam was exactly that small. What it sharpened: the write path is
+`define` itself (one verb, two effects), not agent-level file verbs.
+Staleness got teeth by accident — a corrupt genome panics at mount naming
+the file, because `-> *Bridge` cannot spell a refusal arm. The generational
+claim is now testable rather than designed: session N+1 CAN inherit. What
+still separates inheritance from *improvement* is the selection edge
+above — promotion has no oracle yet.
