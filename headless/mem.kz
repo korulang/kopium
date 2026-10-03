@@ -1,0 +1,149 @@
+// MEM — the agent's working memory: a string-keyed session map.
+//
+// Why this exists: bindings die at turn end and the note is for durable
+// text — nothing between "in scope this turn" and "on disk". A model that
+// wants to keep a scratch value across turns has no legal surface today;
+// `stash`/`recall`/`forget` is the smallest map that fixes it.
+//
+// Measured-naive by design: this is the kopium-side spike of the
+// interpreter floor (2026-10-03 thread — the std version of a session map
+// would be gated on optimality; a 32-slot linear scan is correct for a
+// session that stashes dozens of keys). Spellings are chosen for
+// promotion: the verbs read like the std surface they are auditioning for.
+//
+// No obligations: memory is not a resource — nothing is minted, held, or
+// owed. `full`/`missing`/`too-large` are named outcomes, not refusals, so
+// a model that stashes past capacity or recalls an absent key gets the
+// branch handed back and learns (430_056).
+
+~import std/runtime
+
+const std = @import("std");
+
+const MAX_SLOTS = 32;
+const MAX_KEY = 32;
+const MAX_VAL = 256;
+
+var key_buf: [MAX_SLOTS][MAX_KEY]u8 = undefined;
+var key_len: [MAX_SLOTS]usize = .{0} ** MAX_SLOTS;
+var val_buf: [MAX_SLOTS][MAX_VAL]u8 = undefined;
+var val_len: [MAX_SLOTS]usize = .{0} ** MAX_SLOTS;
+var used: [MAX_SLOTS]bool = .{false} ** MAX_SLOTS;
+
+// A freed slot is reusable: forget unmarks `used`, and stash takes the
+// lowest free slot — names stay dense the way note handles do. (Plain
+// `fn`s cannot see `$mod`; the procs pass module state in, same pattern
+// as notes' slotOf.)
+fn slotOf(
+    key: []const u8,
+    mod_used: [MAX_SLOTS]bool,
+    mod_key_buf: [MAX_SLOTS][MAX_KEY]u8,
+    mod_key_len: [MAX_SLOTS]usize,
+) ?usize {
+    for (0..MAX_SLOTS) |s| {
+        if (mod_used[s] and
+            std.mem.eql(u8, mod_key_buf[s][0..mod_key_len[s]], key))
+        {
+            return s;
+        }
+    }
+    return null;
+}
+
+fn freeSlot(mod_used: [MAX_SLOTS]bool) ?usize {
+    for (0..MAX_SLOTS) |s| {
+        if (!mod_used[s]) return s;
+    }
+    return null;
+}
+
+// ============================================================================
+// STASH — write (or overwrite) one key
+// ============================================================================
+
+~pub tor stash { key: string, text: string }
+| ok string
+| full string
+| too-large string
+
+~proc stash|zig {
+    if (key.len > MAX_KEY or text.len > MAX_VAL) {
+        return .{ .too_large = key };
+    }
+    if (slotOf(key, $mod.used, $mod.key_buf, $mod.key_len)) |s| {
+        @memcpy($mod.val_buf[s][0..text.len], text);
+        $mod.val_len[s] = text.len;
+        return .{ .ok = key };
+    }
+    const s = freeSlot($mod.used) orelse return .{ .full = key };
+    @memcpy($mod.key_buf[s][0..key.len], key);
+    @memcpy($mod.val_buf[s][0..text.len], text);
+    $mod.key_len[s] = key.len;
+    $mod.val_len[s] = text.len;
+    $mod.used[s] = true;
+    return .{ .ok = key };
+}
+
+// ============================================================================
+// RECALL — read one key back
+// ============================================================================
+
+~pub tor recall { key: string }
+| ok string
+| missing string
+
+~proc recall|zig {
+    const s = slotOf(key, $mod.used, $mod.key_buf, $mod.key_len) orelse return .{ .missing = key };
+    return .{ .ok = $mod.val_buf[s][0..$mod.val_len[s]] };
+}
+
+// ============================================================================
+// FORGET — drop one key; the miss is named, not silent
+// ============================================================================
+
+~pub tor forget { key: string }
+| ok string
+| missing string
+
+~proc forget|zig {
+    const s = slotOf(key, $mod.used, $mod.key_buf, $mod.key_len) orelse return .{ .missing = key };
+    $mod.used[s] = false;
+    return .{ .ok = key };
+}
+
+// ============================================================================
+// KEYS — what the session currently remembers (comma-joined, insert order
+// is slot order — an implementation detail, not a contract)
+// ============================================================================
+
+~pub tor keys {} -> string
+
+var list_buf: [4096]u8 = undefined;
+
+~proc keys|zig {
+    var n: usize = 0;
+    var first = true;
+    for (0..MAX_SLOTS) |s| {
+        if (!$mod.used[s]) continue;
+        const k = $mod.key_buf[s][0..$mod.key_len[s]];
+        if (!first) {
+            $mod.list_buf[n] = ',';
+            n += 1;
+        }
+        first = false;
+        @memcpy($mod.list_buf[n .. n + k.len], k);
+        n += k.len;
+    }
+    return $mod.list_buf[0..n];
+}
+
+// ============================================================================
+// THE PERMISSION MODEL
+// ============================================================================
+
+~std/runtime:register(scope: "mem") {
+    stash(1)
+    recall(1)
+    forget(1)
+    keys(1)
+}

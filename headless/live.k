@@ -36,6 +36,7 @@ import std/string
 import std/bridge
 import std/interpreter
 import app/notes
+import app/mem
 import app/wire
 import koru/sse
 import koru/curl
@@ -265,8 +266,15 @@ turn = app/wire:warm-grammar(br)
 // Turn 9 is the sequencing witness (frag-partial-programs): a goal that asks
 // for two invocations in one reply, which the bridge runs as steps and reports
 // under `?partial`.
+// The agent's vocabulary is one composite scope: notes' file verbs plus
+// mem's session-map verbs, pulled in whole by name.
+std/runtime:register(scope: "kopium") {
+    scope(notes)
+    scope(mem)
+}
+
 tor converse { model: string, max_tokens: u32, temperature: string }
-converse = std/bridge:create(id: "kopium-live", scope: "notes"): br
+converse = std/bridge:create(id: "kopium-live", scope: "kopium"): br
 |> std/io:print.ln("--- session open, the agent's only tool is a Koru interpreter")
 |> turn(br, model, max_tokens, temperature, n: 1, goal: "Open a note called agent-notes.txt.")
 |> turn(br, model, max_tokens, temperature, n: 2, goal: "Write the line 'a live model wrote this' into the note you just opened.")
