@@ -1,0 +1,42 @@
+// hmodel.kz — the canned model for heredity.k. Two scripts keyed on session:
+// `a` does the open/append/close dance, invents the composite, uses it;
+// `b` just calls it — the whole point is that `b` never saw the define.
+// Like app/model, turns that use a minted handle read `last-minted`:
+// handles are opaque, so the script observes instead of guessing.
+
+const std = @import("std");
+
+var say_buf: [128]u8 = undefined;
+
+~pub tor say { session: string, turn: u32 } -> string
+
+~proc say|zig {
+    const notes = @import("root").koru_app.koru_notes;
+    const last = notes.last_minted_event.handler(.{});
+    const a = std.mem.eql(u8, session, "a");
+    return switch (turn) {
+        // Session A — the agent does the three-verb dance, then names it.
+        1 => if (a) "open(path: \"agent-log.txt\")" else "log-line(path: \"agent-log.txt\", text: \"session B inherited this\")",
+        2 => if (a) std.fmt.bufPrint(&$mod.say_buf, "append(handle: \"{s}\", text: \"session A was here\")", .{last}) catch "append()" else "greet(msg: \"never seen before\")",
+        3 => if (a) std.fmt.bufPrint(&$mod.say_buf, "close(handle: \"{s}\")", .{last}) catch "close()" else "",
+        // The invention: the same three verbs as one word.
+        4 => "tor log-line { path: string, text: string }\nlog-line = open(path)\n| ok h |> append(handle: h, text)\n    | ok |> close(handle: h)",
+        5 => "log-line(path: \"agent-log.txt\", text: \"in one word now\")",
+        else => "",
+    };
+}
+
+// What the model *meant* by each turn, for the transcript. Prose only.
+~pub tor intent { session: string, turn: u32 } -> string
+
+~proc intent|zig {
+    const a = std.mem.eql(u8, session, "a");
+    return switch (turn) {
+        1 => if (a) "log a line — open the file" else "log a line — the verb's already here",
+        2 => if (a) "log a line — append the text" else "call a verb I never defined and nobody registered",
+        3 => if (a) "log a line — close the file" else "",
+        4 => "name that whole dance so I never do it by hand again",
+        5 => "log a line the short way",
+        else => "",
+    };
+}

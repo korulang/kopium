@@ -23,7 +23,7 @@ tor run-src { br: *std/bridge:Bridge, src: string }
 run-src = std/bridge:run(br, source: src)
 | result r |> std/interpreter:value.stringify(r.value): v
     |> std/io:print.ln("VALUE {{ v:s }}\n{{ r.trace:s }}")
-| defined d |> std/io:print.ln("FAIL-DEFINED {{ d:s }}")
+| defined d |> std/io:print.ln("DEFINED {{ d:s }}")
 | partial p |> std/io:print.ln("FAIL-PARTIAL {{ p.report:s }}")
 | unhandled-branch ub |> std/io:print.ln("FAIL-UNHANDLED {{ ub.branch:s }} {{ ub.payload:s }}")
 | dispatch-error e |> std/io:print.ln("{{ e.trace:s }}FAIL-DISPATCH {{ e.event_name:s }} {{ e.message:s }}")
@@ -46,7 +46,8 @@ one = koru/yyjson:parse(text: line)
 | err e |> std/io:print.ln("FAIL-FIXTURE not JSON ({{ e.msg:s }})")
 
 app/corpus_env:env-or(key: "KOPIUM_SCOPE", fallback: "airline"): scope
-|> [with]std/bridge:create(id: "corpus-replay", scope, introspection: true): br
+|> app/corpus_env:env-or(key: "KOPIUM_WORLD", fallback: ""): w
+|> [with]std/bridge:create(id: "corpus-replay", scope, introspection: true, world: w): br
 |> app/tau_wire:saw-eof()
 | yes |> std/io:eprint.ln("corpus-replay: stdin already at EOF")
 | no |> std/io:read-file(path: "corpus-replay.fixture.jsonl")

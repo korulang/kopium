@@ -87,3 +87,14 @@ the file, because `-> *Bridge` cannot spell a refusal arm. The generational
 claim is now testable rather than designed: session N+1 CAN inherit. What
 still separates inheritance from *improvement* is the selection edge
 above — promotion has no oracle yet.
+2026-10-03 — **the seam woke** (`heredity.k` headless demo + `KOPIUM_WORLD`
+on the bench path): inheritance is no longer pinned-but-dormant — real
+sessions mount worlds. Two demonstrations, one receipt each: `heredity.k`
+runs session A doing open/append/close by hand, defining `log-line` as the
+composite, closing; session B mounts the same dir and dispatches `log-line`
+on turn one — the composite body chains verbs through arm-bound results
+(`| ok h |>`), which is the grammar a defined flow's body actually speaks.
+On the bench path, `corpus-replay` with `KOPIUM_WORLD` persisted
+`find-user` and the next process's `vocabulary()` — the prompt's own
+source — listed it. The frag's next edge is unchanged and now load-bearing:
+promotion still has no oracle, so fossilization is live.

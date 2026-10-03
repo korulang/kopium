@@ -24,6 +24,7 @@ import std/bridge
 import std/interpreter
 import app/airline_tools
 import app/airline_native
+import app/corpus_env
 import app/tau_wire
 import koru/sse
 import koru/curl
@@ -313,6 +314,7 @@ std/string:from-page(text: "")
 | err e |> app/tau_wire:die(msg: e)
 
 app/tau_wire:scope-name(): sc
-|> [with]std/bridge:create(id: "tau-agent", scope: sc, introspection: true): br
+|> app/corpus_env:env-or(key: "KOPIUM_WORLD", fallback: ""): w
+|> [with]std/bridge:create(id: "tau-agent", scope: sc, introspection: true, world: w): br
 |> app/tau_wire:model-name(): m
 |> boot(br, model: m, max_tokens: 100000, temperature: "0", bound: 6, scope: sc)
