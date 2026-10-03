@@ -30,3 +30,5 @@ echo "pre-push: possession gate — 900 forged closes, 2 real holds…"
 ./possession-check.sh 900
 echo "pre-push: refusal gate — canned session, 3 pins…"
 ./refusal-check.sh
+echo "pre-push: heredity gate — two sessions, one world…"
+./heredity-check.sh
