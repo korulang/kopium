@@ -34,9 +34,12 @@ pin() {
     fi
 }
 
-pin "defined log-line — persisted to the world"
+# The defined/denied report lines come from app/agent:act — the shared
+# verdict dispatch. Persistence is witnessed by the world file pin below
+# and by session B inheriting, not by this line's wording.
+pin "defined log-line — the session's vocabulary now includes it"
 pin "log-line(path: string, text: string)"
-pin "DENIED — 'greet' is not in this session's vocabulary"
+pin "DENIED — 'greet' is not in this agent's scope"
 
 # The inherited dispatch: everything after "session B open" is B's run —
 # the composite must actually have executed there, not just been listed.

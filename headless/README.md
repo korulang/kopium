@@ -107,6 +107,29 @@ The numbers are per-call costs. Metering is parked as a feature and nothing here
 sets a limit, but an LLM driving an interpreter is the case that would want one
 first — untrusted input against a budget.
 
+## The agent file is a scope, a model, and a list of goals
+
+`session.k` is ~60 lines and most of them are comments, because the part
+every agent would copy — the eleven-arm verdict dispatch on
+`std/bridge:run` — is not in it. It lives in `agent.k` as `app/agent:act`,
+shared by `session.k` and `heredity.k`:
+
+```koru
+turn = app/model:say(turn: n): src
+    |> std/io:print.ln("  tool> {{ src:s }}")
+    |> app/agent:act(br, source: src)
+```
+
+All of `run`'s outcomes are required except `?partial`, and `act` names them
+because each is a different agent behaviour — REFUSED is a guessed handle,
+DENIED is outside the vocabulary, UNHANDLED is a resource the bridge is
+holding for next turn. That report is the harness's job, not yours.
+
+To write your own agent: register a scope (that is the whole permission
+model), hand a `say` tor that answers with Koru source — canned or a live
+model — and list goals. The bridge keeps the resources, the interpreter
+keeps the vocabulary, `act` keeps the verdicts.
+
 ## `append` consumes and re-issues, on purpose
 
 ```koru

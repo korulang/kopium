@@ -31,6 +31,7 @@ import std/bridge
 import std/io
 import app/notes
 import app/model
+import app/agent
 
 [with]std/bridge:create(id: "kopium-headless", scope: "notes"): br
 |> std/io:print.ln("--- session open, the agent's only tool is a Koru interpreter")
@@ -46,27 +47,17 @@ import app/model
     |> std/io:print.ln("--- transcript ends; no hang-up is written below this line")
 | not-found s |> std/io:print.ln("!! scope {{ s:s }} vanished at hang-up")
 
-// One turn: ask the model, show what it said, run it against the bridge, show
-// what the bridge did. The `br` parameter carries no phantom — a turn USES the
-// session, it does not end it. The canned model binds the observed handle
-// itself (handles are opaque; nothing is predictable, so a cooperative model
-// never guesses — it reads what the observation returned).
+// One turn: ask the model, show what it said, act on it. `act` is the shared
+// verdict dispatch in app/agent — an agent file names a scope, a model, and
+// goals; the twelve-arm report is the harness's, not yours.
+// The `br` parameter carries no phantom — a turn USES the session, it does
+// not end it. The canned model binds the observed handle itself (handles are
+// opaque; nothing is predictable, so a cooperative model never guesses — it
+// reads what the observation returned).
 tor turn { br: *std/bridge:Bridge, n: u32 }
 turn = app/model:intent(turn: n): why
     |> std/io:print.ln("")
     |> std/io:print.ln("turn {{ n:d }}  model wants to: {{ why:s }}")
     |> app/model:say(turn: n): src
     |> std/io:print.ln("  tool> {{ src:s }}")
-    |> std/bridge:run(br, source: src)
-        | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
-        | partial p |> std/io:print.ln("  {{ p.ran:d }}/{{ p.total:d }} steps ran — bridge holds {{ p.handles:d }}")
-        | defined d |> std/io:print.ln("  defined {{ d:s }} — the session's vocabulary now includes it")
-        | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
-        | unhandled-branch ub |> std/io:print.ln("  UNHANDLED: '{{ ub.branch:s }}' fired, held {{ ub.handles:s }} — carry it to the next turn")
-        | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this agent's scope")
-        | residue r |> std/io:print.ln("  the model emitted prose — bound as residue: {{ r.report:s }}")
-        | parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
-        | exhausted _ |> std/io:print.ln("  budget exhausted")
-        | validation-error v |> std/io:print.ln("  invalid: {{ v:s }}")
-        | shape-error s |> std/io:print.ln("  wrong shape: {{ s.message:s }}")
-        | scope-not-found s2 |> std/io:print.ln("  no such scope: {{ s2:s }}")
+    |> app/agent:act(br, source: src)

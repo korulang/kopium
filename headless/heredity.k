@@ -19,6 +19,7 @@ import std/bridge
 import std/io
 import app/notes
 import app/hmodel
+import app/agent
 
 [with]std/bridge:create(id: "session-a", scope: "notes", world: "world"): a
 |> std/io:print.ln("--- session A open — empty world, six registered verbs")
@@ -47,16 +48,4 @@ aturn = app/hmodel:intent(session, turn: n): why
     |> std/io:print.ln("turn {{ n:d }}  model wants to: {{ why:s }}")
     |> app/hmodel:say(session, turn: n): src
     |> std/io:print.ln("  tool> {{ src:s }}")
-    |> std/bridge:run(br, source: src)
-        | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
-        | partial p |> std/io:print.ln("  {{ p.ran:d }}/{{ p.total:d }} steps ran — bridge holds {{ p.handles:d }}")
-        | defined d |> std/io:print.ln("  defined {{ d:s }} — persisted to the world")
-        | dispatch-error e |> std/io:print.ln("  REFUSED: {{ e.message:s }} — '{{ e.event_name:s }}' never ran")
-        | unhandled-branch ub |> std/io:print.ln("  UNHANDLED: '{{ ub.branch:s }}' fired, held {{ ub.handles:s }}")
-        | event-denied ev |> std/io:print.ln("  DENIED — '{{ ev:s }}' is not in this session's vocabulary")
-        | residue r |> std/io:print.ln("  the model emitted prose — bound as residue: {{ r.report:s }}")
-        | parse-error p |> std/io:print.ln("  the model did not emit Koru: {{ p.message:s }}")
-        | exhausted _ |> std/io:print.ln("  budget exhausted")
-        | validation-error v |> std/io:print.ln("  invalid: {{ v:s }}")
-        | shape-error s |> std/io:print.ln("  wrong shape: {{ s.message:s }}")
-        | scope-not-found s2 |> std/io:print.ln("  no such scope: {{ s2:s }}")
+    |> app/agent:act(br, source: src)
