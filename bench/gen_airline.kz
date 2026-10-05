@@ -125,7 +125,7 @@ fn emitShape(name: []const u8, prop: *yyj.Value, defs: ?*yyj.Value) bool {
     const d = defs orelse return false;
     const shape = jget(d, ref["#/$defs/".len..]) orelse return false;
     const sprops = jget(shape, "properties") orelse return false;
-    putf(&docs_out, "  {s}: Source — JSON array/object, bare or \"quoted\" — {{", .{name});
+    putf(&docs_out, "  {s}: Source — array/object, bare or \"quoted\"; bare record keys (k: v) normalize to JSON — {{", .{name});
     var oi: yyj.c.yyjson_obj_iter = undefined;
     var first = true;
     if (yyj.c.yyjson_obj_iter_init(sprops, &oi)) {
@@ -192,7 +192,8 @@ fn emitTool(v: *yyj.Value) void {
 
     // proc — serializes inputs to the tau2 JSON args object, emits the
     // outbound CALL line under this tor's own tau2 name, blocks for the
-    // result. Source fields splice `.text` raw so real arrays reach tau2.
+    // result. Source fields splice `.text` through __jsonKeys — bare
+    // record keys normalize to JSON so the wire stays Koru-shaped.
     putf(&tors_out, "~proc {s}|zig {{\n    const __W = @import(\"root\").koru_app.koru_tau_wire;\n", .{kname});
     if (nf == 0) {
         putf(&tors_out, "    return __W.callIO(\"{s}\", \"{{}}\");\n}}\n\n", .{name});
@@ -206,6 +207,7 @@ fn emitTool(v: *yyj.Value) void {
         var fmtbuf: std.ArrayList(u8) = .{};
         var argbuf: std.ArrayList(u8) = .{};
         var ei: usize = 0;
+        var ki: usize = 0;
         for (fields[0..nf], 0..) |f, i| {
             if (i != 0) {
                 put(&fmtbuf, ", ");
@@ -223,8 +225,10 @@ fn emitTool(v: *yyj.Value) void {
                     putf(&argbuf, "{s}_v", .{f.name});
                 },
                 .source => {
+                    putf(&tors_out, "    var __k{d}: [{d}]u8 = undefined;\n    const {s}_v = __jsonKeys({s}.text, &__k{d});\n", .{ ki, buf, f.name, f.name, ki });
+                    ki += 1;
                     putf(&fmtbuf, "\\\"{s}\\\": {{s}}", .{f.name});
-                    putf(&argbuf, "{s}.text", .{f.name});
+                    putf(&argbuf, "{s}_v", .{f.name});
                 },
                 else => {
                     putf(&fmtbuf, "\\\"{s}\\\": {{{s}}}", .{ f.name, if (f.kind == .boolean) "s" else "d" });
@@ -247,7 +251,7 @@ fn emitTool(v: *yyj.Value) void {
             .source => {
                 if (!emitShape(f.name, f.prop, defs)) {
                     const t = jstr(jget(f.prop, "type"));
-                    putf(&docs_out, "  {s}: Source — JSON {s}, bare or \"quoted\"", .{ f.name, if (t.len != 0) t else "value" });
+                    putf(&docs_out, "  {s}: Source — JSON {s}, bare or \"quoted\"; bare record keys (k: v) normalize to JSON", .{ f.name, if (t.len != 0) t else "value" });
                     const pd = std.mem.trim(u8, jstr(jget(f.prop, "description")), " \n\t");
                     if (pd.len != 0) putf(&docs_out, " — {s}", .{pd});
                     put(&docs_out, "\n");
@@ -320,7 +324,8 @@ const GENERATED_HEADER =
     \\// i64, number -> f64, boolean -> bool); composite params are Source
     \\// — the wire captures raw JSON text, admitted bare (flights: [{...}])
     \\// or "quoted"; a string param named `expression` is Expression —
-    \\// math text admitted bare. Source fields splice `.text` raw into the
+    \\// math text admitted bare. Source fields splice `.text` through
+    \\// __jsonKeys (bare record keys -> quoted) into the
     \\// args JSON so real arrays reach tau2's typed executor.
     \\//
     \\// Each proc IS the southbound effect: it emits the outbound CALL
@@ -364,6 +369,66 @@ const GENERATED_HEADER =
     \\    return buf[0..i];
     \\}
     \\
+    \\// Normalize captured Source text for splicing into the args JSON:
+    \\// quote a bare identifier sitting in object-key position (right
+    \\// after `{` or `,` outside strings). The wire's own record
+    \\// spelling `{flight_number: "HAT028"}` is legal Koru — the
+    \\// marshal translates it; tau2's JSON quoting never reaches the
+    \\// model's surface. Everything else copies verbatim.
+    \\fn __jsonKeys(s: []const u8, buf: []u8) []const u8 {
+    \\    var i: usize = 0;
+    \\    var r: usize = 0;
+    \\    var in_str = false;
+    \\    var esc = false;
+    \\    var last: u8 = ' ';
+    \\    while (r < s.len) {
+    \\        const c = s[r];
+    \\        if (in_str) {
+    \\            if (i >= buf.len) @panic("kopium: arg string exceeds JSON scratch");
+    \\            buf[i] = c;
+    \\            i += 1;
+    \\            if (esc) {
+    \\                esc = false;
+    \\            } else if (c == '\\') {
+    \\                esc = true;
+    \\            } else if (c == '"') {
+    \\                in_str = false;
+    \\            }
+    \\            r += 1;
+    \\            continue;
+    \\        }
+    \\        if (c == '"') {
+    \\            in_str = true;
+    \\        } else if (c == ' ' or c == '\t' or c == '\r' or c == '\n') {
+    \\        } else if ((last == '{' or last == ',') and
+    \\            ((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'))
+    \\        {
+    \\            var j = r;
+    \\            while (j < s.len and
+    \\                ((s[j] >= 'a' and s[j] <= 'z') or (s[j] >= 'A' and s[j] <= 'Z') or
+    \\                 (s[j] >= '0' and s[j] <= '9') or s[j] == '_' or s[j] == '-')) j += 1;
+    \\            var k = j;
+    \\            while (k < s.len and (s[k] == ' ' or s[k] == '\t' or s[k] == '\r' or s[k] == '\n')) k += 1;
+    \\            if (k < s.len and s[k] == ':') {
+    \\                if (i + (j - r) + 2 > buf.len) @panic("kopium: arg string exceeds JSON scratch");
+    \\                buf[i] = '"';
+    \\                @memcpy(buf[i + 1 ..][0 .. j - r], s[r..j]);
+    \\                buf[i + 1 + (j - r)] = '"';
+    \\                i += j - r + 2;
+    \\                last = '"';
+    \\                r = j;
+    \\                continue;
+    \\            }
+    \\        }
+    \\        if (i >= buf.len) @panic("kopium: arg string exceeds JSON scratch");
+    \\        buf[i] = c;
+    \\        i += 1;
+    \\        if (c != ' ' and c != '\t' and c != '\r' and c != '\n') last = c;
+    \\        r += 1;
+    \\    }
+    \\    return buf[0..i];
+    \\}
+    \\
     \\
 ;
 
@@ -391,8 +456,9 @@ const DOC_PREAMBLE =
     \\
     \\Every entry below is translated verbatim from the tool schema the
     \\stock interface advertises (descriptions, types, enums, nested field
-    \\shapes). Two field types capture text: `Source` takes a JSON
-    \\array/object — bare (`flights: [{...}]`) or "quoted"; `Expression`
+    \\shapes). Two field types capture text: `Source` takes an
+    \\array/object — bare (`flights: [{...}]`, record keys `k: v`
+    \\normalize to JSON) or "quoted"; `Expression`
     \\takes bare math text (`calculate(expression: 2 + 2)`). Scalar strings
     \\still need "double quotes".
     \\

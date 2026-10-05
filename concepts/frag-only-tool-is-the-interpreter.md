@@ -49,3 +49,11 @@ wall exists because self-noticed confession is the only evidence the
 dishonesty-detection works, and being caught four times in one session is
 the failure to notice. A correct reading fires before the first command:
 what does the agent live inside, and what does the charter say about it.
+
+**The rule holds at the marshal's own seam.** 2026-10-05: tau2's JSON
+quoting reached the model — Source fields demanded `{"k": v}` while the
+doc drew the shape as `{k: v}`, and a model spelling the Koru record
+form paid for the leak with a process kill. The fix was not teaching
+JSON harder; it was `__jsonKeys` — the marshal translating bare keys on
+its own side of the boundary. When the surface demands a spelling only
+the layer beneath needs, the surface is wrong, not the model.

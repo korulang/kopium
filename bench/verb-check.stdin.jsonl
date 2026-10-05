@@ -16,3 +16,4 @@
 {"kind": "result", "id": "k15", "content": "{\"reservation_id\":\"FQ8APE\",\"passengers\":[{\"first_name\":\"Omar\",\"last_name\":\"Rossi\",\"dob\":\"1970-06-06\"}]}"}
 {"kind": "result", "id": "k16", "content": "{\"result\":60.0}"}
 {"kind": "user", "text": "no problem"}
+{"kind": "result", "id": "k17", "content": "{\"reservation_id\":\"JG7FMM\",\"cabin\":\"economy\",\"status\":\"updated\"}"}

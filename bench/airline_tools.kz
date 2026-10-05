@@ -9,7 +9,8 @@
 // i64, number -> f64, boolean -> bool); composite params are Source
 // — the wire captures raw JSON text, admitted bare (flights: [{...}])
 // or "quoted"; a string param named `expression` is Expression —
-// math text admitted bare. Source fields splice `.text` raw into the
+// math text admitted bare. Source fields splice `.text` through
+// __jsonKeys (bare record keys -> quoted) into the
 // args JSON so real arrays reach tau2's typed executor.
 //
 // Each proc IS the southbound effect: it emits the outbound CALL
@@ -53,6 +54,66 @@ fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
     return buf[0..i];
 }
 
+// Normalize captured Source text for splicing into the args JSON:
+// quote a bare identifier sitting in object-key position (right
+// after `{` or `,` outside strings). The wire's own record
+// spelling `{flight_number: "HAT028"}` is legal Koru — the
+// marshal translates it; tau2's JSON quoting never reaches the
+// model's surface. Everything else copies verbatim.
+fn __jsonKeys(s: []const u8, buf: []u8) []const u8 {
+    var i: usize = 0;
+    var r: usize = 0;
+    var in_str = false;
+    var esc = false;
+    var last: u8 = ' ';
+    while (r < s.len) {
+        const c = s[r];
+        if (in_str) {
+            if (i >= buf.len) @panic("kopium: arg string exceeds JSON scratch");
+            buf[i] = c;
+            i += 1;
+            if (esc) {
+                esc = false;
+            } else if (c == '\\') {
+                esc = true;
+            } else if (c == '"') {
+                in_str = false;
+            }
+            r += 1;
+            continue;
+        }
+        if (c == '"') {
+            in_str = true;
+        } else if (c == ' ' or c == '\t' or c == '\r' or c == '\n') {
+        } else if ((last == '{' or last == ',') and
+            ((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'))
+        {
+            var j = r;
+            while (j < s.len and
+                ((s[j] >= 'a' and s[j] <= 'z') or (s[j] >= 'A' and s[j] <= 'Z') or
+                 (s[j] >= '0' and s[j] <= '9') or s[j] == '_' or s[j] == '-')) j += 1;
+            var k = j;
+            while (k < s.len and (s[k] == ' ' or s[k] == '\t' or s[k] == '\r' or s[k] == '\n')) k += 1;
+            if (k < s.len and s[k] == ':') {
+                if (i + (j - r) + 2 > buf.len) @panic("kopium: arg string exceeds JSON scratch");
+                buf[i] = '"';
+                @memcpy(buf[i + 1 ..][0 .. j - r], s[r..j]);
+                buf[i + 1 + (j - r)] = '"';
+                i += j - r + 2;
+                last = '"';
+                r = j;
+                continue;
+            }
+        }
+        if (i >= buf.len) @panic("kopium: arg string exceeds JSON scratch");
+        buf[i] = c;
+        i += 1;
+        if (c != ' ' and c != '\t' and c != '\r' and c != '\n') last = c;
+        r += 1;
+    }
+    return buf[0..i];
+}
+
 // ============================================================================
 // THE VOICE CHANNEL — the refusal surface (Koru's own, not a tau2 tool)
 // ============================================================================
@@ -78,11 +139,17 @@ fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
     const flight_type_v = __jsonEsc(flight_type, &__e3);
     var __e4: [4096]u8 = undefined;
     const cabin_v = __jsonEsc(cabin, &__e4);
+    var __k0: [4096]u8 = undefined;
+    const flights_v = __jsonKeys(flights.text, &__k0);
+    var __k1: [4096]u8 = undefined;
+    const passengers_v = __jsonKeys(passengers.text, &__k1);
+    var __k2: [4096]u8 = undefined;
+    const payment_methods_v = __jsonKeys(payment_methods.text, &__k2);
     var __e5: [4096]u8 = undefined;
     const insurance_v = __jsonEsc(insurance, &__e5);
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"user_id\": \"{s}\", \"origin\": \"{s}\", \"destination\": \"{s}\", \"flight_type\": \"{s}\", \"cabin\": \"{s}\", \"flights\": {s}, \"passengers\": {s}, \"payment_methods\": {s}, \"total_baggages\": {d}, \"nonfree_baggages\": {d}, \"insurance\": \"{s}\"}}",
-        .{ user_id_v, origin_v, destination_v, flight_type_v, cabin_v, flights.text, passengers.text, payment_methods.text, total_baggages, nonfree_baggages, insurance_v }) catch @panic("kopium: book_reservation args exceed scratch");
+        .{ user_id_v, origin_v, destination_v, flight_type_v, cabin_v, flights_v, passengers_v, payment_methods_v, total_baggages, nonfree_baggages, insurance_v }) catch @panic("kopium: book_reservation args exceed scratch");
     return __W.callIO("book_reservation", __args);
 }
 
@@ -244,11 +311,13 @@ fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
     const reservation_id_v = __jsonEsc(reservation_id, &__e0);
     var __e1: [4096]u8 = undefined;
     const cabin_v = __jsonEsc(cabin, &__e1);
+    var __k0: [4096]u8 = undefined;
+    const flights_v = __jsonKeys(flights.text, &__k0);
     var __e2: [4096]u8 = undefined;
     const payment_id_v = __jsonEsc(payment_id, &__e2);
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\", \"cabin\": \"{s}\", \"flights\": {s}, \"payment_id\": \"{s}\"}}",
-        .{ reservation_id_v, cabin_v, flights.text, payment_id_v }) catch @panic("kopium: update_reservation_flights args exceed scratch");
+        .{ reservation_id_v, cabin_v, flights_v, payment_id_v }) catch @panic("kopium: update_reservation_flights args exceed scratch");
     return __W.callIO("update_reservation_flights", __args);
 }
 
@@ -259,9 +328,11 @@ fn __jsonEsc(s: []const u8, buf: []u8) []const u8 {
     const __S = struct { threadlocal var buf: [4096]u8 = undefined; };
     var __e0: [4096]u8 = undefined;
     const reservation_id_v = __jsonEsc(reservation_id, &__e0);
+    var __k0: [4096]u8 = undefined;
+    const passengers_v = __jsonKeys(passengers.text, &__k0);
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\", \"passengers\": {s}}}",
-        .{ reservation_id_v, passengers.text }) catch @panic("kopium: update_reservation_passengers args exceed scratch");
+        .{ reservation_id_v, passengers_v }) catch @panic("kopium: update_reservation_passengers args exceed scratch");
     return __W.callIO("update_reservation_passengers", __args);
 }
 
