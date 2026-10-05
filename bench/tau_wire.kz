@@ -440,7 +440,10 @@ var toolfrag_hi: usize = 0;
 
 ~proc bump-fail|zig {
     if (n + 1 >= bound) return .{ .over = .{} };
-    if (n + 1 >= bound - 2) return .{ .edge = n + 1 };
+    if (n + 1 >= bound - 2) {
+        observer_answered = false;
+        return .{ .edge = n + 1 };
+    }
     return .{ .retry = n + 1 };
 }
 
@@ -538,14 +541,24 @@ var total_c: i64 = 0;
 
 // A residue turn the agent aimed at the observer (`note(...)`/`note:` that
 // didn't parse as wire) is the elicited answer, not a rejected reply —
-// striking it would punish answering the question we asked. Plain prose
-// residue still strikes.
+// striking it would punish answering the question we asked. But the
+// exemption is one answer per edge question, not per turn: a model that
+// keeps emitting the same unparseable note is the refusal loop the bound
+// exists to kill (measured task28 2026-10-05: 246 observer residues, all
+// exempt, until the 900s watchdog). bump-fail clears `observer_answered`
+// when the edge question goes out; the first observer residue after an
+// edge answers it free — every other observer residue strikes.
+var observer_answered: bool = true;
+
 ~pub tor residue-verdict { observer: bool }
 | observer
 | strike
 
 ~proc residue-verdict|zig {
-    if (observer) return .{ .observer = .{} };
+    if (observer and !observer_answered) {
+        observer_answered = true;
+        return .{ .observer = .{} };
+    }
     return .{ .strike = .{} };
 }
 

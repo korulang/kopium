@@ -26,7 +26,9 @@ failed `note(`/`note:` item as observer residue, and a `note(...)` glued
 to a same-line call splits at the first `)` whose suffix passes the gate
 (the malformed note was swallowing live calls into its residue string).
 `partial` counts `wire_failures` so the rejection bound still kills
-malformed wire; observer residue and clean partials stay free.
+malformed wire; clean partials stay free, and observer residue is free
+**once per edge question** — the exemption answers the question asked,
+it is not a lane.
 
 The progressive ladder this completes: prose is captured (rung 1, free),
 `note` is offered (rung 2, sanctioned), and near the bound the wire asks
@@ -47,6 +49,12 @@ signal only as failure deepens, and no rung rescues the run.
   types drive which wire shapes, not whether "a verb takes trailing text"
   becomes a bespoke grammar rule. Lars's call — the ruling is about the
   type grammar.
-- A permanently-free observer lane can theoretically loop forever (the
-  strike bound never engages on pure-note turns); unproven whether that
-  needs its own bound once raw-text lands.
+- ~~A permanently-free observer lane can theoretically loop forever~~ —
+  proven, task28 2026-10-05: 246 exempt observer residues (the model's
+  task was done; its malformed notes were all it emitted) until the
+  900s watchdog killed the sim. The bound that holds the intent without
+  the loop: `bump-fail` clears `observer_answered` when the edge question
+  goes out, the first observer residue answers it free, and every later
+  one strikes — so a note-loop dies at the rejection bound like any
+  other. Probe-pinned in `bench/probe_observer.k`; task 28 replayed to
+  reward 1.0 in 18 model calls.
