@@ -1,0 +1,53 @@
+// The canned model for handoff.k — two agents on ONE bridge.
+//
+// Same contract as model.kz: the model emits source text; the harness under
+// test is the bridge. `who` is the agent's name ("a"/"b") — the only thing
+// that distinguishes one agent from another is which script produced the
+// source. Custody is the bridge's, so agent b can act on a handle agent a
+// minted: handles are opaque, and the only legal knowledge is what the
+// observation returned — `last_minted_event`, bound the way a real model
+// reads the transcript.
+//
+// The script:
+//   a1  open a note — the bridge mints the handle
+//   b1  append into a's note — b never opened it
+//   b2  close a's note — b discharges the obligation a created
+//   a2  append again — the handle is dead for EVERYONE, refused
+//
+// That last beat is the point: custody is not "whoever opened it," it is the
+// bridge's pool, and a discharged obligation refuses for the opener too.
+
+const std = @import("std");
+
+var say_buf: [128]u8 = undefined;
+
+~pub tor say { who: string, n: u32 } -> string
+
+~proc say|zig {
+    const notes = @import("root").koru_app.koru_notes;
+    const last = notes.last_minted_event.handler(.{});
+    const is_a = std.mem.eql(u8, who, "a");
+    return switch (n) {
+        1 => if (is_a)
+            "open(path: \"relay-note.txt\")"
+        else
+            std.fmt.bufPrint(&say_buf, "append(handle: \"{s}\", text: \"agent b writing through a handle agent a minted\")", .{last}) catch "append()",
+        2 => if (is_a)
+            std.fmt.bufPrint(&say_buf, "append(handle: \"{s}\", text: \"a writes to a closed note\")", .{last}) catch "append()"
+        else
+            std.fmt.bufPrint(&say_buf, "close(handle: \"{s}\")", .{last}) catch "close()",
+        else => "read(path: \"relay-note.txt\")",
+    };
+}
+
+// What each agent *meant* by each turn, for the transcript. Prose only.
+~pub tor intent { who: string, n: u32 } -> string
+
+~proc intent|zig {
+    const is_a = std.mem.eql(u8, who, "a");
+    return switch (n) {
+        1 => if (is_a) "open a note" else "write into the note agent-a opened",
+        2 => if (is_a) "append to the note again (agent-b closed it)" else "close the note agent-a opened",
+        else => "read the note",
+    };
+}
