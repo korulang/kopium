@@ -84,8 +84,8 @@ def verb_check() -> list[str]:
         if fx["tau_name"] is None:  # say
             if ob.get("kind") != "say" or ob.get("text") != fx["args"]["text"]:
                 fails.append(f"verb-check {v}: outbound {ob}")
-            if val.get("value") != fd["text"]:
-                fails.append(f"verb-check {v}: bound {val.get('value')!r} != user reply {fd['text']!r}")
+            if val.get("value") != fx["args"]["text"]:
+                fails.append(f"verb-check {v}: bound {val.get('value')!r} != emitted text {fx['args']['text']!r}")
             continue
         if ob.get("kind") != "call" or ob.get("name") != fx["tau_name"]:
             fails.append(f"verb-check {v}: expected call {fx['tau_name']}, got {ob.get('kind')} {ob.get('name')}")

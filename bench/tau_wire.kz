@@ -11,10 +11,12 @@
 // calls since the previous outbound line (retries included), accumulated
 // here by add-usage from the SSE terminal payloads.
 //
-// The user's reply read by a say() proc is queued in `pending`; the main
-// flow drains it into the transcript as real user messages before the next
-// model call. EOF sets saw_eof — callers exit, discharging the bridge
-// normally.
+// Say is emit-only: each outbound SAY is owed exactly one inbound "user"
+// line by the harness (replies follow outbound order). callIO pends any
+// it meets before its result; pull() reads the remainder at turn end.
+// Pending lines are drained into the transcript as real user messages
+// before the next model call. EOF sets saw_eof — callers exit,
+// discharging the bridge normally.
 
 const std = @import("std");
 
@@ -54,6 +56,11 @@ var pending_buf: [PENDING_CAP][PENDING_SZ]u8 = undefined;
 var pending_len: [PENDING_CAP]usize = [_]usize{0} ** PENDING_CAP;
 var pending_head: usize = 0;
 var pending_tail: usize = 0;
+
+// Says emitted minus their user replies consumed. Each SAY outbound owes
+// the binary exactly one inbound "user" line; callIO debits whichever it
+// meets early, pull() collects the rest at turn end.
+var outstanding_user: usize = 0;
 
 // ============================================================================
 // ZIG HELPERS
@@ -162,11 +169,14 @@ fn pushPending(text: []const u8) void {
 // PROC-SIDE I/O — called from inside dispatched procs, mid-run.
 // ============================================================================
 
-// say(text:) — emit the SAY line, then block for the next inbound line,
-// which is the user's reply. The reply is queued for the main loop AND
-// returned as this proc's value (auto-bound r{N} like every result).
+// say(text:) — emit the SAY line and return the emitted text. Say is a
+// write, not a read: it never blocks the turn, so a reply can speak AND
+// call. The user's reply arrives as an ordinary inbound "user" line and
+// lands wherever the next read lands — callIO pends it; the top-level
+// loop takes it as the next turn's input.
 fn sayIO(text: []const u8) []const u8 {
     n_say += 1;
+    outstanding_user += 1;
     const alloc = std.heap.page_allocator;
     var out = std.ArrayListUnmanaged(u8){};
     out.appendSlice(alloc, "{\"kind\":\"say\",\"text\":\"") catch @panic("kopium: OOM");
@@ -175,16 +185,7 @@ fn sayIO(text: []const u8) []const u8 {
     appendUsage(alloc, &out);
     out.appendSlice(alloc, "}") catch @panic("kopium: OOM");
     writeOut(out.items);
-    const line = readInboundLine() orelse return "";
-    const kind = fieldKind(line);
-    if (std.mem.eql(u8, kind, "user")) {
-        const t = jsonStr(line, "text") orelse @panic("kopium: user line without text");
-        pushPending(t);
-        return t;
-    }
-    if (std.mem.eql(u8, kind, "result"))
-        @panic("kopium: a result line reached say() — protocol desync");
-    @panic("kopium: unknown inbound kind");
+    return text;
 }
 
 // Every tool tor — emit the CALL line with the tau2 schema name baked in,
@@ -206,14 +207,25 @@ fn callIO(tau_name: []const u8, args_json: []const u8) []const u8 {
     appendUsage(alloc, &out);
     out.appendSlice(alloc, "}") catch @panic("kopium: OOM");
     writeOut(out.items);
-    const line = readInboundLine() orelse return "";
-    const kind = fieldKind(line);
-    if (!std.mem.eql(u8, kind, "result"))
-        @panic("kopium: call expected a result line");
-    const rid = jsonStr(line, "id") orelse @panic("kopium: result line without id");
-    if (!std.mem.eql(u8, rid, id))
-        @panic("kopium: result id does not match the outstanding call");
-    return jsonStr(line, "content") orelse @panic("kopium: result line without content");
+    // A non-blocking say() earlier in this turn means the harness may feed
+    // the user's say-reply before this call's result — pend it and keep
+    // reading until the result arrives.
+    while (true) {
+        const line = readInboundLine() orelse return "";
+        const kind = fieldKind(line);
+        if (std.mem.eql(u8, kind, "user")) {
+            const t = jsonStr(line, "text") orelse @panic("kopium: user line without text");
+            pushPending(t);
+            outstanding_user -= 1;
+            continue;
+        }
+        if (!std.mem.eql(u8, kind, "result"))
+            @panic("kopium: call expected a result line");
+        const rid = jsonStr(line, "id") orelse @panic("kopium: result line without id");
+        if (!std.mem.eql(u8, rid, id))
+            @panic("kopium: result id does not match the outstanding call");
+        return jsonStr(line, "content") orelse @panic("kopium: result line without content");
+    }
 }
 
 // ============================================================================
@@ -250,6 +262,27 @@ fn callIO(tau_name: []const u8, args_json: []const u8) []const u8 {
 ~pub tor take-pending {}
 | some string
 | none
+
+// Turn-end pull: collect the user replies owed by this turn's says. Every
+// outstanding line is "user" — each call's result was already consumed by
+// its own callIO — so a non-user kind here means protocol desync. EOF
+// drains the counter; drain() sees saw-eof on its `none`.
+~pub tor pull {}
+
+~proc pull|zig {
+    while (outstanding_user > 0) {
+        const line = readInboundLine() orelse {
+            outstanding_user = 0;
+            return;
+        };
+        const kind = fieldKind(line);
+        if (!std.mem.eql(u8, kind, "user"))
+            @panic("kopium: pull expected a user line — protocol desync");
+        const t = jsonStr(line, "text") orelse @panic("kopium: user line without text");
+        pushPending(t);
+        outstanding_user -= 1;
+    }
+}
 
 ~proc take-pending|zig {
     if (pending_head == pending_tail) return .{ .none = .{} };

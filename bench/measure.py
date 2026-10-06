@@ -237,10 +237,22 @@ def metrics(arm: str, d: Path) -> dict:
         row["model_calls"] = len(agent_msgs)
     else:
         sess_path = d / "receipts" / "session.json"
-        if not sess_path.exists():
-            raise RuntimeError(f"{d}: kopium run has no session.json")
-        sess = json.loads(sess_path.read_text())
         n_receipts = len(list((d / "receipts").glob("call_*.json")))
+        if not sess_path.exists():
+            # Zero-call run: the sim ended before the agent was ever asked
+            # (user ###STOP### on turn 0) — the binary never spawned.
+            # Receipts without a session are a mid-session death; stay loud.
+            if n_receipts:
+                raise RuntimeError(
+                    f"{d}: {n_receipts} call receipts but no session.json — "
+                    f"the run died mid-session")
+            row["model_calls"] = 0
+            row["rejected_turns"] = 0
+            row["defines"] = 0
+            row["rejections_by_kind"] = "{}"
+            row["cost"] = round(ptok * PRICE_PROMPT + ctok * PRICE_COMPLETION, 6)
+            return row
+        sess = json.loads(sess_path.read_text())
         if sess["model_calls"] != n_receipts:
             raise RuntimeError(f"{d}: session model_calls {sess['model_calls']} != receipts {n_receipts}")
         if (sess["prompt_tokens"], sess["completion_tokens"]) != (ptok, ctok):
