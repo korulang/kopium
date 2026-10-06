@@ -31,3 +31,9 @@ app/tau_wire:residue-verdict(observer: true)
 app/tau_wire:residue-verdict(observer: true)
 | observer |> std/io:print.ln("second observer residue -> observer")
 | strike |> std/io:print.ln("second observer residue -> strike")
+
+// A reply that ran but moved neither n_say nor n_call delivered nothing.
+app/tau_wire:mark-call-start()
+|> app/tau_wire:delivered()
+| said |> std/io:print.ln("empty reply -> said (unexpected)")
+| silent |> std/io:print.ln("empty reply -> silent")

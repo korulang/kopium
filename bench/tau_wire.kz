@@ -469,6 +469,28 @@ var toolfrag_hi: usize = 0;
 ~proc mark-call-start|zig {
     call_usage_seen = false;
     n_model_calls += 1;
+    delivered_mark = n_say + n_call;
+}
+
+// A reply that ran clean but moved neither n_say nor n_call reached
+// nobody: notes go to the observer, residue to a bound name, defines to
+// the vocabulary — only a say or an outbound call leaves the agent. A
+// streak of such replies is the refusal loop the bound exists to kill,
+// wearing a well-formed disguise (measured task46 2026-10-06: ~200
+// identical well-formed `note(...)` calls, each returning ok, until the
+// 900s watchdog). `bump-fail`'s streak bounds it; the edge question asks
+// what the model is waiting for before the run dies.
+var delivered_mark: u64 = 0;
+var n_silent: u64 = 0;
+
+~pub tor delivered {}
+| said
+| silent
+
+~proc delivered|zig {
+    if (n_say + n_call > delivered_mark) return .{ .said = .{} };
+    n_silent += 1;
+    return .{ .silent = .{} };
 }
 
 var n_usage_missing: u64 = 0;
@@ -591,8 +613,8 @@ var observer_answered: bool = true;
     const alloc = std.heap.page_allocator;
     const path = std.fmt.allocPrint(alloc, "{s}/session.json", .{dir}) catch @panic("kopium: OOM");
     const body = std.fmt.allocPrint(alloc,
-        "{{\"model_calls\":{d},\"rejected_turns\":{d},\"rejections_by_kind\":{{\"parse-error\":{d},\"event-denied\":{d},\"validation-error\":{d},\"shape-error\":{d},\"exhausted\":{d},\"scope-not-found\":{d},\"residue\":{d},\"unhandled\":{d},\"partial\":{d}}},\"defines\":{d},\"outbound_say\":{d},\"outbound_call\":{d},\"residue_items\":{d},\"prompt_tokens\":{d},\"completion_tokens\":{d},\"usage_missing\":{d}}}",
-        .{ n_model_calls, n_rejected, rej_parse, rej_denied, rej_validation,
+        "{{\"model_calls\":{d},\"rejected_turns\":{d},\"silent_turns\":{d},\"rejections_by_kind\":{{\"parse-error\":{d},\"event-denied\":{d},\"validation-error\":{d},\"shape-error\":{d},\"exhausted\":{d},\"scope-not-found\":{d},\"residue\":{d},\"unhandled\":{d},\"partial\":{d}}},\"defines\":{d},\"outbound_say\":{d},\"outbound_call\":{d},\"residue_items\":{d},\"prompt_tokens\":{d},\"completion_tokens\":{d},\"usage_missing\":{d}}}",
+        .{ n_model_calls, n_rejected, n_silent, rej_parse, rej_denied, rej_validation,
            rej_shape, rej_exhausted, rej_scope, rej_residue, rej_unhandled, rej_partial, n_defines, n_say, n_call,
            n_residue, total_p, total_c, n_usage_missing }) catch @panic("kopium: OOM");
     const f = std.fs.cwd().createFile(path, .{}) catch @panic("kopium: session.json create failed");

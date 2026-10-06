@@ -50,11 +50,19 @@ signal only as failure deepens, and no rung rescues the run.
   becomes a bespoke grammar rule. Lars's call — the ruling is about the
   type grammar.
 - ~~A permanently-free observer lane can theoretically loop forever~~ —
-  proven, task28 2026-10-05: 246 exempt observer residues (the model's
-  task was done; its malformed notes were all it emitted) until the
-  900s watchdog killed the sim. The bound that holds the intent without
-  the loop: `bump-fail` clears `observer_answered` when the edge question
-  goes out, the first observer residue answers it free, and every later
-  one strikes — so a note-loop dies at the rejection bound like any
-  other. Probe-pinned in `bench/probe_observer.k`; task 28 replayed to
-  reward 1.0 in 18 model calls.
+  proven twice, and the second proof is the sharper one. Task 28
+  (2026-10-05): 246 *malformed* observer residues — exempt from the
+  rejection bound — until the 900s watchdog. The fix: `bump-fail` clears
+  `observer_answered` when the edge question goes out, the first observer
+  residue answers it free, every later one strikes. Task 46 (2026-10-06):
+  ~200 *well-formed* `note(...)` calls — each parsed, ran, returned `ok`,
+  delivered nothing — while the model waited for a request it judged
+  absent. The rejection bound counts failures; this loop was all
+  successes, so the liveness question is not "did the wire parse" but
+  "did the reply reach anyone": `mark-call-start` snapshots
+  `n_say + n_call`, `delivered` reads the delta, and six consecutive
+  silent replies die at the same edge/over bound as refusals — a
+  separate streak, so silent turns don't conflate with rejected ones.
+  Effect, not validity, is what a bound may exempt. Both instances
+  probe-pinned in `bench/probe_observer.k`; task 28 replayed to reward
+  1.0 in 18 calls, task 46 to 1.0 in 5.

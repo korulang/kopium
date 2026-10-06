@@ -17,3 +17,5 @@
 {"kind": "result", "id": "k16", "content": "{\"result\":60.0}"}
 {"kind": "user", "text": "no problem"}
 {"kind": "result", "id": "k17", "content": "{\"reservation_id\":\"JG7FMM\",\"cabin\":\"economy\",\"status\":\"updated\"}"}
+{"kind": "user", "text": "ok"}
+{"kind": "user", "text": "ok"}

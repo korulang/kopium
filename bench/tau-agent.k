@@ -253,25 +253,38 @@ drain = app/tau_wire:take-pending()
     | no => again
 
 // The loop: ask, run, report, drain, repeat. EOF ends it; the rejection
-// bound dies loud rather than apologizing. The lens rung: near the bound,
-// `edge` asks the model for its own account — wire or prose, the answer
-// lands in the receipts, so a dying run still ships its post-mortem.
-tor loop { br: *std/bridge:Bridge, model: string, max_tokens: u32, temperature: string, bound: i64, fails: i64 }
+// bound dies loud rather than apologizing, and a reply that ran but
+// delivered nothing (note-only, residue-only, define-only) ticks the
+// sibling silence streak — same edge/over shape, independent counter.
+// The lens rung: near either bound, `edge` asks the model for its own
+// account — wire or prose, the answer lands in the receipts, so a dying
+// run still ships its post-mortem.
+tor loop { br: *std/bridge:Bridge, model: string, max_tokens: u32, temperature: string, bound: i64, fails: i64, silents: i64 }
 loop = clear-reply()
     |> ask(br, model, max_tokens, temperature)
     |> drive(br)
     |> app/tau_wire:verdict()
-    | ran |> drain()
-        | again |> loop(br, model, max_tokens, temperature, bound, fails: 0)
-        | stop |> app/tau_wire:session-end() |> std/io:eprint.ln("--- eof, session ends")
+    | ran |> app/tau_wire:delivered()
+        | said |> drain()
+            | again |> loop(br, model, max_tokens, temperature, bound, fails: 0, silents: 0)
+            | stop |> app/tau_wire:session-end() |> std/io:eprint.ln("--- eof, session ends")
+        | silent |> drain()
+            | stop |> app/tau_wire:session-end() |> std/io:eprint.ln("--- eof, session ends")
+            | again |> app/tau_wire:bump-fail(n: silents, bound)
+                | edge nf |> std/fmt:fmt.blk {
+                    observer: {{ nf:d }} consecutive replies reached nobody — no say, no tool call. note(...) is observer-only; say(text: ...) is the only line to the user. Before this turn dies, in one line: what are you waiting for?
+                }: m |> observe(role: "user", text: m)
+                    |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
+                | retry nf |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
+                | over |> app/tau_wire:die(msg: "6 consecutive replies reached neither the user nor a tool")
     | rejected |> app/tau_wire:saw-eof()
         | yes |> app/tau_wire:session-end()
         | no |> app/tau_wire:bump-fail(n: fails, bound)
             | edge nf |> std/fmt:fmt.blk {
                 observer: {{ nf:d }} consecutive refused replies — before this turn dies, in one line: what were you trying to do? Reasoning belongs in note(text: ...); only say(text: ...) reaches the user.
             }: m |> observe(role: "user", text: m)
-                |> loop(br, model, max_tokens, temperature, bound, fails: nf)
-            | retry nf |> loop(br, model, max_tokens, temperature, bound, fails: nf)
+                |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
+            | retry nf |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
             | over |> app/tau_wire:die(msg: "the wire rejected 6 consecutive replies")
 
 tor clear-reply {}
@@ -288,7 +301,7 @@ boot = app/tau_wire:inbound()
     |> app/tau_wire:vocab-doc(br, scope)
     | ok d |> app/tau_wire:set-doc(text: d) |> app/tau_wire:inbound()
         | user u |> observe(role: "user", text: u) |> app/tau_wire:auth-ensure()
-            | ok |> loop(br, model, max_tokens, temperature, bound, fails: 0)
+            | ok |> loop(br, model, max_tokens, temperature, bound, fails: 0, silents: 0)
             | failed m |> app/tau_wire:die(msg: m)
         | init _ | app/tau_wire:die(msg: "second init line")
         | result _ | app/tau_wire:die(msg: "result with no outstanding call")
