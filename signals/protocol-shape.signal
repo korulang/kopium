@@ -1,0 +1,10 @@
+name: protocol-shape
+kind: inferred
+shape: categorical
+face: in
+membrane: true
+note: the wire protocol's structural contract changed — who emits, who
+      reads, ordering obligations, blocking semantics. Declared 2026-10-06:
+      say went from a disguised RPC (emit + block for the reply) to a pure
+      write with a ledgered inbound obligation (outstanding_user -> pull).
+      Fires when a change alters what a turn *is*, not what a turn says.
