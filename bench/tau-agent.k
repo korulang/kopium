@@ -153,6 +153,35 @@ observe = std/store:query(transcript)
     | ok |> _
     | err e |> app/tau_wire:die(msg: e)
 
+// A whole-prose reply is the chat prior leaking past the gate — the bridge
+// bound the text at rN and refused it. The harness emits the say the model
+// didn't: `say: <prose>` through the scope's own verb, a real wire call —
+// the say ledger counts it, the transcript sees the teaching line, and a
+// scope without say strands it (the strike stands). Colon form, never
+// say(text: rN): say's field is Source, so a bare name delivers literally.
+// The gate stays strict; the policy that prose still reaches the user
+// lives here, in the harness.
+tor deliver-residue { br: *std/bridge:Bridge, text: string }
+| sent
+| stranded
+
+deliver-residue = std/fmt:fmt.blk {
+        say: {{ text:s }}
+    }: src
+    |> std/bridge:run(br, source: src)
+    | result _ => sent
+    | defined _ => stranded
+    | partial _ => stranded
+    | unhandled-branch _ => stranded
+    | dispatch-error _ => stranded
+    | event-denied _ => stranded
+    | residue _ => stranded
+    | parse-error _ => stranded
+    | validation-error _ => stranded
+    | shape-error _ => stranded
+    | exhausted _ => stranded
+    | scope-not-found _ => stranded
+
 // Run what the model wrote and report the outcome back verbatim — the
 // bridge's own diagnostic words, no authored coaching.
 tor act { br: *std/bridge:Bridge, source: string }
@@ -190,8 +219,13 @@ act = observe(role: "assistant", text: source) |> std/bridge:run(br, source)
     |> app/tau_wire:count-rejection(kind: "event-denied")
 | residue r |> observe(role: "user", text: r.report)
     |> app/tau_wire:count-residue(text: r.report)
-    |> app/tau_wire:residue-verdict(r.observer)
+    |> app/tau_wire:residue-verdict(r.observer, prose: r.text)
     | observer |> app/tau_wire:count-out(kind: "note")
+    | deliver |> deliver-residue(br, r.text)
+        | sent |> observe(role: "user", text: "observer: that prose reached the user anyway — the harness emitted it under `say:` on your behalf. Open prose with `say:` yourself; `note:` for thinking out loud.")
+            |> app/tau_wire:count-implicit()
+            |> app/tau_wire:count-out(kind: "say")
+        | stranded |> app/tau_wire:count-rejection(kind: "residue")
     | strike |> app/tau_wire:count-rejection(kind: "residue")
 | parse-error p |> std/fmt:fmt.blk {
         parse-error: {{ p.message:s }}

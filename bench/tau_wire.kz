@@ -605,8 +605,16 @@ var total_c: i64 = 0;
 // edge answers it free — every other observer residue strikes.
 var observer_answered: bool = true;
 
-~pub tor residue-verdict { observer: bool }
+// A prose reply that bound is deliverable: the harness emits `say: <prose>`
+// through the scope's own verb — the wire call is real, the say ledger
+// counts it, and `implicit_say` in session.json makes the concession
+// visible rather than silent. Observer-flagged residue (note attempts,
+// repeat notes after an answered edge) still strikes: internal prose was
+// never meant for the user. A residue verdict carrying no prose — a
+// mixed multi-item turn — has nothing to deliver and strikes unchanged.
+~pub tor residue-verdict { observer: bool, prose: string }
 | observer
+| deliver
 | strike
 
 ~proc residue-verdict|zig {
@@ -614,6 +622,7 @@ var observer_answered: bool = true;
         observer_answered = true;
         return .{ .observer = .{} };
     }
+    if (!observer and prose.len > 0) return .{ .deliver = .{} };
     return .{ .strike = .{} };
 }
 
@@ -625,6 +634,17 @@ var observer_answered: bool = true;
 
 ~proc count-residue|zig {
     n_residue += std.mem.count(u8, text, "residue bound:");
+}
+
+// Residue the harness delivered anyway — the prose reach-the-user
+// concession, counted so the board can see how much of the turn the wire
+// gate still refuses vs. how much the harness soft-delivers.
+var n_implicit: u64 = 0;
+
+~pub tor count-implicit {}
+
+~proc count-implicit|zig {
+    n_implicit += 1;
 }
 
 // On EOF: the run's summary lands next to the call receipts. A loud death
@@ -646,10 +666,10 @@ var observer_answered: bool = true;
     const alloc = std.heap.page_allocator;
     const path = std.fmt.allocPrint(alloc, "{s}/session.json", .{dir}) catch @panic("kopium: OOM");
     const body = std.fmt.allocPrint(alloc,
-        "{{\"model_calls\":{d},\"rejected_turns\":{d},\"silent_turns\":{d},\"rejections_by_kind\":{{\"parse-error\":{d},\"event-denied\":{d},\"validation-error\":{d},\"shape-error\":{d},\"exhausted\":{d},\"scope-not-found\":{d},\"residue\":{d},\"unhandled\":{d},\"partial\":{d}}},\"defines\":{d},\"outbound_say\":{d},\"outbound_call\":{d},\"residue_items\":{d},\"prompt_tokens\":{d},\"completion_tokens\":{d},\"usage_missing\":{d}}}",
+        "{{\"model_calls\":{d},\"rejected_turns\":{d},\"silent_turns\":{d},\"rejections_by_kind\":{{\"parse-error\":{d},\"event-denied\":{d},\"validation-error\":{d},\"shape-error\":{d},\"exhausted\":{d},\"scope-not-found\":{d},\"residue\":{d},\"unhandled\":{d},\"partial\":{d}}},\"defines\":{d},\"outbound_say\":{d},\"outbound_call\":{d},\"residue_items\":{d},\"implicit_say\":{d},\"prompt_tokens\":{d},\"completion_tokens\":{d},\"usage_missing\":{d}}}",
         .{ n_model_calls, n_rejected, n_silent, rej_parse, rej_denied, rej_validation,
            rej_shape, rej_exhausted, rej_scope, rej_residue, rej_unhandled, rej_partial, n_defines, n_say, n_call,
-           n_residue, total_p, total_c, n_usage_missing }) catch @panic("kopium: OOM");
+           n_residue, n_implicit, total_p, total_c, n_usage_missing }) catch @panic("kopium: OOM");
     const f = std.fs.cwd().createFile(path, .{}) catch @panic("kopium: session.json create failed");
     defer f.close();
     f.writeAll(body) catch @panic("kopium: session.json write failed");

@@ -249,6 +249,8 @@ def metrics(arm: str, d: Path) -> dict:
             row["model_calls"] = 0
             row["rejected_turns"] = 0
             row["defines"] = 0
+            row["residue_items"] = 0
+            row["implicit_say"] = 0
             row["rejections_by_kind"] = "{}"
             row["cost"] = round(ptok * PRICE_PROMPT + ctok * PRICE_COMPLETION, 6)
             return row
@@ -256,15 +258,26 @@ def metrics(arm: str, d: Path) -> dict:
         if sess["model_calls"] != n_receipts:
             raise RuntimeError(f"{d}: session model_calls {sess['model_calls']} != receipts {n_receipts}")
         if (sess["prompt_tokens"], sess["completion_tokens"]) != (ptok, ctok):
-            raise RuntimeError(
-                f"{d}: session tokens {sess['prompt_tokens']}/{sess['completion_tokens']} "
-                f"!= tokens on outbound messages {ptok}/{ctok}")
+            # A transfer-terminated sim drops the terminal assistant message —
+            # the transfer tool call ends the run before tau2 records it, so
+            # its usage leaves the message sum while session.json still counts
+            # the call. Tolerate a session-side surplus only there; messages
+            # carrying more than the session spent is always a desync.
+            transferred = any(
+                "###TRANSFER###" in (m.get("content") or "") for m in msgs)
+            if not (transferred and sess["prompt_tokens"] > ptok
+                    and sess["completion_tokens"] >= ctok):
+                raise RuntimeError(
+                    f"{d}: session tokens {sess['prompt_tokens']}/{sess['completion_tokens']} "
+                    f"!= tokens on outbound messages {ptok}/{ctok}")
         blind = integrity_failures(d)
         if blind:
             raise RuntimeError("INTEGRITY: " + "; ".join(blind))
         row["model_calls"] = sess["model_calls"]
         row["rejected_turns"] = sess["rejected_turns"]
         row["defines"] = sess["defines"]
+        row["residue_items"] = sess.get("residue_items", 0)
+        row["implicit_say"] = sess.get("implicit_say", 0)
         row["rejections_by_kind"] = json.dumps(
             {k: v for k, v in sess["rejections_by_kind"].items() if v})
     row["cost"] = round(ptok * PRICE_PROMPT + ctok * PRICE_COMPLETION, 6)
@@ -274,7 +287,7 @@ def metrics(arm: str, d: Path) -> dict:
 COLUMNS = ["arm", "task", "trial", "reward", "db_match", "termination",
            "model_calls", "agent_messages", "env_calls", "prompt_tokens",
            "completion_tokens", "cost", "wall_s", "rejected_turns", "defines",
-           "rejections_by_kind"]
+           "residue_items", "implicit_say", "rejections_by_kind"]
 
 
 def summarize(rows: list[dict]) -> None:
