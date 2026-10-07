@@ -1,0 +1,10 @@
+name: harness-delivers-bound-prose
+kind: inferred
+shape: categorical
+face: in
+membrane: true
+note: the harness changed what a refused turn does next — bound prose
+      soft-delivers through the scope's own say while the wire gate's
+      verdict stays strict; delivery is policy, strictness is grammar,
+      and the concession is counted (implicit_say) rather than silent
+route: surface, wake
