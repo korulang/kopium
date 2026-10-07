@@ -42,6 +42,7 @@ CASES: list[tuple[str, str, str]] = [
     ("notes-unhandled", "named-branch read hands back under the lenient bridge", "probe_unhandled_read.py"),
     ("affordances", "callable surface is possession-shaped (HATEOAS rooms)", "probe_affordances.py"),
     ("opaque-handles", "THE RULING: handles are opaque, binding-only (Lars 09-07/08)", "probe_opaque_handles.py"),
+    ("calc", "the surface is parametric — derivation, denial, world; not possession-shaped", "probe_calc.py"),
 ]
 
 BUILDS = (
