@@ -43,6 +43,7 @@ CASES: list[tuple[str, str, str]] = [
     ("affordances", "callable surface is possession-shaped (HATEOAS rooms)", "probe_affordances.py"),
     ("opaque-handles", "THE RULING: handles are opaque, binding-only (Lars 09-07/08)", "probe_opaque_handles.py"),
     ("calc", "the surface is parametric — derivation, denial, world; not possession-shaped", "probe_calc.py"),
+    ("custody", "the world records holds; a successor reads them through read", "probe_holds.py"),
 ]
 
 BUILDS = (

@@ -1,0 +1,11 @@
+name: capability
+kind: inferred
+shape: categorical
+face: in
+membrane: true
+note: a capability flipped from absent (or chartered-but-unbuilt) to
+      demonstrated — witnessed by a probe or gate, not by intent.
+      Declared 2026-10-13: the resource world became inspectable —
+      holds.log records mint/release/session spans and a successor reads
+      them through its own read verb. Fires when "can it" gains a receipt,
+      not when the surface gets wider.

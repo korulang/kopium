@@ -98,3 +98,17 @@ On the bench path, `corpus-replay` with `KOPIUM_WORLD` persisted
 `find-user` and the next process's `vocabulary()` — the prompt's own
 source — listed it. The frag's next edge is unchanged and now load-bearing:
 promotion still has no oracle, so fossilization is live.
+
+2026-10-13 — **a third channel: events.** Heredity had two — world-state
+(the filesystem's own persistence) and vocabulary (the `*.k` genome). The
+custody record adds the third: `holds.log` in the world dir witnesses every
+mint and release across sessions, one line per event, written at the
+funnel (`probe_holds.k`, `bench/probe_holds.py`). Session B reads it
+through its own `read` verb — no special surface — and sees A's complete
+span before it acts. What sharpened: "a successor can inspect outstanding
+holds" turned out to mean *obligation churn*, not logical handles —
+consume-and-reissue verbs mint per call, so the record is mint/release
+pairs grouped by handle id. And the residual arm's design answered its own
+question: a session cannot omit `bridge:close` (the bridge is itself a
+`<session!>` obligation), so a span left open is legible as exactly what
+it is — a death, not an oversight.
