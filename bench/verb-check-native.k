@@ -17,7 +17,7 @@ import koru/yyjson
 // One run: wire source through the real bridge. dispatch-error prints the
 // teaching message too — possession refusals carry it, and the check is
 // exactly that the refusal teaches.
-tor run-src { br: *std/bridge:Bridge<session>, src: string }
+tor run-src { br: *std/bridge:Bridge<session>, src: string<*> }
 run-src = std/bridge:run(br, source: src)
 | result r |> std/interpreter:value.stringify(r.value): v
     |> std/io:print.ln("VALUE {{ v:s }}")

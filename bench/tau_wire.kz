@@ -397,7 +397,7 @@ fn callIO(tau_name: []const u8, args_json: []const u8) []const u8 {
 var toolfrag_buf: std.ArrayListUnmanaged(std.ArrayListUnmanaged(u8)) = .{};
 var toolfrag_hi: usize = 0;
 
-~pub tor toolfrag { index: i64, text: string }
+~pub tor toolfrag { index: i64, text: string<*> }
 
 ~proc toolfrag|zig {
     if (index < 0) @panic("kopium: negative tool-call index");
@@ -744,7 +744,7 @@ var n_implicit: u64 = 0;
     return .{ .written = .{} };
 }
 
-~pub tor die { msg: string }
+~pub tor die { msg: string<*> }
 
 ~proc die|zig {
     std.debug.print("kopium FATAL: {s}\n", .{msg});
@@ -758,7 +758,7 @@ var n_implicit: u64 = 0;
 // what say does), that gap belongs in std/bridge:grammar, not here.
 // ============================================================================
 
-~pub tor body { model: string, max_tokens: u32, temperature: string, grammar: string, history: string } -> string
+~pub tor body { model: string, max_tokens: u32, temperature: string, grammar: string, history: string<*> } -> string
 
 ~proc body|zig {
     const alloc = std.heap.page_allocator;

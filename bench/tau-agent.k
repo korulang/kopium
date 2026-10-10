@@ -40,7 +40,7 @@ std/store:new(reply, capacity: 2) { *std/string:String<instance!> }
 
 
 
-tor collect { text: string }
+tor collect { text: string<*> }
 collect = std/store:query(reply)
 ! query buf |> std/string:append(s: buf, text)
     | ok |> _
@@ -147,7 +147,7 @@ ask = std/bridge:grammar(br)
 | not-found _ |> app/tau_wire:die(msg: "bridge grammar missing")
 
 // Append a chat message to the transcript.
-tor observe { role: string, text: string }
+tor observe { role: string, text: string<*> }
 observe = std/store:query(transcript)
 ! query h |> headless/wire:msg(role, content: text): m |> std/string:append(s: h, text: m)
     | ok |> _
@@ -161,7 +161,7 @@ observe = std/store:query(transcript)
 // say(text: rN): say's field is Source, so a bare name delivers literally.
 // The gate stays strict; the policy that prose still reaches the user
 // lives here, in the harness.
-tor deliver-residue { br: *std/bridge:Bridge<session>, text: string }
+tor deliver-residue { br: *std/bridge:Bridge<session>, text: string<*> }
 | sent
 | stranded
 
@@ -184,7 +184,7 @@ deliver-residue = std/fmt:fmt.blk {
 
 // Run what the model wrote and report the outcome back verbatim — the
 // bridge's own diagnostic words, no authored coaching.
-tor act { br: *std/bridge:Bridge<session>, source: string }
+tor act { br: *std/bridge:Bridge<session>, source: string<*> }
 act = observe(role: "assistant", text: source) |> std/bridge:run(br, source)
 | result r |> std/interpreter:value.stringify(r.value): v
     |> std/fmt:fmt.blk {

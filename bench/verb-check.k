@@ -26,7 +26,7 @@ import koru/yyjson
 
 // One run: wire source through the real bridge. Every non-`result` arm of
 // std/bridge:run prints a FAIL-<arm> marker so the checker sees it.
-tor run-src { br: *std/bridge:Bridge<session>, src: string }
+tor run-src { br: *std/bridge:Bridge<session>, src: string<*> }
 run-src = std/bridge:run(br, source: src)
 | result r |> std/interpreter:value.stringify(r.value): v
     |> std/io:print.ln("VALUE {{ v:s }}")
