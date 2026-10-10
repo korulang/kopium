@@ -22,6 +22,7 @@ Output: bench/results/compare_<suffix>.csv
 from __future__ import annotations
 
 import csv
+import os
 import sys
 import time
 from pathlib import Path
@@ -52,9 +53,14 @@ litellm.model_cost["openrouter/deepseek/deepseek-v4-flash-0731"] = {
 }
 
 
-def run_one(agent_cls, task, domain, gate=None):
+def run_one(agent_cls, task, domain, gate=None, receipt_dir=None):
     env = build_environment(domain)
     if agent_cls is KopiumAgent:
+        if receipt_dir is not None:
+            receipt_dir.mkdir(parents=True, exist_ok=True)
+            for f in receipt_dir.iterdir():
+                f.unlink()
+            os.environ["KOPIUM_RECEIPT_DIR"] = str(receipt_dir)
         agent = agent_cls(
             tools=env.get_tools(),
             domain_policy=env.get_policy(),
@@ -172,7 +178,8 @@ def main() -> None:
             else:
                 try:
                     (kr, kdb, kcalls, kcost, ktok, kwall) = run_one(
-                        KopiumAgent, task, domain, gate=str(HERE / "tau-agent-binary")
+                        KopiumAgent, task, domain, gate=str(HERE / "tau-agent-binary"),
+                        receipt_dir=HERE / "results" / "runs" / f"compare-{suffix}-task{tid}" / "receipts",
                     )
                 except Exception as e:  # noqa: BLE001
                     kr, kdb, kcalls, kcost, ktok, kwall = None, None, None, None, (None, None), None
