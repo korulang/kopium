@@ -26,7 +26,7 @@ import koru/yyjson
 
 // One run: wire source through the real bridge. Every non-`result` arm of
 // std/bridge:run prints a FAIL-<arm> marker so the checker sees it.
-tor run-src { br: *std/bridge:Bridge, src: string }
+tor run-src { br: *std/bridge:Bridge<session>, src: string }
 run-src = std/bridge:run(br, source: src)
 | result r |> std/interpreter:value.stringify(r.value): v
     |> std/io:print.ln("VALUE {{ v:s }}")
@@ -43,7 +43,7 @@ run-src = std/bridge:run(br, source: src)
 | scope-not-found s2 |> std/io:print.ln("FAIL-SCOPE {{ s2:s }}")
 
 // One fixture line: pull the "source" field, run it, free, close.
-tor one { br: *std/bridge:Bridge, line: string }
+tor one { br: *std/bridge:Bridge<session>, line: string }
 one = koru/yyjson:parse(text: line)
 | ok doc |> koru/yyjson:root(doc): r
     |> koru/yyjson:object.get(doc, v: r, key: "source")

@@ -22,7 +22,7 @@ import std/string
 import std/bridge
 import app/ledger
 
-tor report { br: *std/bridge:Bridge, source: string, tag: string }
+tor report { br: *std/bridge:Bridge<session>, source: string, tag: string }
 report = std/bridge:run(br, source)
 | result r |> std/io:print.ln("[{{ tag:s }}] result handles={{ r.handles:d }}")
 | partial p |> std/io:print.ln("[{{ tag:s }}] partial {{ p.ran:d }}/{{ p.total:d }} handles={{ p.handles:d }}")
@@ -37,50 +37,50 @@ report = std/bridge:run(br, source)
 | shape-error sh |> std/io:print.ln("[{{ tag:s }}] shape-error {{ sh.message:s }}")
 | scope-not-found s2 |> std/io:print.ln("[{{ tag:s }}] scope-not-found {{ s2:s }}")
 
-tor vocab { br: *std/bridge:Bridge }
+tor vocab { br: *std/bridge:Bridge<session> }
 vocab = std/io:print.ln("--- 1: derived vocabulary (ledger register only) ---")
 |> std/bridge:vocabulary(br)
 | ok v |> std/io:print.ln("{{ v:s }}")
 | not-found s |> std/io:print.ln("WRONG: no scope {{ s:s }}")
 
-tor open { br: *std/bridge:Bridge }
+tor open { br: *std/bridge:Bridge<session> }
 open = std/io:print.ln("--- 2: open-acct mints ---")
 |> report(br, source: "open-acct(name: \"checking\")", tag: "open")
 
-tor post-ok { br: *std/bridge:Bridge }
+tor post-ok { br: *std/bridge:Bridge<session> }
 post-ok = std/io:print.ln("--- 3: post binds the minted handle, ok arm HANDLED ---")
 |> app/ledger:last-minted(): h
 |> std/fmt:ln("post(handle: \"{{ h:s }}\", amount: \"50\")\n| ok h2 |> say(text: h2)"): src
 |> report(br, source: src.text, tag: "post-ok")
 
-tor post-bad { br: *std/bridge:Bridge }
+tor post-bad { br: *std/bridge:Bridge<session> }
 post-bad = std/io:print.ln("--- 4: post with a non-integer amount -> bad-amount, no arm -> hand-back ---")
 |> app/ledger:last-minted(): h
 |> std/fmt:ln("post(handle: \"{{ h:s }}\", amount: \"fifty\")"): src
 |> report(br, source: src.text, tag: "post-bad")
 
-tor worth-ok { br: *std/bridge:Bridge }
+tor worth-ok { br: *std/bridge:Bridge<session> }
 worth-ok = std/io:print.ln("--- 5: worth reads the balance by name ---")
 |> report(br, source: "worth(name: \"checking\")\n| ok w |> say(text: w)\n| missing m |> say(text: \"WRONG-missing\")", tag: "worth-ok")
 
-tor worth-miss { br: *std/bridge:Bridge }
+tor worth-miss { br: *std/bridge:Bridge<session> }
 worth-miss = std/io:print.ln("--- 6: worth on an unopened name -> missing ---")
 |> report(br, source: "worth(name: \"ghost\")\n| ok w |> say(text: w)\n| missing m |> say(text: \"no such account\")", tag: "worth-miss")
 
-tor forged { br: *std/bridge:Bridge }
+tor forged { br: *std/bridge:Bridge<session> }
 forged = std/io:print.ln("--- 7: fabricated handle refused pre-proc ---")
 |> report(br, source: "post(handle: \"deadbe\", amount: \"1\")", tag: "forged")
 
-tor denied { br: *std/bridge:Bridge }
+tor denied { br: *std/bridge:Bridge<session> }
 denied = std/io:print.ln("--- 8: a notes verb on ledger scope -> event-denied ---")
 |> report(br, source: "open(path: \"x.txt\")", tag: "denied")
 
-tor growth { br: *std/bridge:Bridge }
+tor growth { br: *std/bridge:Bridge<session> }
 growth = std/io:print.ln("--- 9: define through run, then call it ---")
 |> report(br, source: "tor announce { msg: string }\nannounce = say(text: msg)", tag: "define")
 |> report(br, source: "announce(msg: \"growth carried to ledger\")", tag: "call")
 
-tor close { br: *std/bridge:Bridge }
+tor close { br: *std/bridge:Bridge<session> }
 close = std/io:print.ln("--- 10: close-acct binds, releases ---")
 |> app/ledger:last-minted(): h
 |> std/fmt:ln("close-acct(handle: \"{{ h:s }}\")"): src

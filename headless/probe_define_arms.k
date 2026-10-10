@@ -30,7 +30,7 @@ std/runtime:register(scope: "armites") {
     note(1)
 }
 
-tor install-and-run { br: *std/bridge:Bridge, src: string, call: string }
+tor install-and-run { br: *std/bridge:Bridge<session>, src: string, call: string }
 install-and-run = std/bridge:define(br, source: src)
 | defined d |> std/io:print.ln("DEFINED {{ d:s }}")
     |> std/bridge:run(br, source: call)

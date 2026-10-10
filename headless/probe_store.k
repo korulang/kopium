@@ -10,7 +10,7 @@ import app/notes
 
 std/store:new(reply, capacity: 2) { *std/string:String<instance!> }
 
-tor drive { br: *std/bridge:Bridge }
+tor drive { br: *std/bridge:Bridge<session> }
 drive = std/store:query(reply)
 ! query buf |> std/fmt:ln("{{ buf:S }}"): src |> std/bridge:run(br, source: src.text)
     | result r |> std/io:print.ln("  ok — bridge holds {{ r.handles:d }}")

@@ -20,14 +20,14 @@ import app/wire
 
 // 1. deny, run, deny: the middle step still runs, and the report names
 // each step's verdict — event-denied is a line, not a turn-verdict.
-tor deny-run-deny { br: *std/bridge:Bridge }
+tor deny-run-deny { br: *std/bridge:Bridge<session> }
 deny-run-deny = app/wire:clean(raw: "delete(path: \"a\")\nsay(text: \"middle ran\")\ndelete(path: \"b\")")
 | ok cs |> std/fmt:ln("{{ cs:S }}"): src
     |> report(br, source: src.text)
     |> std/string:free(s: cs)
 | err e |> std/io:print.ln("clean failed: {{ e:s }} — WRONG, clean keeps the whole turn")
 
-tor report { br: *std/bridge:Bridge, source: string }
+tor report { br: *std/bridge:Bridge<session>, source: string }
 report = std/bridge:run(br, source)
 | partial p |> std/io:print.ln("partial {{ p.ran:d }}/{{ p.total:d }}\n{{ p.report:s }}")
 | result r |> std/io:print.ln("WRONG: result handles={{ r.handles:d }} — a three-item turn is not a single result")
@@ -43,7 +43,7 @@ report = std/bridge:run(br, source)
 | scope-not-found s2 |> std/io:print.ln("WRONG: no scope {{ s2:s }}")
 
 // 2. The session outlives the denials: the next single-item turn runs.
-tor survives { br: *std/bridge:Bridge }
+tor survives { br: *std/bridge:Bridge<session> }
 survives = std/io:print.ln("--- the bridge survives the denials ---")
     |> std/bridge:run(br, source: "say(text: \"still here after two denials\")")
     | result r |> std/io:print.ln("say ran — bridge holds {{ r.handles:d }} resource(s)")

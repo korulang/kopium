@@ -10,7 +10,7 @@ import std/fmt
 import std/bridge
 import app/notes
 
-tor report { br: *std/bridge:Bridge, source: string, tag: string }
+tor report { br: *std/bridge:Bridge<session>, source: string, tag: string }
 report = std/bridge:run(br, source)
 | result r |> std/io:print.ln("[{{ tag:s }}] result handles={{ r.handles:d }}")
 | partial p |> std/io:print.ln("[{{ tag:s }}] partial {{ p.ran:d }}/{{ p.total:d }} handles={{ p.handles:d }}\n{{ p.report:s }}")
@@ -31,21 +31,21 @@ check = std/io:read-file(path)
 | not-found |> std/io:print.ln("[{{ tag:s }}] disk {{ path:s }} = missing")
 | failed e |> std/io:print.ln("[{{ tag:s }}] disk {{ path:s }} = failed {{ e:s }}")
 
-tor multi { br: *std/bridge:Bridge }
+tor multi { br: *std/bridge:Bridge<session> }
 multi = std/io:print.ln("--- 1: the model's three-item flat-chain turn, verbatim ---")
 |> report(br, source: "open(path: \"probe_fan_a.txt\") | ok h1 |> append(handle: h1, text: \"alpha\") | ok a1 |> close(handle: h1)\nopen(path: \"probe_fan_b.txt\") | ok h2 |> append(handle: h2, text: \"beta\") | ok a2 |> close(handle: h2)\nopen(path: \"probe_fan_c.txt\") | ok h3 |> append(handle: h3, text: \"gamma\") | ok a3 |> close(handle: h3)", tag: "three-flat")
 |> check(path: "probe_fan_a.txt", tag: "three-flat")
 |> check(path: "probe_fan_b.txt", tag: "three-flat")
 |> check(path: "probe_fan_c.txt", tag: "three-flat")
 
-tor multi-nested { br: *std/bridge:Bridge }
+tor multi-nested { br: *std/bridge:Bridge<session> }
 multi-nested = std/io:print.ln("--- 2: three items, each with the nested spelling ---")
 |> report(br, source: "open(path: \"probe_fan_d.txt\")\n| ok h1 |> append(handle: h1, text: \"delta\")\n    | ok a1 |> close(handle: a1)\nopen(path: \"probe_fan_e.txt\")\n| ok h2 |> append(handle: h2, text: \"epsilon\")\n    | ok a2 |> close(handle: a2)\nopen(path: \"probe_fan_f.txt\")\n| ok h3 |> append(handle: h3, text: \"zeta\")\n    | ok a3 |> close(handle: a3)", tag: "three-nested")
 |> check(path: "probe_fan_d.txt", tag: "three-nested")
 |> check(path: "probe_fan_e.txt", tag: "three-nested")
 |> check(path: "probe_fan_f.txt", tag: "three-nested")
 
-tor multi-items { br: *std/bridge:Bridge }
+tor multi-items { br: *std/bridge:Bridge<session> }
 multi-items = std/io:print.ln("--- 3: three plain items, no arms ---")
 |> report(br, source: "open(path: \"probe_fan_g.txt\")\nopen(path: \"probe_fan_h.txt\")\nopen(path: \"probe_fan_i.txt\")", tag: "three-plain")
 |> check(path: "probe_fan_g.txt", tag: "three-plain")

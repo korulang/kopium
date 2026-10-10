@@ -21,7 +21,7 @@ import std/fmt
 import std/bridge
 import app/notes
 
-tor report { br: *std/bridge:Bridge, source: string, tag: string }
+tor report { br: *std/bridge:Bridge<session>, source: string, tag: string }
 report = std/bridge:run(br, source)
 | result r |> std/io:print.ln("[{{ tag:s }}] result handles={{ r.handles:d }}")
 | partial p |> std/io:print.ln("[{{ tag:s }}] partial {{ p.ran:d }}/{{ p.total:d }} handles={{ p.handles:d }}")
@@ -36,20 +36,20 @@ report = std/bridge:run(br, source)
 | shape-error sh |> std/io:print.ln("[{{ tag:s }}] shape-error {{ sh.message:s }}")
 | scope-not-found s2 |> std/io:print.ln("[{{ tag:s }}] scope-not-found {{ s2:s }}")
 
-tor defect-verbatim { br: *std/bridge:Bridge }
+tor defect-verbatim { br: *std/bridge:Bridge<session> }
 defect-verbatim = std/io:print.ln("--- 1: the model's line — close the pre-append binding ---")
 |> report(br, source: "open(path: \"probe_discharged_a.txt\")\n| ok h |> append(handle: h, text: \"alpha\")\n| ok |> close(handle: h)", tag: "verbatim")
 
-tor aliased { br: *std/bridge:Bridge }
+tor aliased { br: *std/bridge:Bridge<session> }
 aliased = std/io:print.ln("--- 2: binds h2, still closes h — then uses h2 ---")
 |> report(br, source: "open(path: \"probe_discharged_b.txt\")\n| ok h |> append(handle: h, text: \"beta\")\n| ok h2 |> close(handle: h)", tag: "aliased-close")
 |> report(br, source: "open(path: \"probe_discharged_c.txt\")\n| ok h |> append(handle: h, text: \"gamma\")\n| ok h2 |> append(handle: h2, text: \"after-close\")\n| ok |> close(handle: h2)", tag: "h2-after-close")
 
-tor flat-rebind { br: *std/bridge:Bridge }
+tor flat-rebind { br: *std/bridge:Bridge<session> }
 flat-rebind = std/io:print.ln("--- 3: flat chain with the re-bind — still refused ---")
 |> report(br, source: "open(path: \"probe_discharged_d.txt\")\n| ok h |> append(handle: h, text: \"delta\")\n| ok h2 |> close(handle: h2)", tag: "flat-rebind")
 
-tor nested { br: *std/bridge:Bridge }
+tor nested { br: *std/bridge:Bridge<session> }
 nested = std/io:print.ln("--- 4: the indented spelling — arm nested under the step ---")
 |> report(br, source: "open(path: \"probe_discharged_e.txt\")\n| ok h |> append(handle: h, text: \"epsilon\")\n    | ok h2 |> close(handle: h2)", tag: "nested")
 

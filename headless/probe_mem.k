@@ -32,7 +32,7 @@ std/runtime:register(scope: "kopium") {
 |> mem-run(br, label: "keys-after", source: "keys()")
 |> mem-run(br, label: "notes-still-denied-free", source: "read(path: \"no-such-file-xyz.txt\")")
 
-tor mem-run { br: *std/bridge:Bridge, label: string, source: string }
+tor mem-run { br: *std/bridge:Bridge<session>, label: string, source: string }
 mem-run = std/bridge:run(br, source)
 | result r |> std/io:print.ln("{{ label:s }} -> result")
 | unhandled-branch ub |> std/io:print.ln("{{ label:s }} -> unhandled [{{ ub.branch:s }}] {{ ub.payload:s }}")

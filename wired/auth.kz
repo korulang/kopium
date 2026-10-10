@@ -10,7 +10,7 @@
 
 const std = @import("std");
 
-~pub tor bearer { key: string } -> string
+~pub tor bearer { key: string<*> } -> string
 
 ~proc bearer|zig {
     return std.fmt.allocPrint(std.heap.page_allocator, "Bearer {s}", .{key}) catch @panic("kopium: OOM building auth header");

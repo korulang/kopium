@@ -42,7 +42,7 @@ import app/agent
 
 // One turn, same shape as session.k's — ask the model, show the wire, run it,
 // show what the bridge did. `session` picks which canned script answers.
-tor aturn { br: *std/bridge:Bridge, session: string, n: u32 }
+tor aturn { br: *std/bridge:Bridge<session>, session: string, n: u32 }
 aturn = app/hmodel:intent(session, turn: n): why
     |> std/io:print.ln("")
     |> std/io:print.ln("turn {{ n:d }}  model wants to: {{ why:s }}")

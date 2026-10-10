@@ -19,7 +19,7 @@ import app/tau_wire
 import app/corpus_env
 import koru/yyjson
 
-tor run-src { br: *std/bridge:Bridge, src: string }
+tor run-src { br: *std/bridge:Bridge<session>, src: string }
 run-src = std/bridge:run(br, source: src)
 | result r |> std/interpreter:value.stringify(r.value): v
     |> std/io:print.ln("VALUE {{ v:s }}\n{{ r.trace:s }}")
@@ -35,7 +35,7 @@ run-src = std/bridge:run(br, source: src)
 | exhausted _ |> std/io:print.ln("FAIL-EXHAUSTED")
 | scope-not-found s2 |> std/io:print.ln("FAIL-SCOPE {{ s2:s }}")
 
-tor one { br: *std/bridge:Bridge, line: string }
+tor one { br: *std/bridge:Bridge<session>, line: string }
 one = koru/yyjson:parse(text: line)
 | ok doc |> koru/yyjson:root(doc): r
     |> koru/yyjson:object.get(doc, v: r, key: "source")

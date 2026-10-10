@@ -19,7 +19,7 @@ import app/wire
 |> stack-run(br)
 |> rebind-run(br)
 
-tor stack-run { br: *std/bridge:Bridge }
+tor stack-run { br: *std/bridge:Bridge<session> }
 stack-run = std/bridge:run(br, source: "tor jot { m: string }\njot = say(text: m)\ntor double { mm: string }\ndouble = jot(m: mm) | ok q |> jot(m: mm)\ndouble(mm: \"first\")")
 | result r |> std/io:print.ln("result — bridge holds {{ r.handles:d }}")
 | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}]")
@@ -37,7 +37,7 @@ stack-run = std/bridge:run(br, source: "tor jot { m: string }\njot = say(text: m
 // jot redefined in a SECOND run — the defined table persists across runs —
 // then double called unchanged. Late-bound: marker lines show. Snapshot:
 // "second" twice, no markers.
-tor rebind-run { br: *std/bridge:Bridge }
+tor rebind-run { br: *std/bridge:Bridge<session> }
 rebind-run = std/bridge:run(br, source: "tor jot { m: string }\njot = say(text: \"marker\") | ok q |> say(text: m)\ndouble(mm: \"second\")")
 | result r |> std/io:print.ln("result — bridge holds {{ r.handles:d }}")
 | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}]")

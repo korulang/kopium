@@ -29,7 +29,7 @@ proc event-name|zig {
     return source[0..end];
 }
 
-tor handle { br: *std/bridge:Bridge, source: string }
+tor handle { br: *std/bridge:Bridge<session>, source: string }
 handle = std/bridge:run(br, source)
 | result r |> std/interpreter:value.stringify(r.value): j |> event-name(source): n |> std/io:print.ln("OK {{ n:s }} bound={{ r.bound:s }} {{ j:s }}")
 | unhandled-branch ub |> event-name(source): n |> std/io:print.ln("HALT {{ n:s }} {{ ub.branch:s }} {{ ub.payload:s }} held: {{ ub.handles:s }}")
@@ -44,7 +44,7 @@ handle = std/bridge:run(br, source)
 | scope-not-found s2 |> std/io:print.ln("ERROR no scope {{ s2:s }}")
 | defined d |> std/io:print.ln("DEFINED {{ d:s }}")
 
-tor serve { br: *std/bridge:Bridge }
+tor serve { br: *std/bridge:Bridge<session> }
 serve = std/io:readln()
 | line src |> app/gate_intake:intake(first: src)
     | ready full |> handle(br, source: full) |> serve(br)

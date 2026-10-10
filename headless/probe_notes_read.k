@@ -25,7 +25,7 @@ import app/notes
 // read opens, it does not run. The hidden-test closer is out of spend
 // (no clone on disk, image pulls need approval); the verdict below is the
 // run's own, quoted as given.
-tor attempt { br: *std/bridge:Bridge }
+tor attempt { br: *std/bridge:Bridge<session> }
 attempt = std/io:print.ln("--- 1. attempt py-expr-eval: read the task file ---")
     |> std/bridge:run(br, source: "read(path: \"probe_task_expr.txt\")\n| ok text |> say(text: text)")
     | result r |> std/io:print.ln("read ran — bridge holds {{ r.handles:d }} resource(s), nothing minted")
@@ -44,7 +44,7 @@ attempt = std/io:print.ln("--- 1. attempt py-expr-eval: read the task file ---")
 // fired, and the bridge returned it as `unhandled-branch` (430_056) — the
 // long-running bridge handing what nobody handled to the host. It does not
 // refuse, it does not crash, and the session survives.
-tor missing { br: *std/bridge:Bridge }
+tor missing { br: *std/bridge:Bridge<session> }
 missing = std/io:print.ln("--- 2. missing file hands back, not a crash ---")
     |> std/bridge:run(br, source: "read(path: \"no-such-file.txt\")\n| ok |> say(text: \"found\")")
     | result r |> std/io:print.ln("result — WRONG, ok was handled but the file is missing (holds {{ r.handles:d }})")
@@ -60,7 +60,7 @@ missing = std/io:print.ln("--- 2. missing file hands back, not a crash ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 3. The bridge survives the miss: the old verbs still run after it.
-tor survives { br: *std/bridge:Bridge }
+tor survives { br: *std/bridge:Bridge<session> }
 survives = std/io:print.ln("--- 3. the session outlives the miss ---")
     |> std/bridge:run(br, source: "say(text: \"still here after not-found\")")
     | result r |> std/io:print.ln("say ran — bridge holds {{ r.handles:d }} resource(s)")
@@ -76,14 +76,14 @@ survives = std/io:print.ln("--- 3. the session outlives the miss ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 4. The derived vocabulary includes the invention's sibling: read.
-tor show-vocabulary { br: *std/bridge:Bridge }
+tor show-vocabulary { br: *std/bridge:Bridge<session> }
 show-vocabulary = std/io:print.ln("--- 4. derived vocabulary (register, now with read) ---")
     |> std/bridge:vocabulary(br)
     | ok v |> std/io:print.ln("{{ v:s }}")
     | not-found s |> std/io:print.ln("!! scope {{ s:s }} vanished")
 
 // 5. The wall did not move: what was never declared is still denied.
-tor show-contrast { br: *std/bridge:Bridge }
+tor show-contrast { br: *std/bridge:Bridge<session> }
 show-contrast = std/io:print.ln("--- 5. contrast: delete was never declared ---")
     |> std/bridge:run(br, source: "delete(path: \"probe_task_expr.txt\")")
     | result r |> std/io:print.ln("result — WRONG, delete is not a verb (holds {{ r.handles:d }})")

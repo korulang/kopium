@@ -34,7 +34,7 @@ const std = @import("std");
 // AUTH — read once at startup, never again. Not session state.
 // ============================================================================
 
-~pub tor bearer { key: string } -> string
+~pub tor bearer { key: string<*> } -> string
 
 ~proc bearer|zig {
     return std.fmt.allocPrint(std.heap.page_allocator, "Bearer {s}", .{key}) catch @panic("kopium: OOM building auth header");
@@ -82,7 +82,7 @@ var auth_len: usize = 0;
 // way a plain allocating `string` return would; the caller reads it, uses it,
 // and frees it inside one visible flow. One memcpy of a chat line, once per
 // turn, on a network boundary — the cost 610_007 priced as noise.
-~pub tor clean { raw: string }
+~pub tor clean { raw: string<*> }
 | ok *std/string:String<view!>
 | err string
 
@@ -92,7 +92,7 @@ var auth_len: usize = 0;
 
 // The byte arithmetic, and nothing else. Deliberately NOT `pub`: its result is
 // a sub-slice of `raw` and must not travel, so its one caller is the line above.
-~tor clean-span { raw: string } -> string
+~tor clean-span { raw: string<*> } -> string
 
 ~proc clean-span|zig {
     var s = std.mem.trim(u8, raw, " \t\r\n");
@@ -123,7 +123,7 @@ var auth_len: usize = 0;
 
 // One chat message, escaped and comma-prefixed, ready to append to the
 // transcript String and splice straight into a request body.
-~pub tor msg { role: string, content: string } -> string
+~pub tor msg { role: string, content: string<*> } -> string
 
 ~proc msg|zig {
     const alloc = std.heap.page_allocator;
@@ -168,7 +168,7 @@ var auth_len: usize = 0;
 // edges). Callers re-warm per turn, once the bridge exists — `turn`/`act`
 // invoke it with their `br` in hand.
 
-~pub tor warm-grammar { br: *std/bridge:Bridge }
+~pub tor warm-grammar { br: *std/bridge:Bridge<session> }
 
 ~warm-grammar = std/bridge:grammar(br)
 | ok g |> remember-grammar(grammar: g)
@@ -185,7 +185,7 @@ var grammar_len: usize = 0;
     $mod.grammar_len = grammar.len;
 }
 
-~pub tor agent-body { model: string, max_tokens: u32, temperature: string, goal: string, history: string } -> string
+~pub tor agent-body { model: string, max_tokens: u32, temperature: string, goal: string, history: string<*> } -> string
 
 ~proc agent-body|zig {
     const alloc = std.heap.page_allocator;

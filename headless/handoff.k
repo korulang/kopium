@@ -33,7 +33,7 @@ import app/agent
 // One turn: the agent's model emits source, `act` dispatches it against the
 // shared bridge. `who` only labels which script produced the text — the
 // bridge does not know or care which agent a turn came from.
-tor turn { br: *std/bridge:Bridge, who: string, n: u32 }
+tor turn { br: *std/bridge:Bridge<session>, who: string, n: u32 }
 turn = app/relay-model:intent(who, n): why
     |> std/io:print.ln("")
     |> std/io:print.ln("turn {{ n:d }} [{{ who:s }}]  agent wants to: {{ why:s }}")

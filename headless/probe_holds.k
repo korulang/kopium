@@ -16,7 +16,7 @@ import std/bridge
 import std/io
 import app/notes
 
-tor holdrun { br: *std/bridge:Bridge, source: string, tag: string }
+tor holdrun { br: *std/bridge:Bridge<session>, source: string, tag: string }
 holdrun = std/bridge:run(br, source)
 | result r |> std/io:print.ln("[{{ tag:s }}] result")
 | partial p |> std/io:print.ln("[{{ tag:s }}] partial {{ p.ran:d }}/{{ p.total:d }}")
@@ -31,7 +31,7 @@ holdrun = std/bridge:run(br, source)
 | scope-not-found s |> std/io:print.ln("[{{ tag:s }}] scope-not-found {{ s:s }}")
 | residue r |> std/io:print.ln("[{{ tag:s }}] residue {{ r.report:s }}")
 
-tor showlog { br: *std/bridge:Bridge }
+tor showlog { br: *std/bridge:Bridge<session> }
 showlog = std/bridge:run(br, source: "read(path: \"holds-world/holds.log\")\n| ok t |> say(text: t)")
 | result r |> std/io:print.ln("[readlog] the record, through read:")
 | parse-error e |> std/io:print.ln("[readlog] parse-error {{ e.message:s }}")

@@ -14,7 +14,7 @@ import std/bridge
 import std/interpreter
 import app/notes
 
-tor a { br: *std/bridge:Bridge }
+tor a { br: *std/bridge:Bridge<session> }
 a = std/io:print.ln("--- A: 'I'll' narration above armed read ---")
     |> std/bridge:run(br, source: "I'll read field-journal.txt and report what it contains.\n\nread(path: \"field-journal.txt\") | ok v |> say(text: v) | missing m |> say(text: m) | too-large t |> say(text: t)")
     | result r |> std/io:print.ln("  A-RESULT branch=[{{ r.value.branch:s }}]")
@@ -30,7 +30,7 @@ a = std/io:print.ln("--- A: 'I'll' narration above armed read ---")
     | shape-error sh |> std/io:print.ln("  A-SHAPE: {{ sh.message:s }}")
     | scope-not-found s |> std/io:print.ln("  A-NO SCOPE: {{ s:s }}")
 
-tor b { br: *std/bridge:Bridge }
+tor b { br: *std/bridge:Bridge<session> }
 b = std/io:print.ln("--- B: 'I will' — no apostrophe ---")
     |> std/bridge:run(br, source: "I will read field-journal.txt and report what it contains.\n\nread(path: \"field-journal.txt\") | ok v |> say(text: v) | missing m |> say(text: m) | too-large t |> say(text: t)")
     | result r |> std/io:print.ln("  B-RESULT branch=[{{ r.value.branch:s }}]")

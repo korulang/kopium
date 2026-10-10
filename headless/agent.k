@@ -13,7 +13,7 @@
 import std/bridge
 import std/io
 
-pub tor act { br: *std/bridge:Bridge, source: string }
+pub tor act { br: *std/bridge:Bridge<session>, source: string }
 act = std/bridge:run(br, source)
 | result r |> std/io:print.ln("  ok — bridge now holds {{ r.handles:d }} resource(s)")
 | partial p |> std/io:print.ln("  {{ p.ran:d }}/{{ p.total:d }} steps ran — bridge holds {{ p.handles:d }}")

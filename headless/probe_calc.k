@@ -21,7 +21,7 @@ import std/fmt
 import std/bridge
 import app/calc
 
-tor report { br: *std/bridge:Bridge, source: string, tag: string }
+tor report { br: *std/bridge:Bridge<session>, source: string, tag: string }
 report = std/bridge:run(br, source)
 | result r |> std/io:print.ln("[{{ tag:s }}] result handles={{ r.handles:d }}")
 | partial p |> std/io:print.ln("[{{ tag:s }}] partial {{ p.ran:d }}/{{ p.total:d }} handles={{ p.handles:d }}")
@@ -36,49 +36,49 @@ report = std/bridge:run(br, source)
 | shape-error sh |> std/io:print.ln("[{{ tag:s }}] shape-error {{ sh.message:s }}")
 | scope-not-found s2 |> std/io:print.ln("[{{ tag:s }}] scope-not-found {{ s2:s }}")
 
-tor vocab { br: *std/bridge:Bridge }
+tor vocab { br: *std/bridge:Bridge<session> }
 vocab = std/io:print.ln("--- 1: derived vocabulary (calc register only) ---")
 |> std/bridge:vocabulary(br)
 | ok v |> std/io:print.ln("{{ v:s }}")
 | not-found s |> std/io:print.ln("WRONG: no scope {{ s:s }}")
 
-tor grammar { br: *std/bridge:Bridge }
+tor grammar { br: *std/bridge:Bridge<session> }
 grammar = std/io:print.ln("--- 2: derived grammar (does it teach handles?) ---")
 |> std/bridge:grammar(br)
 | ok g |> std/io:print.ln("{{ g:s }}")
 | not-found s |> std/io:print.ln("WRONG: no scope {{ s:s }}")
 
-tor add-ok { br: *std/bridge:Bridge }
+tor add-ok { br: *std/bridge:Bridge<session> }
 add-ok = std/io:print.ln("--- 3: add binds the sum payload ---")
 |> report(br, source: "add(a: \"2\", b: \"40\")\n| sum s |> say(text: s)\n| bad-input m |> say(text: \"WRONG-bad\")", tag: "add-ok")
 
-tor div-zero { br: *std/bridge:Bridge }
+tor div-zero { br: *std/bridge:Bridge<session> }
 div-zero = std/io:print.ln("--- 4: div by zero -> by-zero with payload ---")
 |> report(br, source: "div(a: \"7\", b: \"0\")\n| quotient q |> say(text: \"WRONG-q\")\n| by-zero m |> say(text: m)", tag: "div-zero")
 
-tor add-bad { br: *std/bridge:Bridge }
+tor add-bad { br: *std/bridge:Bridge<session> }
 add-bad = std/io:print.ln("--- 5: add on a non-integer -> bad-input, handled ---")
 |> report(br, source: "add(a: \"fifty\", b: \"1\")\n| sum s |> say(text: \"WRONG-sum\")\n| bad-input m |> say(text: m)", tag: "add-bad")
 
-tor unbound { br: *std/bridge:Bridge }
+tor unbound { br: *std/bridge:Bridge<session> }
 unbound = std/io:print.ln("--- 6: arm body names `t`, only `s` is bound -> validation-error ---")
 |> report(br, source: "add(a: \"1\", b: \"2\")\n| sum s |> say(text: t)", tag: "unbound")
 
-tor denied { br: *std/bridge:Bridge }
+tor denied { br: *std/bridge:Bridge<session> }
 denied = std/io:print.ln("--- 7: notes and ledger verbs on calc scope -> event-denied ---")
 |> report(br, source: "open(path: \"x.txt\")", tag: "denied-notes")
 |> report(br, source: "open-acct(name: \"savings\")", tag: "denied-ledger")
 
-tor foreign { br: *std/bridge:Bridge }
+tor foreign { br: *std/bridge:Bridge<session> }
 foreign = std/io:print.ln("--- 8: invented field on add -> validation-error ---")
 |> report(br, source: "add(a: \"1\", b: \"2\", bogus: \"x\")", tag: "foreign")
 
-tor memory { br: *std/bridge:Bridge }
+tor memory { br: *std/bridge:Bridge<session> }
 memory = std/io:print.ln("--- 9: world state crosses items (bindings cannot) ---")
 |> report(br, source: "remember(name: \"x\", value: \"7\")\nrecall(name: \"x\")\n| ok v |> say(text: v)\n| missing m |> say(text: \"WRONG-missing\")", tag: "memory")
 |> report(br, source: "recall(name: \"ghost\")\n| ok v |> say(text: \"WRONG-ok\")\n| missing m |> say(text: m)", tag: "memory-miss")
 
-tor growth { br: *std/bridge:Bridge }
+tor growth { br: *std/bridge:Bridge<session> }
 growth = std/io:print.ln("--- 10: define through run, then call it ---")
 |> report(br, source: "tor shout { msg: string }\nshout = say(text: msg)", tag: "define")
 |> report(br, source: "shout(msg: \"growth carried to calc\")", tag: "call")

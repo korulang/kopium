@@ -54,7 +54,7 @@ std/store:new(reply, capacity: 2) { *std/string:String<instance!> }
 // point-free version — that one RETURNS the extracted text and hands back
 // freed memory (wired/holes/3_extracted_string_is_a_borrow_that_escapes).
 // The hazard is the escape, so this simply does not escape.
-tor collect { text: string }
+tor collect { text: string<*> }
 collect = std/store:query(reply)
 ! query buf |> std/string:append(s: buf, text)
     | ok |> _
@@ -181,7 +181,7 @@ observe = std/store:query(transcript)
 //
 // Every arm reports. A refusal the agent never hears about is a refusal it
 // will repeat, and turn 4 exists to prove it hears.
-tor act { br: *std/bridge:Bridge, goal: string, source: string }
+tor act { br: *std/bridge:Bridge<session>, goal: string, source: string }
 act = record(goal, said: source) |> std/bridge:run(br, source)
 | result r |> std/interpreter:value.stringify(r.value): v
     |> std/io:print.ln("  ok — returned {{ v:s }}, bridge now holds {{ r.handles:d }} resource(s)")
@@ -235,7 +235,7 @@ act = record(goal, said: source) |> std/bridge:run(br, source)
 // The whole turn travels now (frag-partial-programs): a reply may hold several
 // invocations, a two-line declaration, or a chain, and `std/bridge:run`
 // sequences it. There is no drop to warn about — `extra-lines` is retired.
-tor drive { br: *std/bridge:Bridge, goal: string }
+tor drive { br: *std/bridge:Bridge<session>, goal: string }
 drive = std/store:query(reply)
 ! query buf |> std/fmt:ln("{{ buf:S }}"): raw |> std/io:print.ln("  raw  > [{{ raw.text:s }}]") |> app/wire:clean(raw: raw.text)
     | ok cs |> std/fmt:ln("{{ cs:S }}"): src
@@ -251,7 +251,7 @@ clear-reply = std/store:query(reply)
 
 // One turn. `br` carries no phantom — a turn USES the session, it does not
 // end it.
-tor turn { br: *std/bridge:Bridge, model: string, max_tokens: u32, temperature: string, n: u32, goal: string }
+tor turn { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string, n: u32, goal: string }
 turn = app/wire:warm-grammar(br)
     |> clear-reply()
     |> std/io:print.ln("")

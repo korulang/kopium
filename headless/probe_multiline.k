@@ -18,7 +18,7 @@ import app/wire
 |> two-invocations(br)
 |> std/io:print.ln("--- done ---")
 
-tor two-invocations { br: *std/bridge:Bridge }
+tor two-invocations { br: *std/bridge:Bridge<session> }
 two-invocations = app/wire:clean(raw: "say(text: \"one\")\nsay(text: \"two\")")
 | ok cs |> std/fmt:ln("{{ cs:S }}"): src
     |> std/io:print.ln("clean kept: [{{ src.text:s }}]")
@@ -26,7 +26,7 @@ two-invocations = app/wire:clean(raw: "say(text: \"one\")\nsay(text: \"two\")")
     |> std/string:free(s: cs)
 | err e |> std/io:print.ln("clean failed: {{ e:s }}")
 
-tor report { br: *std/bridge:Bridge, source: string }
+tor report { br: *std/bridge:Bridge<session>, source: string }
 report = std/bridge:run(br, source)
 | partial p |> std/io:print.ln("partial {{ p.ran:d }}/{{ p.total:d }} — both lines ran, one report per step")
 | result r |> std/io:print.ln("WRONG: result handles={{ r.handles:d }} — a two-item turn is not a single result")

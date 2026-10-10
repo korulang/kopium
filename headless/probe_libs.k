@@ -17,7 +17,7 @@ import app/wire
 |> toolchain-verbs(br)
 |> std/io:print.ln("--- done ---")
 
-tor file-verbs { br: *std/bridge:Bridge }
+tor file-verbs { br: *std/bridge:Bridge<session> }
 file-verbs = std/bridge:run(br, source: "read(path: \"gzip/index.kz\") | ok t |> say(text: \"read hit\")\nread(path: \"nope.kz\") | ok t |> say(text: \"BAD\") | missing m |> say(text: \"missing arm fired\")\nread(path: \"../koru/README.md\") | ok t |> say(text: \"ESCAPE — BAD\") | denied d |> say(text: \"denied arm fired\")\nwrite(path: \"probe_scratch.tmp\", text: \"before\") | ok w |> say(text: \"wrote\")\nedit(path: \"probe_scratch.tmp\", old_text: \"before\", new_text: \"after\") | ok e |> say(text: \"edited\") | mismatch m |> say(text: \"BAD mismatch\")\nread(path: \"probe_scratch.tmp\") | ok t |> say(text: t)\nwrite(path: \"probe_escape.tmp\", text: \"line one\\nline two\") | ok w |> say(text: \"escapes written\")\nread(path: \"probe_escape.tmp\") | ok t |> say(text: t)")
 | partial p |> std/io:print.ln("partial {{ p.ran:d }}/{{ p.total:d }}:\n{{ p.report:s }}")
 | result r |> std/io:print.ln("result")
@@ -32,7 +32,7 @@ file-verbs = std/bridge:run(br, source: "read(path: \"gzip/index.kz\") | ok t |>
 | shape-error sh |> std/io:print.ln("shape: {{ sh.message:s }}")
 | scope-not-found s |> std/io:print.ln("no scope: {{ s:s }}")
 
-tor toolchain-verbs { br: *std/bridge:Bridge }
+tor toolchain-verbs { br: *std/bridge:Bridge<session> }
 toolchain-verbs = std/bridge:run(br, source: "queue()\ncheck(path: \"gzip/tests/roundtrip.kz\") | ok |> say(text: \"check green\") | error e |> say(text: e)\ntest(path: \"sqlite3/tests/basic.k\") | pass |> say(text: \"test pass\") | fail f |> say(text: f)\nboard()")
 | partial p |> std/io:print.ln("partial {{ p.ran:d }}/{{ p.total:d }}:\n{{ p.report:s }}")
 | result r |> std/io:print.ln("result")

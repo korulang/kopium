@@ -20,7 +20,7 @@ import std/bridge
 import std/interpreter
 import app/notes
 
-tor a { br: *std/bridge:Bridge }
+tor a { br: *std/bridge:Bridge<session> }
 a = std/io:print.ln("--- A: emitted |* residual arm ---")
     |> std/bridge:run(br, source: "read(path: \"probe_ub_exists.txt\")\n| ok |> say(text: \"found\")\n|* |> say(text: \"caught the rest\")")
     | result r |> std/io:print.ln("  A-RESULT branch=[{{ r.value.branch:s }}]")
@@ -35,7 +35,7 @@ a = std/io:print.ln("--- A: emitted |* residual arm ---")
     | shape-error sh |> std/io:print.ln("  A-SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("  A-NO SCOPE: {{ s2:s }}")
 
-tor b { br: *std/bridge:Bridge }
+tor b { br: *std/bridge:Bridge<session> }
 b = std/io:print.ln("--- B: emitted |* Audit e metatype residual ---")
     |> std/bridge:run(br, source: "read(path: \"probe_ub_exists.txt\")\n| ok |> say(text: \"found\")\n|* Audit e |> say(text: \"metatype caught\")")
     | result r |> std/io:print.ln("  B-RESULT branch=[{{ r.value.branch:s }}]")
@@ -50,7 +50,7 @@ b = std/io:print.ln("--- B: emitted |* Audit e metatype residual ---")
     | shape-error sh |> std/io:print.ln("  B-SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("  B-NO SCOPE: {{ s2:s }}")
 
-tor c { br: *std/bridge:Bridge }
+tor c { br: *std/bridge:Bridge<session> }
 c = std/io:print.ln("--- C: emitted |? corpse arm ---")
     |> std/bridge:run(br, source: "read(path: \"probe_ub_exists.txt\")\n| ok |> say(text: \"found\")\n|? |> say(text: \"caught the rest\")")
     | result r |> std/io:print.ln("  C-RESULT branch=[{{ r.value.branch:s }}]")
@@ -65,7 +65,7 @@ c = std/io:print.ln("--- C: emitted |? corpse arm ---")
     | shape-error sh |> std/io:print.ln("  C-SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("  C-NO SCOPE: {{ s2:s }}")
 
-tor d { br: *std/bridge:Bridge }
+tor d { br: *std/bridge:Bridge<session> }
 d = std/io:print.ln("--- D: control — named arms only ---")
     |> std/bridge:run(br, source: "read(path: \"probe_ub_exists.txt\")\n| ok v |> say(text: \"found it\")\n| missing m |> say(text: \"absent\")")
     | result r |> std/io:print.ln("  D-RESULT branch=[{{ r.value.branch:s }}]")

@@ -17,13 +17,13 @@ import std/bridge
 import std/fmt
 import app/notes
 
-tor empty { br: *std/bridge:Bridge }
+tor empty { br: *std/bridge:Bridge<session> }
 empty = std/io:print.ln("--- A: nothing held, the callable surface ---")
     |> std/bridge:affordances(br)
     | ok v |> std/io:print.ln("{{ v:s }}")
     | not-found s |> std/io:print.ln("!! scope {{ s:s }} vanished")
 
-tor aff-open { br: *std/bridge:Bridge }
+tor aff-open { br: *std/bridge:Bridge<session> }
 aff-open = std/io:print.ln("--- B: after open, the surface grows ---")
     |> std/bridge:run(br, source: "open(path: \"probe_affordances.txt\")")
     | result r |> std/bridge:affordances(br)
@@ -40,7 +40,7 @@ aff-open = std/io:print.ln("--- B: after open, the surface grows ---")
     | shape-error sh |> std/io:print.ln("SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("NO SCOPE: {{ s2:s }}")
 
-tor aff-close { br: *std/bridge:Bridge }
+tor aff-close { br: *std/bridge:Bridge<session> }
 aff-close = std/io:print.ln("--- C: after close, the surface shrinks ---")
     |> app/notes:last-minted(): h
     |> std/fmt:ln("close(handle: \"{{ h:s }}\")"): src

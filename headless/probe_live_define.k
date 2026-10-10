@@ -22,7 +22,7 @@ import app/wire
 |> std/io:print.ln("--- done ---")
 
 // 1. Discoverability: the prompt names the two-line define shape.
-tor show-prompt { br: *std/bridge:Bridge }
+tor show-prompt { br: *std/bridge:Bridge<session> }
 show-prompt = app/wire:warm-grammar(br)
     |> app/wire:agent-body(model: "canned", max_tokens: 100, temperature: "0", goal: "teach the session a new verb", history: ""): body
     |> std/io:print.ln("--- 1. prompt (what the model is shown) ---")
@@ -31,7 +31,7 @@ show-prompt = app/wire:warm-grammar(br)
 // 2 + 3. Arrival + install: clean keeps both lines, run reports defined.
 // Split like live.k's drive/act: `define` owns the snapshot String and frees
 // it on one visible line after the last use.
-tor define { br: *std/bridge:Bridge }
+tor define { br: *std/bridge:Bridge<session> }
 define = app/wire:clean(raw: "tor greet { msg: string }\ngreet = say(text: msg)")
 | ok cs |> std/fmt:ln("{{ cs:S }}"): src
     |> std/io:print.ln("--- 2. live intake keeps the declaration whole ---")
@@ -40,7 +40,7 @@ define = app/wire:clean(raw: "tor greet { msg: string }\ngreet = say(text: msg)"
     |> std/string:free(s: cs)
 | err e |> std/io:print.ln("clean failed: {{ e:s }}")
 
-tor install { br: *std/bridge:Bridge, source: string }
+tor install { br: *std/bridge:Bridge<session>, source: string }
 install = std/io:print.ln("--- 3. run on the cleaned source ---")
     |> std/bridge:run(br, source)
     | result r |> std/io:print.ln("result — WRONG, the declaration dispatched as an invocation (holds {{ r.handles:d }})")
@@ -56,7 +56,7 @@ install = std/io:print.ln("--- 3. run on the cleaned source ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 4. Growth closes: the invention dispatches next turn.
-tor redispatch { br: *std/bridge:Bridge }
+tor redispatch { br: *std/bridge:Bridge<session> }
 redispatch = std/io:print.ln("--- 4. next turn calls the invention ---")
     |> std/bridge:run(br, source: "greet(msg: \"hello from a defined flow\")")
     | result r |> std/io:print.ln("greet ran — bridge holds {{ r.handles:d }} resource(s)")
@@ -72,7 +72,7 @@ redispatch = std/io:print.ln("--- 4. next turn calls the invention ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 5 + 6. The derived renders include the invention.
-tor show-renders { br: *std/bridge:Bridge }
+tor show-renders { br: *std/bridge:Bridge<session> }
 show-renders = std/io:print.ln("--- 5. derived vocabulary (register + inventions) ---")
     |> std/bridge:vocabulary(br)
     | ok v |> std/io:print.ln("{{ v:s }}")

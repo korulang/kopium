@@ -161,7 +161,7 @@ rescroll = std/store:query(transcript)
     | done n when scroll.y > @as(i64, @intCast(n)) - 1 |> std/store:stored { scroll.lines: @as(i64, @intCast(n)), scroll.y: @as(i64, @intCast(n)) - 1 }
     | done n |> std/store:stored { scroll.lines: @as(i64, @intCast(n)) }
 
-tor show { text: string }
+tor show { text: string<*> }
 show = std/store:query(transcript)
 ! query buf |> std/string:append(s: buf, text)
     | ok |> rescroll()
@@ -181,7 +181,7 @@ seed-draft = std/string:from-page(text: "")
 | err _ |> _
 
 // ── the delta ladder, inline-consuming ──────────────────────────────────────
-tor collect { text: string }
+tor collect { text: string<*> }
 collect = std/store:query(reply)
 ! query buf |> std/string:append(s: buf, text)
     | ok |> show(text)
@@ -190,7 +190,7 @@ collect = std/store:query(reply)
 // One reasoning chunk in, frontier out: clear + append keeps the strip at
 // the stream's edge. `think` is reached from handle-delta's `reasoning`
 // arm — content:"" rides along in the same delta and appends nothing.
-tor think { text: string }
+tor think { text: string<*> }
 think = std/fmt:ln("… {{ text:s }}"): mt |> std/store:query(thinking)
 ! query buf |> std/string:clear(s: buf) |> std/string:append(s: buf, mt.text)
     | ok |> _

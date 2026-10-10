@@ -20,7 +20,7 @@ import std/bridge
 import std/fmt
 import app/notes
 
-tor mint-1 { br: *std/bridge:Bridge }
+tor mint-1 { br: *std/bridge:Bridge<session> }
 mint-1 = std/io:print.ln("--- A: first open mints an opaque handle ---")
     |> std/bridge:run(br, source: "open(path: \"probe_opaque_1.txt\")")
     | result r |> std/io:print.ln("mint-1 ran") |> app/notes:last-minted(): h1 |> std/io:print.ln("minted-1: {{ h1:s }}")
@@ -35,7 +35,7 @@ mint-1 = std/io:print.ln("--- A: first open mints an opaque handle ---")
     | shape-error sh |> std/io:print.ln("SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("NO SCOPE: {{ s2:s }}")
 
-tor mint-2 { br: *std/bridge:Bridge }
+tor mint-2 { br: *std/bridge:Bridge<session> }
 mint-2 = std/io:print.ln("--- B: a second open mints a DIFFERENT handle ---")
     |> std/bridge:run(br, source: "open(path: \"probe_opaque_2.txt\")")
     | result r |> std/io:print.ln("mint-2 ran") |> app/notes:last-minted(): h2 |> std/io:print.ln("minted-2: {{ h2:s }}")
@@ -50,7 +50,7 @@ mint-2 = std/io:print.ln("--- B: a second open mints a DIFFERENT handle ---")
     | shape-error sh |> std/io:print.ln("SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("NO SCOPE: {{ s2:s }}")
 
-tor bind-append { br: *std/bridge:Bridge }
+tor bind-append { br: *std/bridge:Bridge<session> }
 bind-append = std/io:print.ln("--- C: the minted handle is the one that binds ---")
     |> app/notes:last-minted(): h
     |> std/fmt:ln("append(handle: \"{{ h:s }}\", text: \"bound\")"): src
@@ -67,7 +67,7 @@ bind-append = std/io:print.ln("--- C: the minted handle is the one that binds --
     | shape-error sh |> std/io:print.ln("SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("NO SCOPE: {{ s2:s }}")
 
-tor bind-close { br: *std/bridge:Bridge }
+tor bind-close { br: *std/bridge:Bridge<session> }
 bind-close = std/io:print.ln("--- D: close binds with the same handle ---")
     |> app/notes:last-minted(): h
     |> std/fmt:ln("close(handle: \"{{ h:s }}\")"): src
@@ -84,7 +84,7 @@ bind-close = std/io:print.ln("--- D: close binds with the same handle ---")
     | shape-error sh |> std/io:print.ln("SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("NO SCOPE: {{ s2:s }}")
 
-tor guess { br: *std/bridge:Bridge }
+tor guess { br: *std/bridge:Bridge<session> }
 guess = std/io:print.ln("--- E: a fabricated 6-hex guess is refused ---")
     |> std/bridge:run(br, source: "close(handle: \"deadbe\")")
     | result r |> std/io:print.ln("result — WRONG, deadbe was never minted")

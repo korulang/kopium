@@ -25,7 +25,7 @@ import app/mock_session_model
     |> std/io:print.ln("--- transcript ends")
 | not-found s |> std/io:print.ln("!! scope {{ s:s }} vanished at hang-up")
 
-tor turn { br: *std/bridge:Bridge, n: u32 }
+tor turn { br: *std/bridge:Bridge<session>, n: u32 }
 turn = app/mock_session_model:intent(turn: n): why
     |> std/io:print.ln("")
     |> std/io:print.ln("turn {{ n:d }}  model wants to: {{ why:s }}")

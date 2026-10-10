@@ -6,7 +6,7 @@ import std/io
 import std/bridge
 import app/calc
 
-tor show { br: *std/bridge:Bridge }
+tor show { br: *std/bridge:Bridge<session> }
 show = std/bridge:grammar(br)
 | ok g |> std/io:print.ln("{{ g:s }}")
 | not-found s |> std/io:print.ln("WRONG: no scope {{ s:s }}")

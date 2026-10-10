@@ -20,21 +20,21 @@ import app/wire
 |> when-true(br)
 |> std/io:print.ln("--- done ---")
 
-tor when-false { br: *std/bridge:Bridge }
+tor when-false { br: *std/bridge:Bridge<session> }
 when-false = app/wire:clean(raw: "read(path: \"probe_multiline.k\")\n| ok t when false |> say(text: \"FIRED-despite-false-guard\")\n| ok u |> say(text: \"unguarded-arm-ran\")\n| missing m |> say(text: \"WRONG-missing\")")
 | ok cs |> std/fmt:ln("{{ cs:S }}"): src
     |> report(br, source: src.text, tag: "when-false")
     |> std/string:free(s: cs)
 | err e |> std/io:print.ln("clean failed: {{ e:s }}")
 
-tor when-true { br: *std/bridge:Bridge }
+tor when-true { br: *std/bridge:Bridge<session> }
 when-true = app/wire:clean(raw: "read(path: \"probe_multiline.k\")\n| ok t when true |> say(text: \"true-guard-fired\")\n| ok u |> say(text: \"WRONG-unguarded-ran\")\n| missing m |> say(text: \"WRONG-missing\")")
 | ok cs |> std/fmt:ln("{{ cs:S }}"): src
     |> report(br, source: src.text, tag: "when-true")
     |> std/string:free(s: cs)
 | err e |> std/io:print.ln("clean failed: {{ e:s }}")
 
-tor report { br: *std/bridge:Bridge, source: string, tag: string }
+tor report { br: *std/bridge:Bridge<session>, source: string, tag: string }
 report = std/bridge:run(br, source)
 | result r |> std/io:print.ln("[{{ tag:s }}] result handles={{ r.handles:d }}")
 | partial p |> std/io:print.ln("[{{ tag:s }}] partial {{ p.ran:d }}/{{ p.total:d }}")

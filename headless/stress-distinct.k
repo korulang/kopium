@@ -35,7 +35,7 @@ import app/notes
 // THE BOTH-ARMS HAMMER — over the bridge's real pool
 // ============================================================================
 
-tor hammer { br: *std/bridge:Bridge, n: u32 }
+tor hammer { br: *std/bridge:Bridge<session>, n: u32 }
 
 proc hammer|zig {
     const rt = @import("root").koru_std.koru_runtime;
@@ -168,7 +168,7 @@ proc hammer|zig {
     }
 }
 
-tor drive { br: *std/bridge:Bridge }
+tor drive { br: *std/bridge:Bridge<session> }
 drive = hammer(br, n: 900)
 
 [with]std/bridge:create(id: "possession-distinct", scope: "notes"): br

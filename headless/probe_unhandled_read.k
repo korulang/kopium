@@ -24,7 +24,7 @@ import std/bridge
 import std/interpreter
 import app/notes
 
-tor a { br: *std/bridge:Bridge }
+tor a { br: *std/bridge:Bridge<session> }
 a = std/io:print.ln("--- A: bare read of an absent path (zero-continuation) ---")
     |> std/bridge:run(br, source: "read(path: \"no-such-file.txt\")")
     | result r |> std/io:print.ln("  A-RESULT branch=[{{ r.value.branch:s }}]")
@@ -39,7 +39,7 @@ a = std/io:print.ln("--- A: bare read of an absent path (zero-continuation) ---"
     | shape-error sh |> std/io:print.ln("  A-SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("  A-NO SCOPE: {{ s2:s }}")
 
-tor b { br: *std/bridge:Bridge }
+tor b { br: *std/bridge:Bridge<session> }
 b = std/io:print.ln("--- B: only | ok handled, | missing fires ---")
     |> std/bridge:run(br, source: "read(path: \"no-such-file.txt\")\n| ok |> say(text: \"found\")")
     | result r |> std/io:print.ln("  B-RESULT branch=[{{ r.value.branch:s }}]")
@@ -54,7 +54,7 @@ b = std/io:print.ln("--- B: only | ok handled, | missing fires ---")
     | shape-error sh |> std/io:print.ln("  B-SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("  B-NO SCOPE: {{ s2:s }}")
 
-tor c { br: *std/bridge:Bridge }
+tor c { br: *std/bridge:Bridge<session> }
 c = std/io:print.ln("--- C: bare read of an existing file (zero-continuation) ---")
     |> std/bridge:run(br, source: "read(path: \"probe_ub_exists.txt\")")
     | result r |> std/io:print.ln("  C-RESULT branch=[{{ r.value.branch:s }}]")
@@ -69,7 +69,7 @@ c = std/io:print.ln("--- C: bare read of an existing file (zero-continuation) --
     | shape-error sh |> std/io:print.ln("  C-SHAPE ERROR: {{ sh.message:s }}")
     | scope-not-found s2 |> std/io:print.ln("  C-NO SCOPE: {{ s2:s }}")
 
-tor d { br: *std/bridge:Bridge }
+tor d { br: *std/bridge:Bridge<session> }
 d = std/io:print.ln("--- D: | ok handled and | ok fires ---")
     |> std/bridge:run(br, source: "read(path: \"probe_ub_exists.txt\")\n| ok |> say(text: \"found it\")")
     | result r |> std/io:print.ln("  D-RESULT branch=[{{ r.value.branch:s }}]")

@@ -24,7 +24,7 @@ import app/wire
 |> selfref-run(br)
 |> positional-run(br)
 
-tor define-run { br: *std/bridge:Bridge }
+tor define-run { br: *std/bridge:Bridge<session> }
 define-run = std/bridge:run(br, source: "tor echo { m: string }\necho = say(text: m)")
 | result r |> std/io:print.ln("result — bridge holds {{ r.handles:d }}")
 | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}]")
@@ -45,7 +45,7 @@ define-run = std/bridge:run(br, source: "tor echo { m: string }\necho = say(text
 // First attempt spelled `echo(m: m)` and the pun rule refused the define at
 // install ("redundant explicit label") — a self-call MUST pun (`echo(n)`),
 // so the recursive spelling is the only one that installs.
-tor selfref-run { br: *std/bridge:Bridge }
+tor selfref-run { br: *std/bridge:Bridge<session> }
 selfref-run = std/bridge:run(br, source: "tor echo { n: string }\necho = say(text: \"marker\") | ok q |> echo(n)\necho(n: \"hello\")")
 | result r |> std/io:print.ln("result — bridge holds {{ r.handles:d }}")
 | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}]")
@@ -64,7 +64,7 @@ selfref-run = std/bridge:run(br, source: "tor echo { n: string }\necho = say(tex
 // `jot(h, m)` is the ONLY self-call spelling, since `h: h` and `m: m` are
 // redundant labels the grammar refuses. Measured: installs clean, recurses,
 // refused at the cap (64 emit lines = the run's work before the refusal).
-tor positional-run { br: *std/bridge:Bridge }
+tor positional-run { br: *std/bridge:Bridge<session> }
 positional-run = std/bridge:run(br, source: "tor jot { h: string, m: string }\njot = say(text: m) | ok q |> jot(h, m)\njot(h: \"x\", m: \"y\")")
 | result r |> std/io:print.ln("result — bridge holds {{ r.handles:d }}")
 | unhandled-branch ub |> std/io:print.ln("  UNHANDLED branch=[{{ ub.branch:s }}]")

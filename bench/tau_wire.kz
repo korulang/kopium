@@ -324,7 +324,7 @@ fn callIO(tau_name: []const u8, args_json: []const u8) []const u8 {
 // its own contract: scope-grammar emits the wire rules, THIS scope's verb
 // signatures (possession phantoms included), and the worked example the
 // register block's produce/consume edges derive — nothing hand-typed.
-~pub tor vocab-doc { br: *std/bridge:Bridge, scope: string }
+~pub tor vocab-doc { br: *std/bridge:Bridge<session>, scope: string }
 | ok string
 | failed string
 

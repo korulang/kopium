@@ -132,7 +132,7 @@ send = app/tau_wire:auth(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |
 
 // Build this turn's request from transcript + derived grammar, receipt it,
 // then fire.
-tor ask { br: *std/bridge:Bridge, model: string, max_tokens: u32, temperature: string }
+tor ask { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string }
 ask = std/bridge:grammar(br)
 | ok g |> std/store:query(transcript)
     ! query h |> std/fmt:fmt.blk {
@@ -161,7 +161,7 @@ observe = std/store:query(transcript)
 // say(text: rN): say's field is Source, so a bare name delivers literally.
 // The gate stays strict; the policy that prose still reaches the user
 // lives here, in the harness.
-tor deliver-residue { br: *std/bridge:Bridge, text: string }
+tor deliver-residue { br: *std/bridge:Bridge<session>, text: string }
 | sent
 | stranded
 
@@ -184,7 +184,7 @@ deliver-residue = std/fmt:fmt.blk {
 
 // Run what the model wrote and report the outcome back verbatim — the
 // bridge's own diagnostic words, no authored coaching.
-tor act { br: *std/bridge:Bridge, source: string }
+tor act { br: *std/bridge:Bridge<session>, source: string }
 act = observe(role: "assistant", text: source) |> std/bridge:run(br, source)
 | result r |> std/interpreter:value.stringify(r.value): v
     |> std/fmt:fmt.blk {
@@ -253,7 +253,7 @@ act = observe(role: "assistant", text: source) |> std/bridge:run(br, source)
 // The toolcall reply's accumulated args text is `{"program": "<wire>"}` —
 // the program string is the wire source. A missing/unparseable program is
 // a rejected turn, observed back like any other.
-tor drive { br: *std/bridge:Bridge }
+tor drive { br: *std/bridge:Bridge<session> }
 drive = app/tau_wire:channel()
 | content |> std/store:query(reply)
     ! query buf |> std/fmt:fmt.blk {
@@ -293,7 +293,7 @@ drain = app/tau_wire:take-pending()
 // The lens rung: near either bound, `edge` asks the model for its own
 // account — wire or prose, the answer lands in the receipts, so a dying
 // run still ships its post-mortem.
-tor loop { br: *std/bridge:Bridge, model: string, max_tokens: u32, temperature: string, bound: i64, fails: i64, silents: i64 }
+tor loop { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string, bound: i64, fails: i64, silents: i64 }
 loop = clear-reply()
     |> ask(br, model, max_tokens, temperature)
     |> drive(br)
@@ -329,7 +329,7 @@ clear-reply = std/store:query(reply)
 // line — everything else the wire needs arrives through the procs. The doc
 // source is the scope: "airline" reads the schema-derived file, any other
 // scope renders its own grammar (rules + typed vocabulary + derived example).
-tor boot { br: *std/bridge:Bridge, model: string, max_tokens: u32, temperature: string, bound: i64, scope: string }
+tor boot { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string, bound: i64, scope: string }
 boot = app/tau_wire:inbound()
 | init p |> app/tau_wire:set-policy(text: p)
     |> app/tau_wire:vocab-doc(br, scope)

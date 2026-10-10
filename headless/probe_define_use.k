@@ -18,7 +18,7 @@ import app/wire
 |> go(br)
 |> std/io:print.ln("--- done ---")
 
-tor go { br: *std/bridge:Bridge }
+tor go { br: *std/bridge:Bridge<session> }
 go = app/wire:clean(raw: "tor greet { msg: string }\ngreet = say(text: msg)\ngreet(msg: \"hello from the same turn\")")
 | ok cs |> std/fmt:ln("{{ cs:S }}"): src
     |> std/io:print.ln("cleaned> [{{ src.text:s }}]")
@@ -26,7 +26,7 @@ go = app/wire:clean(raw: "tor greet { msg: string }\ngreet = say(text: msg)\ngre
     |> std/string:free(s: cs)
 | err e |> std/io:print.ln("clean err: {{ e:s }}")
 
-tor report { br: *std/bridge:Bridge, source: string }
+tor report { br: *std/bridge:Bridge<session>, source: string }
 report = std/bridge:run(br, source)
 | partial p |> std/io:print.ln("PARTIAL {{ p.ran:d }}/{{ p.total:d }} report=[{{ p.report:s }}]")
 | result r |> std/io:print.ln("WRONG: result handles={{ r.handles:d }} — define+use is two items")

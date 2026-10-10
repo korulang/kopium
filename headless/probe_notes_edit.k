@@ -31,7 +31,7 @@ import app/notes
 // 0. Fixture via the old verbs: created and filled, left closed. Flat
 // sequential tors (one run, full switch each) — the established probe shape;
 // the old nested-run chain is rejected by KORU022's pipeline check.
-tor s-open { br: *std/bridge:Bridge }
+tor s-open { br: *std/bridge:Bridge<session> }
 s-open = std/io:print.ln("--- 0. fixture via open/append/close ---")
     |> std/bridge:run(br, source: "open(path: \"probe_edit_fixture.txt\")")
     | result r |> std/io:print.ln("open minted — bridge holds {{ r.handles:d }} resource(s)")
@@ -46,7 +46,7 @@ s-open = std/io:print.ln("--- 0. fixture via open/append/close ---")
     | shape-error sh |> std/io:print.ln("shape-error: {{ sh.message:s }} — WRONG")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
-tor s-append-1 { br: *std/bridge:Bridge }
+tor s-append-1 { br: *std/bridge:Bridge<session> }
 s-append-1 = app/notes:last-minted(): h
     |> std/fmt:ln("append(handle: \"{{ h:s }}\", text: \"the quick brown fox\")"): src
     |> std/bridge:run(br, source: src.text)
@@ -62,7 +62,7 @@ s-append-1 = app/notes:last-minted(): h
     | shape-error sh |> std/io:print.ln("shape-error: {{ sh.message:s }} — WRONG")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
-tor s-append-2 { br: *std/bridge:Bridge }
+tor s-append-2 { br: *std/bridge:Bridge<session> }
 s-append-2 = app/notes:last-minted(): h
     |> std/fmt:ln("append(handle: \"{{ h:s }}\", text: \"jumps over the lazy dog\")"): src
     |> std/bridge:run(br, source: src.text)
@@ -78,7 +78,7 @@ s-append-2 = app/notes:last-minted(): h
     | shape-error sh |> std/io:print.ln("shape-error: {{ sh.message:s }} — WRONG")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
-tor s-append-3 { br: *std/bridge:Bridge }
+tor s-append-3 { br: *std/bridge:Bridge<session> }
 s-append-3 = app/notes:last-minted(): h
     |> std/fmt:ln("append(handle: \"{{ h:s }}\", text: \"the end\")"): src
     |> std/bridge:run(br, source: src.text)
@@ -94,7 +94,7 @@ s-append-3 = app/notes:last-minted(): h
     | shape-error sh |> std/io:print.ln("shape-error: {{ sh.message:s }} — WRONG")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
-tor s-close { br: *std/bridge:Bridge }
+tor s-close { br: *std/bridge:Bridge<session> }
 s-close = app/notes:last-minted(): h
     |> std/fmt:ln("close(handle: \"{{ h:s }}\")"): src
     |> std/bridge:run(br, source: src.text)
@@ -111,7 +111,7 @@ s-close = app/notes:last-minted(): h
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 1. Before bytes: the fixture as the old verbs left it.
-tor before { br: *std/bridge:Bridge }
+tor before { br: *std/bridge:Bridge<session> }
 before = std/io:print.ln("--- 1. before: read the fixture ---")
     |> std/bridge:run(br, source: "read(path: \"probe_edit_fixture.txt\")\n| ok text |> say(text: text)")
     | result r |> std/io:print.ln("read ran — bridge holds {{ r.handles:d }} resource(s), nothing minted")
@@ -127,7 +127,7 @@ before = std/io:print.ln("--- 1. before: read the fixture ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 2. THE VULCAN PATCH STEP: one needle, one match, bytes change.
-tor single { br: *std/bridge:Bridge }
+tor single { br: *std/bridge:Bridge<session> }
 single = std/io:print.ln("--- 2. single-match edit rewrites the disk ---")
     |> std/bridge:run(br, source: "edit(path: \"probe_edit_fixture.txt\", old_text: \"quick brown fox\", new_text: \"slow green frog\")")
     | result r |> std/io:print.ln("edit ran — bridge holds {{ r.handles:d }} resource(s), nothing minted")
@@ -143,7 +143,7 @@ single = std/io:print.ln("--- 2. single-match edit rewrites the disk ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 3. After bytes: the replacement is on disk.
-tor after { br: *std/bridge:Bridge }
+tor after { br: *std/bridge:Bridge<session> }
 after = std/io:print.ln("--- 3. after: read the rewritten fixture ---")
     |> std/bridge:run(br, source: "read(path: \"probe_edit_fixture.txt\")\n| ok text |> say(text: text)")
     | result r |> std/io:print.ln("read ran — bridge holds {{ r.handles:d }} resource(s)")
@@ -159,7 +159,7 @@ after = std/io:print.ln("--- 3. after: read the rewritten fixture ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 4. A missing file reports, it does not create.
-tor missing { br: *std/bridge:Bridge }
+tor missing { br: *std/bridge:Bridge<session> }
 missing = std/io:print.ln("--- 4. missing file is not-found, never created ---")
     |> std/bridge:run(br, source: "edit(path: \"no-such-file.txt\", old_text: \"a\", new_text: \"b\")")
     | result r |> std/io:print.ln("missing ran — bridge holds {{ r.handles:d }} resource(s), nothing written")
@@ -175,7 +175,7 @@ missing = std/io:print.ln("--- 4. missing file is not-found, never created ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 5. A needle that matches nothing writes nothing.
-tor miss { br: *std/bridge:Bridge }
+tor miss { br: *std/bridge:Bridge<session> }
 miss = std/io:print.ln("--- 5. zero matches is mismatch, not a write ---")
     |> std/bridge:run(br, source: "edit(path: \"probe_edit_fixture.txt\", old_text: \"porcupine\", new_text: \"x\")")
     | result r |> std/io:print.ln("miss ran — bridge holds {{ r.handles:d }} resource(s), nothing written")
@@ -191,7 +191,7 @@ miss = std/io:print.ln("--- 5. zero matches is mismatch, not a write ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 6. A needle that matches twice writes nothing.
-tor multi { br: *std/bridge:Bridge }
+tor multi { br: *std/bridge:Bridge<session> }
 multi = std/io:print.ln("--- 6. two matches is ambiguous, not a write ---")
     |> std/bridge:run(br, source: "edit(path: \"probe_edit_fixture.txt\", old_text: \"the\", new_text: \"a\")")
     | result r |> std/io:print.ln("multi ran — bridge holds {{ r.handles:d }} resource(s), nothing written")
@@ -207,7 +207,7 @@ multi = std/io:print.ln("--- 6. two matches is ambiguous, not a write ---")
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 7. The refusals wrote nothing: the single replacement stands alone.
-tor unchanged { br: *std/bridge:Bridge }
+tor unchanged { br: *std/bridge:Bridge<session> }
 unchanged = std/io:print.ln("--- 7. refusals wrote nothing: read the fixture ---")
     |> std/bridge:run(br, source: "read(path: \"probe_edit_fixture.txt\")\n| ok text |> say(text: text)")
     | result r |> std/io:print.ln("refusals confirmed — fixture still reads with the single replacement")
@@ -223,14 +223,14 @@ unchanged = std/io:print.ln("--- 7. refusals wrote nothing: read the fixture ---
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 8. The derived vocabulary includes the new verb.
-tor show-vocabulary { br: *std/bridge:Bridge }
+tor show-vocabulary { br: *std/bridge:Bridge<session> }
 show-vocabulary = std/io:print.ln("--- 8. derived vocabulary (register, now with edit) ---")
     |> std/bridge:vocabulary(br)
     | ok v |> std/io:print.ln("{{ v:s }}")
     | not-found s |> std/io:print.ln("!! scope {{ s:s }} vanished")
 
 // 9. The wall did not move: the near-synonym was never declared.
-tor show-contrast { br: *std/bridge:Bridge }
+tor show-contrast { br: *std/bridge:Bridge<session> }
 show-contrast = std/io:print.ln("--- 9. contrast: replace was never declared ---")
     |> std/bridge:run(br, source: "replace(path: \"probe_edit_fixture.txt\", old_text: \"a\", new_text: \"b\")")
     | result r |> std/io:print.ln("result — WRONG, replace is not a verb (holds {{ r.handles:d }})")
@@ -246,7 +246,7 @@ show-contrast = std/io:print.ln("--- 9. contrast: replace was never declared ---
     | scope-not-found s2 |> std/io:print.ln("no such scope: {{ s2:s }} — WRONG")
 
 // 10. The bridge survives it all: the old verbs still run.
-tor survives { br: *std/bridge:Bridge }
+tor survives { br: *std/bridge:Bridge<session> }
 survives = std/io:print.ln("--- 10. the session outlives every refusal ---")
     |> std/bridge:run(br, source: "say(text: \"still here after every refusal\")")
     | result r |> std/io:print.ln("say ran — bridge holds {{ r.handles:d }} resource(s)")
