@@ -97,45 +97,48 @@ Per the gate's own text: the remaining claim is **category-level**
 measured column below), and benchmark competitiveness is not the
 justification for further tau2 spend.
 
-### Re-measured — 2026-10-11: fruit, still losing (17/29 vs 25/29)
+### Re-measured — 2026-10-11: a real regression, named and isolated
 
-Full 29-task sweep, `results/compare_clean28.csv` (probe0 + 3 shards),
-prompt sha `e21e17eb15e5728c`, same de-coached prompt as the clean
-baseline. kopium `b419940` (post-respell, post-phantom-threading fix);
-koru arm fresh; stock arm reused `compare_full50_taught.csv` (its harness
-is unchanged — notes column says so per row). tau2 `c339866` + uncommitted
-user-simulator empty-retry patch — same patch would apply to both arms.
-Smoke gate PASS first (5 runs, 9/14 verbs + deterministic verb-check).
+Full 29-task sweep, both arms fresh, same prompt sha `e21e17eb15e5728c`.
+koru `b419940` (post-respell, post-phantom-threading fix); tau2 `c339866`
++ uncommitted user-simulator retry patch. Smoke gate PASS first. First
+run scored **koru 17/29, stock 25/29** — and then the number moved twice
+under two corrections:
 
-- **koru 17/29 (59%), stock 25/29 (86%)** — decisively off the stale
-  10/28 (36%), +23 points, and NOT a refreshed ~10. But: koru won no task
-  stock lost; the deficit is 8 tasks stock wins that koru doesn't
-  (1, 4, 10, 12, 14, 17, 24, 25). Both lost 7, 18, 21, 23.
-- **Trajectory census — wire failures are gone, cap-outs are not.**
-  Session receipts across the reds: `rejections_by_kind` ≈ 0, marshal
-  intact, zero wire-class failures. The 12 koru reds split: 5
-  cap-out/incomplete (`db=None`, n=15–24 model calls — serial
-  one-call-at-a-time exploration burns the step budget: 4, 7, 10, 17,
-  24); 6 wrong-state (`db=False` — over-action like task 1's
-  not-actually-eligible cancel, or writes that never landed like
-  task 25); 1 state-right-but-reward-0 (task 18 — communication
-  criterion; stock fails this shape too on 7 and 23).
-- **Token advantage is gone — parity now, honestly.** koru prompt
-  2.21M vs stock 2.09M over the sweep; the old 5–18×-fewer-tokens claim
-  does not hold under the current prompt (grammar + vocab doc + residue
-  lane resent per call). koru completion tokens 80k vs stock 260k (3.2×
-  terser output), wall 1041s vs 2603s (2.5× faster end to end), cost
-  parity ($0.13 vs $0.12). Usage columns are real post-`f0ba70b`;
-  `usage_missing: 0` in every session receipt.
+- **run_compare was budget-stale.** It hardcoded `max_steps=40,
+  max_errors=5`; tau2's own defaults (and the budget `measure.py` uses)
+  are 200/10. The wire spends ~2 steps per call where stock batches —
+  the old budget scored protocol cost as agent failure. Fixed in
+  `run_compare.py`.
+- **Re-run at 200/10, both arms fresh:** **koru 17/29, stock 28/29**
+  (`results/compare_fair28.csv`). The 40-step cap-outs didn't recover —
+  they converted to wrong-state (`db=None` → `db=False` on 21/24) or
+  longer wanders. Stock gained 3 tasks from the same budget.
+- **That number was still not the wire's level.** The 10-06 board
+  (`results/measure/kopium-ffaf49a472c1`, 77/100 pass@1) predates
+  `4232bdf` — the implicit-say bound-prose delivery, the only semantic
+  wire change since. Rebuilt the board-era binary (kopium `d54abba`,
+  koru `f37022c38`, koru-libs `9c408b7`) and re-flew the 10 regression
+  tasks on the same provider, same hour, same budget:
+  **era binary 7/10 vs today's binary 2/10** — recovering 5, 10, 20, 22,
+  23, 24. Then the surgical A/B: today's sources minus one line
+  (`residue-verdict` returns `| deliver` for bound prose → strike
+  again): **6/10**, recovering 5, 10, 22, 24. The deliver concession is
+  the regression — one line, ~4–5 tasks, and it shipped behind a smoke
+  gate that checks integrity, not win rate.
+- **Token/cost columns are real** post-`f0ba70b` (`usage_missing: 0`);
+  wire-class failures are zero — `rejections_by_kind` ≈ 0 across reds;
+  residuals are wander/wrong-write classes.
 
-**What this says, plainly:** the composition/transport/memory fixes
-produced real fruit — +7 tasks, every residual failure attributable to
-model judgment or serial-protocol convergence, not to the wire. The wire
-is no longer the bottleneck. The remaining 8-task gap is the model
-spending its step budget serially (cap-outs) and misjudging writes —
-the same failure *class* stock shows, just more of it. Whether that
-residual is closeable by prompt/protocol tuning inside the clean-baseline
-rules (no strategy coaching) is unmeasured.
+**What this says, plainly:** the 77/100 board number holds — the era
+binary reproduces it on today's provider. What regressed is not the
+wire, the model, or the budget: it is a deliberate harness concession
+(undated hypothesis: delivering bare prose teaches the model it can skip
+`say:`, and the resulting half-protocol turns drift into wanders and
+wrong writes — mechanism unproven, effect measured). Whether the
+concession is reverted or redesigned is a real decision: it existed to
+absorb the dominant residue shape (189 rejected turns on the teach
+board), and reverting reinstates that churn.
 
 The comparison set:
 

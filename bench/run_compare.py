@@ -29,6 +29,7 @@ from pathlib import Path
 
 import litellm
 from tau2.agent.llm_agent import LLMAgent
+from tau2.config import DEFAULT_MAX_ERRORS, DEFAULT_MAX_STEPS
 from tau2.orchestrator.orchestrator import Orchestrator
 from tau2.runner import build_environment, build_user, get_tasks, run_simulation
 from tau2.evaluator.evaluator import EvaluationType
@@ -81,8 +82,12 @@ def run_one(agent_cls, task, domain, gate=None, receipt_dir=None):
         user=user,
         environment=env,
         task=task,
-        max_steps=40,
-        max_errors=5,
+        # tau2's own defaults (200/10), not a harness-local budget: the old
+        # 40/5 punished the wire's transport granularity — the content channel
+        # spends ~2 steps per call where stock batches — and scored protocol
+        # cost as agent failure. measure.py learned this lesson first.
+        max_steps=DEFAULT_MAX_STEPS,
+        max_errors=DEFAULT_MAX_ERRORS,
         seed=42,
     )
     t0 = time.monotonic()
@@ -178,7 +183,8 @@ def main() -> None:
             else:
                 try:
                     (kr, kdb, kcalls, kcost, ktok, kwall) = run_one(
-                        KopiumAgent, task, domain, gate=str(HERE / "tau-agent-binary"),
+                        KopiumAgent, task, domain,
+                        gate=os.environ.get("KOPIUM_GATE", str(HERE / "tau-agent-binary")),
                         receipt_dir=HERE / "results" / "runs" / f"compare-{suffix}-task{tid}" / "receipts",
                     )
                 except Exception as e:  # noqa: BLE001
