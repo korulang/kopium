@@ -61,3 +61,23 @@ decision hangs on: the concession existed to absorb the dominant residue
 shape (189 rejected turns on the teach board) — is there a shape that
 keeps the delivery but reimposes the protocol cost on the model (deliver
 AND strike the turn), or is strictness-only the honest surface?
+
+## Evolved 2026-10-11 (same day, second pass) — the price was mismeasured
+
+The morning's "the concession costs ~4-5 tasks" did not survive the full
+board. It was measured on the 10 tasks the current binary *loses* — a
+regression-selected subset where re-flying at ~60% true rate predicts
+~6/10 for any binary; era 7/10 and nodeliv 6/10 were the noise floor,
+not a smoking gun. Full 29-task three-arm, same provider/hour/budget:
+board-era 23/29, today-minus-the-line 18/29, today 17/29. The verdict
+line's isolated cost is **-1, inside single-trial noise (measured ±5)**.
+
+The regression driver moved: the era→today gap is mostly the
+colon-block grammar change (koru `f8b508985`), which rewrote the
+taught form (`say(text: "...")` → `say:` blocks) and fixed real
+segmenter shredding — while nobody re-ran win rate. Delivering bound
+prose stays defended on the original grounds (it absorbs the dominant
+residue class) and the revert case is now weak; the open defect it
+surfaced is different — colon-form `note:` makes every line an item,
+and one reply ran 3,645 items to the watchdog. The surface wants an
+items-per-turn cap, not a revert.

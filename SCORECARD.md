@@ -97,13 +97,13 @@ Per the gate's own text: the remaining claim is **category-level**
 measured column below), and benchmark competitiveness is not the
 justification for further tau2 spend.
 
-### Re-measured — 2026-10-11: a real regression, named and isolated
+### Re-measured — 2026-10-11: the dip is real, the attribution wasn't
 
 Full 29-task sweep, both arms fresh, same prompt sha `e21e17eb15e5728c`.
 koru `b419940` (post-respell, post-phantom-threading fix); tau2 `c339866`
 + uncommitted user-simulator retry patch. Smoke gate PASS first. First
-run scored **koru 17/29, stock 25/29** — and then the number moved twice
-under two corrections:
+run scored **koru 17/29, stock 25/29** — and then the number moved under
+three corrections:
 
 - **run_compare was budget-stale.** It hardcoded `max_steps=40,
   max_errors=5`; tau2's own defaults (and the budget `measure.py` uses)
@@ -114,31 +114,46 @@ under two corrections:
   (`results/compare_fair28.csv`). The 40-step cap-outs didn't recover —
   they converted to wrong-state (`db=None` → `db=False` on 21/24) or
   longer wanders. Stock gained 3 tasks from the same budget.
-- **That number was still not the wire's level.** The 10-06 board
-  (`results/measure/kopium-ffaf49a472c1`, 77/100 pass@1) predates
-  `4232bdf` — the implicit-say bound-prose delivery, the only semantic
-  wire change since. Rebuilt the board-era binary (kopium `d54abba`,
-  koru `f37022c38`, koru-libs `9c408b7`) and re-flew the 10 regression
-  tasks on the same provider, same hour, same budget:
-  **era binary 7/10 vs today's binary 2/10** — recovering 5, 10, 20, 22,
-  23, 24. Then the surgical A/B: today's sources minus one line
-  (`residue-verdict` returns `| deliver` for bound prose → strike
-  again): **6/10**, recovering 5, 10, 22, 24. The deliver concession is
-  the regression — one line, ~4–5 tasks, and it shipped behind a smoke
-  gate that checks integrity, not win rate.
 - **Token/cost columns are real** post-`f0ba70b` (`usage_missing: 0`);
   wire-class failures are zero — `rejections_by_kind` ≈ 0 across reds;
   residuals are wander/wrong-write classes.
 
-**What this says, plainly:** the 77/100 board number holds — the era
-binary reproduces it on today's provider. What regressed is not the
-wire, the model, or the budget: it is a deliberate harness concession
-(undated hypothesis: delivering bare prose teaches the model it can skip
-`say:`, and the resulting half-protocol turns drift into wanders and
-wrong writes — mechanism unproven, effect measured). Whether the
-concession is reverted or redesigned is a real decision: it existed to
-absorb the dominant residue shape (189 rejected turns on the teach
-board), and reverting reinstates that churn.
+**Full-board three-arm A/B (same provider, same hour, 200/10):**
+board-era binary (kopium `d54abba`, koru `f37022c38`, libs `9c408b7`)
+**23/29** — reproduces the 77/100 board level (board trial0 on the same
+tasks was 24/29). Today's binary **17/29**. Today's sources minus the
+`residue-verdict → | deliver` line **18/29**.
+
+**Correction to what was committed earlier today:** the first isolation
+ran on the 10 tasks today *loses* — a regression-selected subset where
+re-flight at ~60% true rate predicts ~6/10 for *any* binary, so era
+7/10 and nodeliv 6/10 looked like a smoking gun. The full board
+decomposes the −6 honestly:
+
+- **implicit-say verdict line: −1 (18 vs 17).** Noise-level. The
+  committed claim "the concession is the regression" was wrong — it
+  measured the subset's regression-to-mean, not the line.
+- **colon-block grammar + prompt (koru `f8b508985`): −5 (23 vs 18).**
+  The era→today prompt diff is the teaching shift: quoted
+  `say(text: "...")`/`note(text: "...")` → colon `say:`/`note:` blocks.
+  The change fixed real shredding (commit-measured residue 3170 → 765)
+  but nobody re-ran win rate — it may have bought a 4× residue cut at
+  ~5 tasks of outcome cost. Mechanism unproven; single-trial noise is
+  measured at ±5 (era/nodeliv differ by 5 on near-identical semantics),
+  so −5 sits at the edge of decisive.
+- **Real defect found regardless:** task 10 wedged — a reply the wire
+  exploded into **3,645 sequential items** (a `note:` line-storm — the
+  colon form makes every line a separate item) and executed all of them
+  until the 900 s watchdog. No items-per-turn cap exists. Era flew the
+  task 1.0 under quoted-note teaching.
+
+**What this says, plainly:** the wire's ceiling is intact — the era
+binary still scores 23/29 on today's provider, stock's 28/29 stands,
+and the −6 dip decomposes as ~1 deliver-verdict + ~5
+colon-block/prompt + noise, not a core limitation. Two actionable
+defects: unbounded items-per-turn (cap it — a 3,645-item turn should
+reject, not execute) and a smoke gate that checks integrity, not win
+rate — the second time a ~5-task regression shipped silently behind it.
 
 The comparison set:
 
