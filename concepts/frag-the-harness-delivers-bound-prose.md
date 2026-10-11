@@ -81,3 +81,20 @@ residue class) and the revert case is now weak; the open defect it
 surfaced is different — colon-form `note:` makes every line an item,
 and one reply ran 3,645 items to the watchdog. The surface wants an
 items-per-turn cap, not a revert.
+
+## Evolved 2026-10-11 (third pass, after trial-2s) — there was no regression to price
+
+The afternoon's "−5 to colon-block, −1 to the line" did not survive the
+trial-2 arms: today's binary re-flew to **23/29** (was 17), era re-flew
+to 21 (was 23). Both binaries sit ~20–23; the entire era-vs-today dip
+was a bad draw inside a ±4–6 single-trial band. And the era prompt,
+transplanted verbatim onto today's binary, scored 16 — prompt text is
+exonerated on the era axis too.
+
+What the concession actually costs: nothing the instrument can resolve.
+It fires ~40×/board and holds the 189-rejected-turns absorption it was
+built for. The day's real findings are elsewhere: an unbounded
+items-per-turn surface (3,645-step wedge) and — mined straight out of
+the `note:` corpus — the model cannot distinguish user prose from wire
+reports in the flat `role: "user"` channel. The channel itself was the
+self-report instrument this whole time.

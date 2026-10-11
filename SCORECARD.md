@@ -118,42 +118,50 @@ three corrections:
   wire-class failures are zero — `rejections_by_kind` ≈ 0 across reds;
   residuals are wander/wrong-write classes.
 
-**Full-board three-arm A/B (same provider, same hour, 200/10):**
-board-era binary (kopium `d54abba`, koru `f37022c38`, libs `9c408b7`)
-**23/29** — reproduces the 77/100 board level (board trial0 on the same
-tasks was 24/29). Today's binary **17/29**. Today's sources minus the
-`residue-verdict → | deliver` line **18/29**.
+**Full-board arms (same provider, same hour, 200/10), including the
+trial-2s that closed the attribution question:**
 
-**Correction to what was committed earlier today:** the first isolation
-ran on the 10 tasks today *loses* — a regression-selected subset where
-re-flight at ~60% true rate predicts ~6/10 for *any* binary, so era
-7/10 and nodeliv 6/10 looked like a smoking gun. The full board
-decomposes the −6 honestly:
+| arm | trial 1 | trial 2 |
+|---|---|---|
+| board-era binary (`d54abba` / koru `f37022c38`) | 23/29 | 21/29 |
+| today's binary | 17/29 | **23/29** |
+| today − `residue-verdict → | deliver` (nodeliv) | 18/29 | — |
+| today + era's prompt verbatim (eraprompt) | 16/29 | — |
+| stock LLMAgent | 28/29 | — |
 
-- **implicit-say verdict line: −1 (18 vs 17).** Noise-level. The
-  committed claim "the concession is the regression" was wrong — it
-  measured the subset's regression-to-mean, not the line.
-- **colon-block grammar + prompt (koru `f8b508985`): −5 (23 vs 18).**
-  The era→today prompt diff is the teaching shift: quoted
-  `say(text: "...")`/`note(text: "...")` → colon `say:`/`note:` blocks.
-  The change fixed real shredding (commit-measured residue 3170 → 765)
-  but nobody re-ran win rate — it may have bought a 4× residue cut at
-  ~5 tasks of outcome cost. Mechanism unproven; single-trial noise is
-  measured at ±5 (era/nodeliv differ by 5 on near-identical semantics),
-  so −5 sits at the edge of decisive.
-- **Real defect found regardless:** task 10 wedged — a reply the wire
-  exploded into **3,645 sequential items** (a `note:` line-storm — the
-  colon form makes every line a separate item) and executed all of them
-  until the 900 s watchdog. No items-per-turn cap exists. Era flew the
-  task 1.0 under quoted-note teaching.
+**Second correction of the day — there was no regression.** Today's
+binary drew 17 on trial 1 and **23 on trial 2**; era drew 23 and 21.
+Both binaries sit ~20–23, indistinguishable. The −6 was a bad draw on
+a ±4–6 single-trial band, not a post-board change: the deliver line
+costs ≤1, the era prompt *transplanted verbatim* onto today's binary
+scored 16 (prompt text exonerated — Lars's prompting hypothesis tested
+and dead), and the colon-block grammar change's −5 attribution was the
+same selection noise wearing a second costume. The lesson the day
+actually taught: **a 29-task single trial cannot carry a −6 claim** —
+the board's own 2-trial design exists for exactly this reason and the
+re-baseline ignored it.
 
-**What this says, plainly:** the wire's ceiling is intact — the era
-binary still scores 23/29 on today's provider, stock's 28/29 stands,
-and the −6 dip decomposes as ~1 deliver-verdict + ~5
-colon-block/prompt + noise, not a core limitation. Two actionable
-defects: unbounded items-per-turn (cap it — a 3,645-item turn should
-reject, not execute) and a smoke gate that checks integrity, not win
-rate — the second time a ~5-task regression shipped silently behind it.
+What survived the noise audit, and is real:
+
+- **Task 10 wedged on a 3,645-item reply** — a `note:` line-storm the
+  wire executed to the watchdog. No items-per-turn cap exists.
+- **The observer channel self-reported a real surface defect.** Mining
+  `note:` lines from the loss tasks' receipts: the model repeatedly
+  cannot tell which text is the user's message — "The context shows
+  bound values but no user message" (task 8), "The user's last message
+  was not wire… r32 is my own previous reply" (task 22), "the user
+  hasn't sent a new message" (task 7). Mechanically accurate: user
+  prose, step reports, residue reports, and error notices all arrive
+  as `role: "user"` with no envelope difference (tau-agent.k observes
+  them identically). The model diagnosed the conflation itself.
+- **The stock gap is the real number:** 28 vs ~20–22 pooled across all
+  koru arms — and per prompt-transplant evidence, not prompt-fixable
+  on the text axis alone.
+
+Standing for the next session: items-per-turn cap; an inbound envelope
+that separates `user:` prose from wire reports; and the unproven
+residual — whether batching-teaching or the toolcall channel (which
+legally carries N calls per reply) moves the stock gap.
 
 The comparison set:
 
