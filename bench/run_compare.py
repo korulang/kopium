@@ -38,7 +38,9 @@ from tau2.utils.llm_utils import get_token_usage
 from kopium_agent import KopiumAgent
 
 HERE = Path(__file__).parent
-LLM = "openrouter/deepseek/deepseek-v4-flash-0731"
+# Model for all three roles (koru agent, stock agent, user sim) — same-model
+# fairness. BENCH_MODEL overrides for arm comparisons (e.g. claude-sonnet).
+LLM = os.environ.get("BENCH_MODEL", "openrouter/deepseek/deepseek-v4-flash-0731")
 
 # LiteLLM's price table has "deepseek/deepseek-v4-flash" but not the -0731
 # slug, so completion_cost() returns 0 and every message logs "model isn't
@@ -155,7 +157,7 @@ def main() -> None:
         start = int(sys.argv[1]) if len(sys.argv) > 1 else 0
         count = int(sys.argv[2]) if len(sys.argv) > 2 else 50
         tasks = get_tasks(domain)
-        window = tasks[start : start + count]
+        tasks = tasks[start : start + count]
     out_dir = HERE / "results"
     out_dir.mkdir(exist_ok=True)
     out_path = out_dir / f"compare_{suffix}.csv"
