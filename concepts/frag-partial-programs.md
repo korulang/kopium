@@ -217,3 +217,25 @@ while the stock arm batched all five lookups in one tool-call message
 and finished. Teaching the batch flipped the same task to 1.0 in 8
 calls at 66s. Composition being legal on the wire is not enough — if the
 prompt forbids it, the capability might as well not exist.
+
+## Evolved 2026-10-11 — composition without a read is blind
+
+The doctrine got its first honest price: a vocab-doc arm teaching "one
+reply is a whole plan" (batch independent calls, chain dependent ones
+through `| ok r |>`) flew 29 tasks — **10-15/29 against a ~20/29
+baseline.** The model composed immediately (50+ arm-chain replies in the
+first hour) and still lost ground: chains inflate the step count while
+the model stays blind to what it is chaining on.
+
+The missing half of this belief, now measured: **bound values are
+write-only.** A verb result shows its payload once, in its own step
+report; thereafter `r6.payment_methods` can be passed but never
+re-read — `note:` echoes literal text, no inspect affordance exists.
+The model's notes name the gap verbatim ("I should check what's in
+r6.payment_methods" while looping five turns on task 14; "I need to see
+the actual flight data" on tasks 10/12). Composition is still the
+product — but a model that cannot inspect bound state composes blind,
+and blind composition measures *below* one-call-per-turn. The doctrine
+now carries a dependency: the read affordance (an `inspect:`/`show:`
+wire verb, or interpolated bound-name reads) is a precondition on the
+composition thesis, not a nice-to-have.

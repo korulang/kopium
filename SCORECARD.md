@@ -219,3 +219,29 @@ The publishable surface exists: `korulang_org` blog (`+page.svx` posts,
 publish path (see `status-ceremony`). `all-of-kopium` (draft, 2026-09-06) is
 the snapshot post this would succeed — it predates holes 6–9, the wire flip,
 composition economics, and the entire live-define catalog.
+
+### 2026-10-11, late — the composition arm: the model composes, and loses anyway
+
+Following the trial-2 resolution (no regression; true level ~20-23/29),
+one forward experiment ran: `airline_vocab_doc.md` gained a "Compose —
+one reply is a whole plan" section teaching batched independent calls
+and `| ok r |>` chains. **Result: ~10-15/29 vs the ~20/29 baseline —
+a measured regression, reverted.**
+
+The receipts show the mechanism, not just the number: the model
+composes immediately (50+ arm-chains) but its blocker sits underneath —
+**bound values are write-only.** A result's payload is visible once,
+in its own step report; after that `rN.field` can be passed but never
+re-read. The model invents `note: fs.status` (echoes literal text),
+loops "let me pull up your balances" five turns on task 14 while the
+user waits, and burns 2× model calls on inspect-attempts. Two taught
+spelling errors added friction (inline `| ok r |> next()` MalformedNodes
+where arm-on-own-line is what the segmenter accepts; ~3 parse errors,
+model adapted).
+
+The standing defect queue, re-ranked by model-filed evidence:
+**(1) inspect/read affordance for bound values** — begged for verbatim
+on tasks 10, 12, 14; (2) inbound envelope separating `user:` prose from
+wire reports (tasks 7, 8, 16, 22 self-diagnosed); (3) items-per-turn
+cap (3,645-step wedge); (4) chain-spelling reconciliation between the
+doc comment and the segmenter.
