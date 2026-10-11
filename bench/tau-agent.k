@@ -153,6 +153,11 @@ observe = std/store:query(transcript)
     | ok |> _
     | err e |> app/tau_wire:die(msg: e)
 
+tor observe-human { text: string<*> }
+observe-human = std/fmt:fmt.blk {
+        user: {{ text:s }}
+    }: m |> observe(role: "user", text: m)
+
 // A whole-prose reply is the chat prior leaking past the gate — the bridge
 // bound the text at rN and refused it. The harness emits the say the model
 // didn't: `say: <prose>` through the scope's own verb, a real wire call —
@@ -184,8 +189,38 @@ deliver-residue = std/fmt:fmt.blk {
 
 // Run what the model wrote and report the outcome back verbatim — the
 // bridge's own diagnostic words, no authored coaching.
+tor run-capped { br: *std/bridge:Bridge<session>, source: string<*> }
+| result { value: @import("root").koru_std.koru_interpreter.Value, used: u64, handles: u32, bound: string, trace: string }
+| defined string
+| unhandled-branch { branch: string, payload: string, handles: string }
+| exhausted { used: u64, last_event: string, handles: u32 }
+| parse-error { message: string, line: u32, column: u32 }
+| residue { report: string, observer: bool, bound: string, text: string }
+| validation-error string
+| shape-error { branch: string, field: ?string, message: string }
+| event-denied string
+| dispatch-error { event_name: string, message: string, trace: string }
+| ?partial { ran: u32, total: u32, used: u64, handles: u32, report: string, wire_failures: u32 }
+| scope-not-found string
+
+run-capped = app/tau_wire:item-cap(source, max: 128)
+| ok _ |> std/bridge:run(br, source)
+    | result r => result { r.value, r.used, r.handles, r.bound, r.trace }
+    | defined d => defined d
+    | partial p => partial { p.ran, p.total, p.used, p.handles, p.report, p.wire_failures }
+    | unhandled-branch ub => unhandled-branch { ub.branch, ub.payload, ub.handles }
+    | dispatch-error e => dispatch-error { e.event_name, e.message, e.trace }
+    | event-denied ev => event-denied ev
+    | residue r => residue { r.report, r.observer, r.bound, r.text }
+    | parse-error p => parse-error { p.message, p.line, p.column }
+    | validation-error v => validation-error v
+    | shape-error sh => shape-error { sh.branch, sh.field, sh.message }
+    | exhausted e => exhausted { e.used, e.last_event, e.handles }
+    | scope-not-found s2 => scope-not-found s2
+| over _ => exhausted { used: 0, last_event: "turn item cap exceeded", handles: 0 }
+
 tor act { br: *std/bridge:Bridge<session>, source: string<*> }
-act = observe(role: "assistant", text: source) |> std/bridge:run(br, source)
+act = observe(role: "assistant", text: source) |> run-capped(br, source)
 | result r |> std/interpreter:value.stringify(r.value): v
     |> std/fmt:fmt.blk {
         {{ r.trace:s }}result: {{ v:s }} bound: {{ r.bound:s }}
@@ -242,7 +277,10 @@ act = observe(role: "assistant", text: source) |> std/bridge:run(br, source)
     }: m
     |> observe(role: "user", text: m)
     |> app/tau_wire:count-rejection(kind: "shape-error")
-| exhausted _ |> observe(role: "user", text: "exhausted")
+| exhausted e |> std/fmt:fmt.blk {
+        exhausted: {{ e.last_event:s }}
+    }: m
+    |> observe(role: "user", text: m)
     |> app/tau_wire:count-rejection(kind: "exhausted")
 | scope-not-found s2 |> std/fmt:fmt.blk {
         scope-not-found: {{ s2:s }}
@@ -279,7 +317,7 @@ tor drain {}
 | stop
 
 drain = app/tau_wire:take-pending()
-| some u |> observe(role: "user", text: u) |> drain()
+| some u |> observe-human(text: u) |> drain()
     | again => again
     | stop => stop
 | none |> app/tau_wire:saw-eof()
@@ -334,7 +372,7 @@ boot = app/tau_wire:inbound()
 | init p |> app/tau_wire:set-policy(text: p)
     |> app/tau_wire:vocab-doc(br, scope)
     | ok d |> app/tau_wire:set-doc(text: d) |> app/tau_wire:inbound()
-        | user u |> observe(role: "user", text: u) |> app/tau_wire:auth-ensure()
+        | user u |> observe-human(text: u) |> app/tau_wire:auth-ensure()
             | ok |> loop(br, model, max_tokens, temperature, bound, fails: 0, silents: 0)
             | failed m |> app/tau_wire:die(msg: m)
         | init _ | app/tau_wire:die(msg: "second init line")

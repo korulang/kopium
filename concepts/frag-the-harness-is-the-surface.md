@@ -43,3 +43,28 @@ its own doctrine. Related: frag-only-tool-is-the-interpreter holds about
 what the *agent* lives inside; this fragment is about what the *artifact*
 is. The agent's frame law and the artifact's category are different
 questions, and conflating them produced the sentence.
+
+---
+
+## Evolve 2026-10-11 — the surface got an envelope and a ceiling
+
+Two model-filed surface defects closed at the kopium layer (commissioned
+to an independent fixer — codex — audited by a second agent, landed here):
+
+- **Inbound envelope.** Human prose now arrives wrapped `user: <text>`
+  via `observe-human` — distinct from the harness's own step/residue/
+  error reports, which share the same `role: "user"` observations. The
+  model had self-diagnosed this ("r32 is my own previous reply").
+- **Items-per-turn cap.** `run-capped` counts turn items with a
+  kopium-side mirror of the bridge segmenter and rejects over 128 as
+  `exhausted`, with `last_event` surfaced to the model. The mirror was
+  proven exact against `partial.total` on a differential harness
+  (bench/scratch-itemcap.k), including the 150-item storm shape.
+
+**The technique, not just the fix:** a harness-layer cap is honest only
+if its count agrees with the enforcer's — the audit measured a real
+±1-per-define divergence before the verbatim port, and the differential
+harness is the durable instrument for keeping them in lock. One drift
+hole stands open: a new `?`-optional branch on `std/bridge:run` would
+drop silently through `run-capped`'s hand-mirrored union — mandatory
+branches refuse at compile, optional ones don't.
