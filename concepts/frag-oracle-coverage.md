@@ -65,3 +65,18 @@ can witness an event but only a *rate* answers "does the model do this,"
 and the challenge format currently produces witnesses. Replays that need
 rates (does steering move the define rate?) need n, and the briefs don't
 yet say when.
+
+**2026-10-12: the oracle was reading a throttle, not the wire.** Every
+run_compare board through 2026-10-11 compared stock-thinking against
+koru-silent — `tau_wire.kz` sent `reasoning: effort none` while the stock
+agent ran the provider default, measured live: 40-97 reasoning tokens per
+call vs 0. The ~8-task gap was substantially that asymmetry, not surface.
+Under `KOPIUM_REASONING=medium` plus a bounded `max_tokens` (16384 — the
+unbounded 100000 budget wedged the wire into 900s watchdog deaths on three
+tasks), koru scored 23/29 vs stock 27/29, and three of four systematic
+losers flipped (task 1's first win in eight trials, 20, 21; task 14 still
+fails on certificate-policy fidelity). The gate's verdict stands updated:
+the wire at full reasoning parity sits at top of its band; the residual
+four-task margin is single-trial, unproven either way. The lesson the
+concept now carries: an oracle that grades a surface is only as honest as
+the decode budget both arms are given.

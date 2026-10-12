@@ -402,4 +402,4 @@ app/tau_wire:scope-name(): sc
 |> app/corpus_env:env-or(key: "KOPIUM_WORLD", fallback: ""): w
 |> [with]std/bridge:create(id: "tau-agent", scope: sc, introspection: true, world: w): br
 |> app/tau_wire:model-name(): m
-|> boot(br, model: m, max_tokens: 100000, temperature: "0", bound: 6, scope: sc)
+|> boot(br, model: m, max_tokens: 16384, temperature: "0", bound: 6, scope: sc)

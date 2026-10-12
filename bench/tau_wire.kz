@@ -942,7 +942,7 @@ var n_implicit: u64 = 0;
     out.appendSlice(alloc, budget) catch @panic("kopium: OOM");
     out.appendSlice(alloc, ",\"temperature\":") catch @panic("kopium: OOM");
     out.appendSlice(alloc, temperature) catch @panic("kopium: OOM");
-    const effort = std.posix.getenv("KOPIUM_REASONING") orelse "none";
+    const effort = std.posix.getenv("KOPIUM_REASONING") orelse "medium";
     out.appendSlice(alloc, ",\"reasoning\":{\"effort\":\"") catch @panic("kopium: OOM");
     out.appendSlice(alloc, effort) catch @panic("kopium: OOM");
     out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
