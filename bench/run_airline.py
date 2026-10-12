@@ -26,6 +26,7 @@ from tau2.runner import build_environment, build_user, get_tasks, run_simulation
 from tau2.evaluator.evaluator import EvaluationType
 
 from kopium_agent import KopiumAgent
+from model_guard import guard_llm
 
 HERE = Path(__file__).parent
 AGENT_BIN = HERE / "tau-agent-binary"
@@ -36,6 +37,7 @@ def main() -> None:
     llm = "openrouter/deepseek/deepseek-v4-flash-0731"
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
+    llm = guard_llm(llm)
 
     if not AGENT_BIN.exists():
         sys.exit(f"kopium agent missing: build it in {HERE} with koruc tau-agent.k && mv a.out tau-agent-binary")

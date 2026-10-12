@@ -32,6 +32,7 @@ from tau2.orchestrator.orchestrator import Orchestrator
 from tau2.runner import build_environment, build_user, get_tasks, run_simulation
 
 from kopium_agent import KopiumAgent
+from model_guard import guard_llm
 
 HERE = Path(__file__).parent
 GATE = HERE / "mock-gate-binary"
@@ -42,6 +43,7 @@ def main() -> None:
     llm = "openai/gpt-4.1-mini"
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
+    llm = guard_llm(llm)
 
     if not GATE.exists():
         sys.exit(f"gate binary missing: build it first: cd {HERE} && koruc mock-gate.k")

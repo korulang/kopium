@@ -37,23 +37,45 @@ from tau2.utils.llm_utils import get_token_usage
 
 from kopium_agent import KopiumAgent
 
+from model_guard import guard_llm
+
 HERE = Path(__file__).parent
 # Model for all three roles (koru agent, stock agent, user sim) — same-model
-# fairness. BENCH_MODEL overrides for arm comparisons (e.g. claude-sonnet).
-LLM = os.environ.get("BENCH_MODEL", "openrouter/deepseek/deepseek-v4-flash-0731")
+# fairness. BENCH_MODEL overrides for arm comparisons. guard_llm is the wall:
+# Anthropic slugs exit at startup (burned ~$20/run twice — 2026-08-15 haiku,
+# 2026-10-11 sonnet) unless BENCH_ALLOW_ANTHROPIC=1 is set per invocation.
+LLM = guard_llm(os.environ.get("BENCH_MODEL", "openrouter/deepseek/deepseek-v4.1-flash"))
 
-# LiteLLM's price table has "deepseek/deepseek-v4-flash" but not the -0731
-# slug, so completion_cost() returns 0 and every message logs "model isn't
-# mapped". Register the OpenRouter-published price for this exact slug so the
-# existing cost plumbing (message.cost, get_cost, SimulationRun.agent_cost)
-# produces real numbers. $0.14/M prompt, $0.28/M completion.
-litellm.model_cost["openrouter/deepseek/deepseek-v4-flash-0731"] = {
-    "input_cost_per_token": 0.14e-6,
-    "output_cost_per_token": 0.28e-6,
-    "max_tokens": 163840,
+# LiteLLM's price table lacks the v4.1-flash slug, so completion_cost()
+# returns 0 and every message logs "model isn't mapped". Register the
+# OpenRouter-published price for this exact slug so the existing cost
+# plumbing (message.cost, get_cost, SimulationRun.agent_cost) produces real
+# numbers. $0.30/M prompt, $1.20/M completion (api/v1/models, verified
+# 2026-10-12).
+litellm.model_cost["openrouter/deepseek/deepseek-v4.1-flash"] = {
+    "input_cost_per_token": 0.3e-6,
+    "output_cost_per_token": 1.2e-6,
+    "max_tokens": 1048576,
     "litellm_provider": "openrouter",
     "mode": "chat",
 }
+
+# A model litellm can't price logs $0 and leaves blank cost columns — the
+# claude29 CSVs recorded ~5.4M tokens at no dollar figure. Unknown-price is a
+# startup error, not a silent zero.
+try:
+    litellm.get_model_info(LLM)
+except Exception:
+    sys.exit(
+        f"BENCH_MODEL={LLM} has no price entry in litellm.model_cost — costs "
+        f"would log as blank. Register its OpenRouter price in this file "
+        f"(see the -0731 block above) before running."
+    )
+
+# The koru arm's reasoning effort (tau_wire.kz reads KOPIUM_REASONING). Stock
+# runs exactly as tau2 ships it — provider defaults — because that is the
+# opponent; recorded per row so the koru setting behind every number is visible.
+REASONING = os.environ.get("KOPIUM_REASONING", "none")
 
 
 def run_one(agent_cls, task, domain, gate=None, receipt_dir=None):
@@ -124,6 +146,17 @@ def main() -> None:
     # --koru-from reuses koru rows the caller judges still valid (e.g. a
     # smoke run under the same agent code). Later files override earlier
     # ones (freshest last on the command line).
+    #
+    # Stock never changes between iterations, and it is stochastic — a fresh
+    # stock run is a different draw, not a better one. So the comparator is
+    # frozen: results/stock_baseline.csv loads automatically unless
+    # --stock-from is given or --stock-fresh forces a re-run (headline
+    # boards only — a fresh baseline is set by copying a chosen CSV there).
+    if ("--stock-from" not in sys.argv and "--stock-fresh" not in sys.argv
+            and (HERE / "results" / "stock_baseline.csv").exists()):
+        sys.argv += ["--stock-from", str(HERE / "results" / "stock_baseline.csv")]
+    while "--stock-fresh" in sys.argv:
+        sys.argv.remove("--stock-fresh")
     stock_reuse: dict[str, dict] = {}
     koru_reuse: dict[str, dict] = {}
     for flag, dest in (("--stock-from", stock_reuse), ("--koru-from", koru_reuse)):
@@ -162,11 +195,11 @@ def main() -> None:
     out_dir.mkdir(exist_ok=True)
     out_path = out_dir / f"compare_{suffix}.csv"
 
-    print(f"domain={domain} tasks={len(tasks)} suffix={suffix}", flush=True)
+    print(f"domain={domain} tasks={len(tasks)} suffix={suffix} model={LLM} koru_reasoning={REASONING} stock=tau2 defaults", flush=True)
     rows = []
     with open(out_path, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["task", "koru_reward", "koru_db", "koru_calls",
+        w.writerow(["task", "model", "reasoning", "koru_reward", "koru_db", "koru_calls",
                     "koru_prompt_tokens", "koru_completion_tokens",
                     "koru_cost", "koru_wall_s",
                     "stock_reward", "stock_db", "stock_calls",
@@ -193,6 +226,10 @@ def main() -> None:
                     kr, kdb, kcalls, kcost, ktok, kwall = None, None, None, None, (None, None), None
                     notes = f"koru err: {e}"
                     print(f"    koru ERROR: {e}", flush=True)
+                    if "requires more credits" in str(e):
+                        print("ABORT: OpenRouter 402 — account is out of credits, "
+                              "every remaining task would be an error row.", flush=True)
+                        break
             if tid in stock_reuse:
                 s = stock_reuse[tid]
                 sr, sdb, scalls = s["reward"], s["db"], s["calls"]
@@ -206,7 +243,11 @@ def main() -> None:
                     sr, sdb, scalls, scost, stok, swall = None, None, None, None, (None, None), None
                     notes += f" | stock err: {e}"
                     print(f"    stock ERROR: {e}", flush=True)
-            row = [tid, kr, kdb, kcalls, *ktok, round(kcost, 4) if kcost else None, round(kwall, 1) if kwall else None,
+                    if "requires more credits" in str(e):
+                        print("ABORT: OpenRouter 402 — account is out of credits, "
+                              "every remaining task would be an error row.", flush=True)
+                        break
+            row = [tid, LLM, REASONING, kr, kdb, kcalls, *ktok, round(kcost, 4) if kcost else None, round(kwall, 1) if kwall else None,
                    sr, sdb, scalls, *stok, round(scost, 4) if scost else None, round(swall, 1) if swall else None,
                    notes]
             rows.append(row)
@@ -215,8 +256,8 @@ def main() -> None:
             print(f"    => koru {kr} (db={kdb}, n={kcalls}, cost=${kcost if kcost is not None else '--'}, wall={kwall if kwall is not None else '--'}s) "
                   f"| stock {sr} (db={sdb}, n={scalls}, cost=${scost if scost is not None else '--'}, wall={swall if swall is not None else '--'}s)", flush=True)
 
-            krn = sum(1 for r in rows if r[1] and r[1] > 0)
-            srn = sum(1 for r in rows if r[8] and r[8] > 0)
+            krn = sum(1 for r in rows if r[3] and r[3] > 0)
+            srn = sum(1 for r in rows if r[10] and r[10] > 0)
             done = len(rows)
             if krn and srn:
                 print(f"    tally {done:2d}: koru {krn:2d} ({krn/done*100:3.0f}%)  stock {srn:2d} ({srn/done*100:3.0f}%)  gap {srn-krn:+d}", flush=True)
@@ -228,14 +269,14 @@ def main() -> None:
                         break
 
     aborted = len(rows) < len(tasks)
-    krn = sum(1 for r in rows if r[1] and r[1] > 0)
-    srn = sum(1 for r in rows if r[8] and r[8] > 0)
+    krn = sum(1 for r in rows if r[3] and r[3] > 0)
+    srn = sum(1 for r in rows if r[10] and r[10] > 0)
     total_costs = [0.0, 0.0]
     for r in rows:
-        if r[6]:
-            total_costs[0] += r[6]
-        if r[13]:
-            total_costs[1] += r[13]
+        if r[8]:
+            total_costs[0] += r[8]
+        if r[15]:
+            total_costs[1] += r[15]
     print(f"done: {len(rows)} tasks, {out_path}" + ("  [EARLY-STOPPED]" if aborted else ""))
     print(f"koru>0: {krn}/{len(rows)}  stock>0: {srn}/{len(rows)}")
     print(f"total cost: koru=${total_costs[0]:.4f} stock=${total_costs[1]:.4f}")

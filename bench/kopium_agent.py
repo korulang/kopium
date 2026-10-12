@@ -65,7 +65,7 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         domain_policy: str,
         domain: str = "airline",
         gate_binary: Optional[Path] = None,
-        llm: str = "openrouter/deepseek/deepseek-v4-flash-0731",
+        llm: str = "openrouter/deepseek/deepseek-v4.1-flash",
         llm_args: Optional[dict] = None,
     ):
         super().__init__(tools=tools, domain_policy=domain_policy)

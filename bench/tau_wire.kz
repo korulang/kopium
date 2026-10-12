@@ -28,12 +28,6 @@ const std = @import("std");
 var auth_buf: [1024]u8 = undefined;
 var auth_len: usize = 0;
 
-var policy_buf: [65536]u8 = undefined;
-var policy_len: usize = 0;
-
-var doc_buf: [131072]u8 = undefined;
-var doc_len: usize = 0;
-
 // Model spend since the last outbound line.
 var usage_p: i64 = 0;
 var usage_c: i64 = 0;
@@ -471,64 +465,6 @@ fn callIO(tau_name: []const u8, args_json: []const u8) []const u8 {
     return std.posix.getenv("KOPIUM_SCOPE") orelse "airline";
 }
 
-// The model-facing contract for the bound scope. The transliterated arm
-// reads the schema-derived doc (tau2's descriptions and enums are not in
-// the register block, so a file carries them). Every other scope renders
-// its own contract: scope-grammar emits the wire rules, THIS scope's verb
-// signatures (possession phantoms included), and the worked example the
-// register block's produce/consume edges derive — nothing hand-typed.
-~pub tor vocab-doc { br: *std/bridge:Bridge<session>, scope: string }
-| ok string
-| failed string
-
-~proc vocab-doc|zig {
-    const kb = @import("root").koru_std.koru_bridge;
-    // The contract text source differs per arm — airline's per-param doc
-    // is generated from tau2's schema (gen_airline.kz); other scopes render
-    // their grammar from the register block. Everything after is common:
-    // the derived introspection render, then the describe-handles probe.
-    const g = if (std.mem.eql(u8, scope, "airline")) blk: {
-        const f = std.fs.cwd().openFile("airline_vocab_doc.md", .{}) catch
-            return .{ .failed = "airline_vocab_doc.md missing — run ./gen_airline.sh" };
-        defer f.close();
-        const d = f.readToEndAlloc(std.heap.page_allocator, 1 << 20) catch
-            return .{ .failed = "airline_vocab_doc.md unreadable" };
-        break :blk d;
-    } else switch (@import("root").koru_std.koru_runtime.scope_grammar_event.handler(.{ .name = scope })) {
-        .ok => |t| t,
-        .not_found => return .{ .failed = "scope has no registered vocabulary" },
-    };
-    // scope-grammar knows nothing of the session grant — the introspection
-    // verbs (vocabulary/grammar/bind/note) live on the bridge. Advertise them
-    // in the doc only when the session actually grants them, so a prompt can
-    // never name a verb the wire would deny.
-    const g_full = if (br.introspection)
-        std.fmt.allocPrint(std.heap.page_allocator, "{s}\n{s}", .{ g, kb.introspection_verbs })
-            catch @panic("kopium: vocab-doc OOM")
-    else
-        g;
-    // Scopes may carry a `describe-handles` verb documenting what each minted
-    // tag holds — possession signatures name the obligation, not its content.
-    // Run it through the real bridge and append what it returns; a scope
-    // without one just gets the grammar. The run binds an rN — a boot-time
-    // binding, harmless.
-    const probe = @import("root").koru_std.koru_bridge.run_event.handler(.{
-        .br = br, .source = "describe-handles()",
-    });
-    return switch (probe) {
-        .result => |r| blk: {
-            const text = for (r.value.fields) |f| {
-                if (std.mem.eql(u8, f.name, "__type_ref") and f.value == .string_val)
-                    break f.value.string_val;
-            } else r.value.toJsonBuf();
-            break :blk .{ .ok = std.fmt.allocPrint(std.heap.page_allocator,
-                "{s}\n\nWhat your minted handles carry:\n{s}", .{ g_full, text })
-                catch @panic("kopium: vocab-doc OOM") };
-        },
-        else => .{ .ok = g_full },
-    };
-}
-
 // Which channel the model's reply rides: "content" (the default — wire text
 // in the message body) or "toolcall" — the request offers a single `koru`
 // tool and the reply's program arrives inside its argument string.
@@ -598,22 +534,6 @@ var toolfrag_hi: usize = 0;
     toolfrag_hi = 0;
     if (out.items.len == 0) return .{ .none = .{} };
     return .{ .programs = out.items };
-}
-
-~pub tor set-policy { text: string }
-
-~proc set-policy|zig {
-    if (text.len > policy_buf.len) @panic("kopium: policy too long");
-    @memcpy(policy_buf[0..text.len], text);
-    policy_len = text.len;
-}
-
-~pub tor set-doc { text: string }
-
-~proc set-doc|zig {
-    if (text.len > doc_buf.len) @panic("kopium: vocab doc too long");
-    @memcpy(doc_buf[0..text.len], text);
-    doc_len = text.len;
 }
 
 ~pub tor add-usage { p: i64, c: i64, cost: f64, has_cost: bool }
@@ -772,16 +692,17 @@ var total_c: i64 = 0;
 // edge answers it free — every other observer residue strikes.
 var observer_answered: bool = true;
 
-// A prose reply that bound is deliverable: the harness emits `say: <prose>`
-// through the scope's own verb — the wire call is real, the say ledger
-// counts it, and `implicit_say` in session.json makes the concession
-// visible rather than silent. Observer-flagged residue (note attempts,
-// repeat notes after an answered edge) still strikes: internal prose was
-// never meant for the user. A residue verdict carrying no prose — a
-// mixed multi-item turn — has nothing to deliver and strikes unchanged.
+// Nothing non-wire reaches the user. Implicit-say — the harness emitting
+// `say: <prose>` on the model's behalf — made refused prose look like a
+// working surface: the simulator answered "I'll retrieve your details"
+// turns as if progress happened, so the model never felt pressure to spell
+// `say:` or `verb(...)`. Every residue now strikes; the report quotes the
+// offense and names the real channels. Observer-flagged residue (note
+// attempts, repeat notes after an answered edge) gets one observer answer
+// first. A residue verdict carrying no prose — a mixed multi-item turn —
+// strikes unchanged.
 ~pub tor residue-verdict { observer: bool, prose: string }
 | observer
-| deliver
 | strike
 
 ~proc residue-verdict|zig {
@@ -789,7 +710,7 @@ var observer_answered: bool = true;
         observer_answered = true;
         return .{ .observer = .{} };
     }
-    if (!observer and prose.len > 0) return .{ .deliver = .{} };
+    _ = prose;
     return .{ .strike = .{} };
 }
 
@@ -801,17 +722,6 @@ var observer_answered: bool = true;
 
 ~proc count-residue|zig {
     n_residue += std.mem.count(u8, text, "residue bound:");
-}
-
-// Residue the harness delivered anyway — the prose reach-the-user
-// concession, counted so the board can see how much of the turn the wire
-// gate still refuses vs. how much the harness soft-delivers.
-var n_implicit: u64 = 0;
-
-~pub tor count-implicit {}
-
-~proc count-implicit|zig {
-    n_implicit += 1;
 }
 
 // On EOF: the run's summary lands next to the call receipts. A loud death
@@ -833,10 +743,10 @@ var n_implicit: u64 = 0;
     const alloc = std.heap.page_allocator;
     const path = std.fmt.allocPrint(alloc, "{s}/session.json", .{dir}) catch @panic("kopium: OOM");
     const body = std.fmt.allocPrint(alloc,
-        "{{\"model_calls\":{d},\"rejected_turns\":{d},\"silent_turns\":{d},\"rejections_by_kind\":{{\"parse-error\":{d},\"event-denied\":{d},\"validation-error\":{d},\"shape-error\":{d},\"exhausted\":{d},\"scope-not-found\":{d},\"residue\":{d},\"unhandled\":{d},\"partial\":{d}}},\"defines\":{d},\"outbound_say\":{d},\"outbound_call\":{d},\"residue_items\":{d},\"implicit_say\":{d},\"prompt_tokens\":{d},\"completion_tokens\":{d},\"usage_missing\":{d}}}",
+        "{{\"model_calls\":{d},\"rejected_turns\":{d},\"silent_turns\":{d},\"rejections_by_kind\":{{\"parse-error\":{d},\"event-denied\":{d},\"validation-error\":{d},\"shape-error\":{d},\"exhausted\":{d},\"scope-not-found\":{d},\"residue\":{d},\"unhandled\":{d},\"partial\":{d}}},\"defines\":{d},\"outbound_say\":{d},\"outbound_call\":{d},\"residue_items\":{d},\"prompt_tokens\":{d},\"completion_tokens\":{d},\"usage_missing\":{d}}}",
         .{ n_model_calls, n_rejected, n_silent, rej_parse, rej_denied, rej_validation,
            rej_shape, rej_exhausted, rej_scope, rej_residue, rej_unhandled, rej_partial, n_defines, n_say, n_call,
-           n_residue, n_implicit, total_p, total_c, n_usage_missing }) catch @panic("kopium: OOM");
+           n_residue, total_p, total_c, n_usage_missing }) catch @panic("kopium: OOM");
     const f = std.fs.cwd().createFile(path, .{}) catch @panic("kopium: session.json create failed");
     defer f.close();
     f.writeAll(body) catch @panic("kopium: session.json write failed");
@@ -911,6 +821,27 @@ var n_implicit: u64 = 0;
     return .{ .written = .{} };
 }
 
+// The reply half of the receipt: the model's raw wire text for the call at
+// the current receipt_seq, written as resp_NNN.txt next to call_NNN.json.
+// Without it the last turn of a session is invisible — the request shows
+// the user message that prompted it, never what the model emitted.
+~pub tor write-response { text: string<*> }
+| written
+| skipped
+| failed string
+
+~proc write-response|zig {
+    const dir = std.posix.getenv("KOPIUM_RECEIPT_DIR") orelse return .{ .skipped = .{} };
+    var pb: [1024]u8 = undefined;
+    const path = std.fmt.bufPrint(&pb, "{s}/resp_{d:0>3}.txt", .{ dir, receipt_seq }) catch
+        return .{ .failed = "receipt path too long" };
+    const f = std.fs.cwd().createFile(path, .{}) catch
+        return .{ .failed = "receipt create failed" };
+    defer f.close();
+    f.writeAll(text) catch return .{ .failed = "receipt write failed" };
+    return .{ .written = .{} };
+}
+
 ~pub tor die { msg: string<*> }
 
 ~proc die|zig {
@@ -919,20 +850,17 @@ var n_implicit: u64 = 0;
 }
 
 // ============================================================================
-// THE REQUEST — system message = derived grammar + generated tool-contract
-// doc + domain policy, verbatim, newline-separated. Nothing authored sits on
-// this surface: if the model lacks something (how r{N} bindings resolve,
-// what say does), that gap belongs in std/bridge:grammar, not here.
+// THE REQUEST — no system message, no pushed anything. messages is the
+// transcript and only the transcript: history entries are comma-prefixed,
+// so the first entry loses its comma to open the array. The wire teaches
+// itself through the gate's own refusals; vocabulary()/grammar()/contract()
+// pull what the session contains.
 // ============================================================================
 
-~pub tor body { model: string, max_tokens: u32, temperature: string, grammar: string, history: string<*> } -> string
+~pub tor body { model: string, max_tokens: u32, temperature: string, history: string<*> } -> string
 
 ~proc body|zig {
     const alloc = std.heap.page_allocator;
-    if (policy_len == 0) @panic("kopium: body() before init set the policy");
-    if (doc_len == 0) @panic("kopium: body() before the vocab doc was set");
-    const policy = policy_buf[0..policy_len];
-    const doc = doc_buf[0..doc_len];
 
     var out = std.ArrayListUnmanaged(u8){};
     out.appendSlice(alloc, "{\"model\":\"") catch @panic("kopium: OOM");
@@ -949,16 +877,16 @@ var n_implicit: u64 = 0;
     // The toolcall channel: one tool, `koru`, whose `program` argument IS the
     // wire text. tool_choice required — every reply must arrive as a call.
     if (std.mem.eql(u8, std.posix.getenv("KOPIUM_CHANNEL") orelse "content", "toolcall")) {
-        out.appendSlice(alloc, ",\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"koru\",\"description\":\"The Koru interpreter. The 'program' argument is one wire program in the grammar from the system message; its run report returns as this tool's result.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"program\":{\"type\":\"string\",\"description\":\"One wire program.\"}},\"required\":[\"program\"],\"additionalProperties\":false}}}],\"tool_choice\":\"required\"") catch @panic("kopium: OOM");
+        out.appendSlice(alloc, ",\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"koru\",\"description\":\"The Koru interpreter. The 'program' argument is one wire program (call grammar() for the full rules); its run report returns as this tool's result.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"program\":{\"type\":\"string\",\"description\":\"One wire program.\"}},\"required\":[\"program\"],\"additionalProperties\":false}}}],\"tool_choice\":\"required\"") catch @panic("kopium: OOM");
     }
-    out.appendSlice(alloc, ",\"stream_options\":{\"include_usage\":true},\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
-    jsonEscape(alloc, &out, grammar);
-    jsonEscape(alloc, &out, "\n");
-    jsonEscape(alloc, &out, doc);
-    jsonEscape(alloc, &out, "\n");
-    jsonEscape(alloc, &out, policy);
-    out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
-    out.appendSlice(alloc, history) catch @panic("kopium: OOM");
+    // No system message — messages is the transcript itself. Entries are
+    // comma-prefixed, so the first one loses its comma to open the array.
+    out.appendSlice(alloc, ",\"stream_options\":{\"include_usage\":true},\"messages\":[") catch @panic("kopium: OOM");
+    if (history.len > 0 and history[0] == ',') {
+        out.appendSlice(alloc, history[1..]) catch @panic("kopium: OOM");
+    } else {
+        out.appendSlice(alloc, history) catch @panic("kopium: OOM");
+    }
     out.appendSlice(alloc, "]") catch @panic("kopium: OOM");
     out.appendSlice(alloc, "}") catch @panic("kopium: OOM");
     return out.toOwnedSlice(alloc) catch @panic("kopium: OOM");

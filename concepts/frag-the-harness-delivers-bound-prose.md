@@ -98,3 +98,29 @@ items-per-turn surface (3,645-step wedge) and — mined straight out of
 the `note:` corpus — the model cannot distinguish user prose from wire
 reports in the flat `role: "user"` channel. The channel itself was the
 self-report instrument this whole time.
+
+## Evolved 2026-10-12 — strictness-only shipped; the concession is gone
+
+The open question from the first evolution — "is there a shape that keeps
+the delivery but reimposes the protocol cost, or is strictness-only the
+honest surface?" — was answered by removal, not compromise. `residue-verdict`
+now has only `observer | strike`; `deliver-residue`, `count-implicit`, and
+the `implicit_say` stat are deleted. Every non-observer residue strikes, and
+the report quotes the refused text head (`'tool_call: get-user-details(...)'
+is not wire`).
+
+The cost the concession actually carried was invisible to the win-rate
+instrument all along: implicit-say scored a wire failure as user-facing
+success, so the model learned from its own leaked prose — "I'll retrieve
+your user details now" delivered ×12 while the simulator waited — and the
+simulator's patience masked the break. That is the masking channel the
+revert case should have priced: not win-rate delta, but corrupted teaching.
+
+The strict board measured on deepseek-v4.1-flash: **koru 23/29 vs stock
+25/29** — the gap narrowed from 5 to 2 under strictness, not widened. The
+six losses decompose under re-flight into three stochastic draws (11, 14,
+19 flip to 1.0 unchanged) and three reproducible *model-reasoning* failures
+through a working wire (task 7 communicates $708 where $1,628 is expected;
+task 18 pins `gift_card_3481935` as payment_id on all five refunds; task 23
+stalls re-asking confirmation instead of dispatching the three bookings).
+None are wire deaths; every rejected turn is legible in session.json.

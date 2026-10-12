@@ -7,11 +7,14 @@ from tau2.runner import build_environment, build_user, get_tasks, run_simulation
 from tau2.evaluator.evaluator import EvaluationType
 from tau2.agent.llm_agent import LLMAgent
 
+from model_guard import guard_llm
+
 def main() -> None:
     task_id = sys.argv[1] if len(sys.argv) > 1 else "0"
     llm = "openrouter/deepseek/deepseek-v4-flash-0731"
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
+    llm = guard_llm(llm)
     env = build_environment("airline")
     tasks = get_tasks("airline", task_ids=[task_id])
     task = tasks[0]

@@ -47,12 +47,15 @@ HERE = Path(__file__).parent
 OUT = HERE / "results" / "measure"
 TAU2_ROOT = HERE.parent.parent / "tau2-bench"
 
+from model_guard import guard_llm
+
 DOMAIN = "airline"
 LLM = "openrouter/deepseek/deepseek-v4-flash-0731"
 # Agent model for BOTH arms — KOPIUM_LLM overrides it for model A/B runs.
 # The user simulator stays pinned to LLM so an agent-model delta is not
-# confounded by a different simulated user.
-AGENT_LLM = os.environ.get("KOPIUM_LLM", LLM)
+# confounded by a different simulated user. guard_llm is the wall: Anthropic
+# slugs exit at startup unless BENCH_ALLOW_ANTHROPIC=1 (see model_guard.py).
+AGENT_LLM = guard_llm(os.environ.get("KOPIUM_LLM", LLM))
 AGENT_LLM_ARGS = {"temperature": 0.0, "reasoning_effort": "none"}
 # tau2's own defaults (tau2/config.py), not a harness-local budget: the old
 # 40/5 punished transport granularity (one env call per message) rather
@@ -63,7 +66,9 @@ SEED_BASE = 42
 # run_compare.py registers with litellm). $/token. An unpriced model is a
 # loud error — never a silently mispriced report.
 PRICES = {
-    "openrouter/deepseek/deepseek-v4-flash-0731": (0.14e-6, 0.28e-6),
+    # $0.018/M in, $0.64/M out — api/v1/models, verified 2026-10-11 (the old
+    # $0.14/$0.28 row was stale: input ~8x high, output ~2.3x low).
+    "openrouter/deepseek/deepseek-v4-flash-0731": (0.018e-6, 0.64e-6),
     "openrouter/google/gemini-2.5-flash": (0.30e-6, 2.50e-6),
     "openrouter/meta/muse-spark-1.3-contributor": (0.10e-6, 0.20e-6),
 }

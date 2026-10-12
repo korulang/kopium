@@ -130,21 +130,21 @@ send = app/tau_wire:auth(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |
         transport failed: {{ e.msg:s }}
     }: m |> app/tau_wire:die(msg: m)
 
-// Build this turn's request from transcript + derived grammar, receipt it,
-// then fire.
+// Build this turn's request from transcript + the boot kernel, receipt it,
+// then fire. The grammar/vocabulary/contract the old arm pushed into the
+// system message now lives behind the wire's own pull verbs — the kernel
+// set at boot is the whole static surface.
 tor ask { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string }
-ask = std/bridge:grammar(br)
-| ok g |> std/store:query(transcript)
-    ! query h |> std/fmt:fmt.blk {
+ask = std/store:query(transcript)
+! query h |> std/fmt:fmt.blk {
         {{ h:S }}
     }: hist
-        |> app/tau_wire:body(model, max_tokens, temperature, grammar: g, history: hist): req
+        |> app/tau_wire:body(model, max_tokens, temperature, history: hist): req
         |> app/tau_wire:mark-call-start()
         |> app/tau_wire:write-receipt(body: req)
         | written |> send(req) |> app/tau_wire:usage-check()
         | skipped |> app/tau_wire:die(msg: "KOPIUM_RECEIPT_DIR unset — receipts are mandatory")
         | failed m |> app/tau_wire:die(msg: m)
-| not-found _ |> app/tau_wire:die(msg: "bridge grammar missing")
 
 // Append a chat message to the transcript.
 tor observe { role: string, text: string<*> }
@@ -157,35 +157,6 @@ tor observe-human { text: string<*> }
 observe-human = std/fmt:fmt.blk {
         user: {{ text:s }}
     }: m |> observe(role: "user", text: m)
-
-// A whole-prose reply is the chat prior leaking past the gate — the bridge
-// bound the text at rN and refused it. The harness emits the say the model
-// didn't: `say: <prose>` through the scope's own verb, a real wire call —
-// the say ledger counts it, the transcript sees the teaching line, and a
-// scope without say strands it (the strike stands). Colon form, never
-// say(text: rN): say's field is Source, so a bare name delivers literally.
-// The gate stays strict; the policy that prose still reaches the user
-// lives here, in the harness.
-tor deliver-residue { br: *std/bridge:Bridge<session>, text: string<*> }
-| sent
-| stranded
-
-deliver-residue = std/fmt:fmt.blk {
-        say: {{ text:s }}
-    }: src
-    |> std/bridge:run(br, source: src)
-    | result _ => sent
-    | defined _ => stranded
-    | partial _ => stranded
-    | unhandled-branch _ => stranded
-    | dispatch-error _ => stranded
-    | event-denied _ => stranded
-    | residue _ => stranded
-    | parse-error _ => stranded
-    | validation-error _ => stranded
-    | shape-error _ => stranded
-    | exhausted _ => stranded
-    | scope-not-found _ => stranded
 
 // Run what the model wrote and report the outcome back verbatim — the
 // bridge's own diagnostic words, no authored coaching.
@@ -256,11 +227,6 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
     |> app/tau_wire:count-residue(text: r.report)
     |> app/tau_wire:residue-verdict(r.observer, prose: r.text)
     | observer |> app/tau_wire:count-out(kind: "note")
-    | deliver |> deliver-residue(br, r.text)
-        | sent |> observe(role: "user", text: "observer: that prose reached the user anyway — the harness emitted it under `say:` on your behalf. Open prose with `say:` yourself; `note:` for thinking out loud.")
-            |> app/tau_wire:count-implicit()
-            |> app/tau_wire:count-out(kind: "say")
-        | stranded |> app/tau_wire:count-rejection(kind: "residue")
     | strike |> app/tau_wire:count-rejection(kind: "residue")
 | parse-error p |> std/fmt:fmt.blk {
         parse-error: {{ p.message:s }}
@@ -298,16 +264,22 @@ drive = app/tau_wire:channel()
         {{ buf:S }}
     }: raw
         |> std/io:eprint.ln("  wire> {{ raw:s }}")
-        |> act(br, source: raw)
+        |> app/tau_wire:write-response(text: raw)
+        | written |> act(br, source: raw)
+        | skipped |> act(br, source: raw)
+        | failed m |> act(br, source: raw)
 | toolcall |> app/tau_wire:tooltake()
     | programs raw |> std/io:eprint.ln("  wire> {{ raw:s }}")
-        |> act(br, source: raw)
+        |> app/tau_wire:write-response(text: raw)
+        | written |> act(br, source: raw)
+        | skipped |> act(br, source: raw)
+        | failed m |> act(br, source: raw)
     | none |> no-program()
 
 // The toolcall reply carried no koru program — a rejected turn, observed
 // back like any other.
 tor no-program {}
-no-program = observe(role: "user", text: "no koru program in the reply — emit one koru tool call whose program is wire text")
+no-program = observe(role: "user", text: "no koru program in the reply — emit one koru tool call whose program is wire text; `vocabulary()` lists every verb")
     |> app/tau_wire:count-rejection(kind: "residue")
 
 // User replies captured by say() procs mid-run become real user messages
@@ -344,34 +316,44 @@ loop = clear-reply()
             | stop |> app/tau_wire:session-end() |> std/io:eprint.ln("--- eof, session ends")
             | again |> app/tau_wire:bump-fail(n: silents, bound)
                 | edge nf |> std/fmt:fmt.blk {
-                    observer: {{ nf:d }} consecutive replies reached nobody — no say, no tool call. note(...) is observer-only; say(text: ...) is the only line to the user. Before this turn dies, in one line: what are you waiting for?
+                    observer: {{ nf:d }} consecutive replies reached nobody. `say:` reaches the user, `note:` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what are you waiting for?
                 }: m |> observe(role: "user", text: m)
                     |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
                 | retry nf |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
-                | over |> app/tau_wire:die(msg: "6 consecutive replies reached neither the user nor a tool")
+                | over |> app/tau_wire:die(msg: "10 consecutive replies reached neither the user nor a tool")
     | rejected |> app/tau_wire:saw-eof()
         | yes |> app/tau_wire:session-end()
         | no |> app/tau_wire:bump-fail(n: fails, bound)
             | edge nf |> std/fmt:fmt.blk {
-                observer: {{ nf:d }} consecutive refused replies — before this turn dies, in one line: what were you trying to do? Reasoning belongs in note(text: ...); only say(text: ...) reaches the user.
+                observer: {{ nf:d }} consecutive refused replies. `say:` reaches the user, `note:` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what were you trying to do?
             }: m |> observe(role: "user", text: m)
                 |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
             | retry nf |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
-            | over |> app/tau_wire:die(msg: "the wire rejected 6 consecutive replies")
+            | over |> app/tau_wire:die(msg: "the wire rejected 10 consecutive replies")
 
 tor clear-reply {}
 clear-reply = std/store:query(reply)
 ! query buf |> std/string:clear(s: buf)
 
-// Boot: init (policy), the scope's tool-contract doc, then the first user
-// line — everything else the wire needs arrives through the procs. The doc
-// source is the scope: "airline" reads the schema-derived file, any other
-// scope renders its own grammar (rules + typed vocabulary + derived example).
-tor boot { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string, bound: i64, scope: string }
+// The seed: the language shown first — five lines of wire in one prior
+// turn (say/note spelling, the pull verb, a fielded call, an rN
+// reference) — then the vocabulary dumped behind it, enclosed in the
+// result shape exactly as a real vocabulary() pull would return it. No
+// kernel, no rules: the verbs are in context, the verdicts teach the rest.
+tor seed { vocab: string }
+seed = observe(role: "assistant", text: "say: Booked — your flight is confirmed, economy.\nnote: user confirmed; the certificate covers the fare.\nvocabulary()\nget-user-details(user_id: \"example_user_0\")\nbook-reservation(user_id: \"example_user_0\", flights: r9.flights, payment_methods: [{payment_id: \"example_cert_0\", amount: 250}], total_baggages: 3, nonfree_baggages: 0, insurance: \"no\")")
+    |> headless/wire:seed-result(value: vocab, bound: "r2"): m
+    |> observe(role: "user", text: m)
+
+// Boot: init (policy — observed in-band as the first transcript entry, no
+// system message, no pushed doc) then the seeded example turn plus the
+// live vocabulary render, then the first user line. Everything else the
+// wire needs arrives through the gate's own refusals and pull verbs.
+tor boot { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string, bound: i64 }
 boot = app/tau_wire:inbound()
-| init p |> app/tau_wire:set-policy(text: p)
-    |> app/tau_wire:vocab-doc(br, scope)
-    | ok d |> app/tau_wire:set-doc(text: d) |> app/tau_wire:inbound()
+| init p |> observe(role: "user", text: p)
+    |> std/bridge:vocabulary(br)
+    | ok v |> seed(vocab: v) |> app/tau_wire:inbound()
         | user u |> observe-human(text: u) |> app/tau_wire:auth-ensure()
             | ok |> loop(br, model, max_tokens, temperature, bound, fails: 0, silents: 0)
             | failed m |> app/tau_wire:die(msg: m)
@@ -379,7 +361,7 @@ boot = app/tau_wire:inbound()
         | result _ | app/tau_wire:die(msg: "result with no outstanding call")
         | eof |> app/tau_wire:session-end()
         | bad m |> app/tau_wire:die(msg: m)
-    | failed m |> app/tau_wire:die(msg: m)
+    | not-found s2 |> app/tau_wire:die(msg: s2)
 | user _ | app/tau_wire:die(msg: "expected init line first")
 | result _ | app/tau_wire:die(msg: "result with no outstanding call")
 | eof |> app/tau_wire:die(msg: "stdin closed before init")
@@ -402,4 +384,4 @@ app/tau_wire:scope-name(): sc
 |> app/corpus_env:env-or(key: "KOPIUM_WORLD", fallback: ""): w
 |> [with]std/bridge:create(id: "tau-agent", scope: sc, introspection: true, world: w): br
 |> app/tau_wire:model-name(): m
-|> boot(br, model: m, max_tokens: 16384, temperature: "0", bound: 6, scope: sc)
+|> boot(br, model: m, max_tokens: 16384, temperature: "0", bound: 10)

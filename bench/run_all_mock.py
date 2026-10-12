@@ -17,6 +17,7 @@ from tau2.runner import build_environment, build_user, get_tasks, run_simulation
 from tau2.evaluator.evaluator import EvaluationType
 
 from kopium_agent import KopiumAgent
+from model_guard import guard_llm
 
 HERE = Path(__file__).parent
 GATE = HERE / "mock-gate-binary"
@@ -26,6 +27,7 @@ def main() -> None:
     llm = "openrouter/deepseek/deepseek-v4-flash-0731"
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
+    llm = guard_llm(llm)
 
     task_ids = [a for a in sys.argv[1:] if a != "--llm"]
     if not task_ids:

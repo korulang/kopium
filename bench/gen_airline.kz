@@ -299,16 +299,27 @@ fn emitTool(v: *yyj.Value) void {
 ~pub tor assemble {} -> { kz: string, doc: string, n: i64 }
 
 ~proc assemble|zig {
+    var doc_final: std.ArrayList(u8) = .{};
+    put(&doc_final, DOC_PREAMBLE);
+    put(&doc_final, docs_out.items);
     var kz_final: std.ArrayList(u8) = .{};
     put(&kz_final, GENERATED_HEADER);
     put(&kz_final, SAY_TOR);
     put(&kz_final, tors_out.items);
-    put(&kz_final, "~std/runtime:register(scope: \"airline\") {\n    say(1)\n");
+    // The tool contract rides the wire as a verb, not the prompt — the
+    // system message carries the bootstrap kernel only, so the model
+    // pulls `contract()` the same way it pulls `vocabulary()`. The doc
+    // text embeds as a multiline literal: same bytes, no file at runtime.
+    put(&kz_final, "// The tool contract, pulled through the wire instead of pushed\n// into the prompt. Same bytes as airline_vocab_doc.md.\nconst __CONTRACT_DOC =\n");
+    var lines = std.mem.splitScalar(u8, doc_final.items, '\n');
+    while (lines.next()) |line| {
+        if (line.len == 0 and lines.peek() == null) break;
+        putf(&kz_final, "    \\\\{s}\n", .{line});
+    }
+    put(&kz_final, ";\n\n~pub tor contract {} -> string\n\n~proc contract|zig {\n    return __CONTRACT_DOC;\n}\n\n");
+    put(&kz_final, "~std/runtime:register(scope: \"airline\") {\n    say(1)\n    contract(1)\n");
     put(&kz_final, reg_out.items);
     put(&kz_final, "}\n");
-    var doc_final: std.ArrayList(u8) = .{};
-    put(&doc_final, DOC_PREAMBLE);
-    put(&doc_final, docs_out.items);
     return .{ .kz = kz_final.items, .doc = doc_final.items, .n = @intCast(tools_n) };
 }
 

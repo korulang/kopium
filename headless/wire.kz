@@ -136,6 +136,21 @@ var auth_len: usize = 0;
     return out.toOwnedSlice(alloc) catch @panic("kopium: OOM");
 }
 
+// A seeded step-result line — `result: {"branch":"","value":"<esc>"} bound:
+// <rN>`, byte-faithful to the record shape act renders back to the model.
+~pub tor seed-result { value: string<*>, bound: string } -> string
+
+~proc seed-result|zig {
+    const alloc = std.heap.page_allocator;
+    var out = std.ArrayListUnmanaged(u8){};
+    out.appendSlice(alloc, "result: {\"branch\":\"\",\"value\":\"") catch @panic("kopium: OOM");
+    jsonEscape(alloc, &out, value);
+    out.appendSlice(alloc, "\"} bound: ") catch @panic("kopium: OOM");
+    out.appendSlice(alloc, bound) catch @panic("kopium: OOM");
+    return out.toOwnedSlice(alloc) catch @panic("kopium: OOM");
+}
+
+
 // ============================================================================
 // THE PROMPT — the vocabulary IS the `register` block, rendered for the model
 // ============================================================================
