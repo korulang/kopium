@@ -245,3 +245,38 @@ on tasks 10, 12, 14; (2) inbound envelope separating `user:` prose from
 wire reports (tasks 7, 8, 16, 22 self-diagnosed); (3) items-per-turn
 cap (3,645-step wedge); (4) chain-spelling reconciliation between the
 doc comment and the segmenter.
+
+### 2026-10-12 — the decode-budget confound: the gap was a throttle, mostly
+
+Every `run_compare.py` board through 2026-10-11 compared stock-with-
+thinking against koru-gagged: `tau_wire.kz` sent `reasoning effort "none"`
+while the stock `LLMAgent` ran provider defaults (measured 40–97 reasoning
+tokens/call on the OpenRouter path; `litellm.drop_params=True` silently
+discards `reasoning_effort` — only `extra_body` controls it). The ~8-task
+deficit was substantially that asymmetry.
+
+**Fixes landed in `69e57e0`, both wire-side:** default effort `none` →
+`medium` (env `KOPIUM_REASONING` still overrides), and `max_tokens`
+100000 → 16384 — the unbounded budget wedged the wire into 900s watchdog
+deaths on three tasks once thinking was on (request sent, reply never
+arrived; "silent for 900s" rows, `compare_think_on_s*` task 2/9/10/23
+v1 cells).
+
+**Board under the fix, vs stock as tau2 ships it (single trial):**
+
+| arm | result |
+|---|---|
+| koru, `medium` + bounded (`69e57e0`) | **23/29** — lost 7, 9, 10, 14, 23, 24 |
+| stock, tau2 defaults | 27/29 — lost 7, 22 |
+
+Three of four systematic losers flipped at task level: task 1's first win
+in eight trials (0/7 → win — the 24-hour date-arithmetic trap survived
+thinking), 20, 21. Task 14 still fails on certificate-policy fidelity
+(model obeyed "use the certificates" over the one-per-reservation rule).
+23 sits at the top of koru's historical band (17–23); the residual
+four-task margin is single-trial and unproven either way.
+
+Costs: koru \$0.255 vs stock \$0.186 — we now pay for thinking too. A
+"parity-off" board (both arms `none`) also flew (koru 19, stock 23) but
+is footnote-grade: stock-neutered is not an arm the project measures
+against — recorded in `compare_parity_off_s*.csv`, not a finding.
