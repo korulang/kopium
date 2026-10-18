@@ -22,9 +22,14 @@ user, never in the scope dispatcher).
 The ruling the smoke earned: **meet the misspelling, don't punish the
 intent.** Every observed note attempt used bare prose — `note(text: I see
 my mistake)`, `note: <prose>` — so an introspection session classifies a
-failed `note(`/`note:` item as observer residue, and a `note(...)` glued
+failed `note(`/`note:`-headed item as observer residue, and a `note(...)` glued
 to a same-line call splits at the first `)` whose suffix passes the gate
 (the malformed note was swallowing live calls into its residue string).
+(2026-10-18: both cited spellings are now refused — `note:` is gone with
+the colon form and `note`'s `text` is a plain `string`, so bare prose
+parses as a bound name and fails; the `note(`/`note:` head detection
+still routes the *intent* to observer residue, which is what this rung
+is for — the teaching message now names only `note(text: "...")`.)
 `partial` counts `wire_failures` so the rejection bound still kills
 malformed wire; clean partials stay free, and observer residue is free
 **once per edge question** — the exemption answers the question asked,
@@ -37,18 +42,15 @@ signal only as failure deepens, and no rung rescues the run.
 
 ## Open questions
 
-- The observed "misspellings" were type inference, not bad quoting: models
-  treated `text:` as a text-typed position. The wire's value grammar is
-  meant to be directed by the declared field type — `name<x>` already does
-  this (a minted-handle type admits only minted handles) — so `expr:
-  Expression` and `source: Source` are the same declaration shape as
-  `var: string`, and each type names its position's wire form: quoted
-  literal, raw text to end of line, Koru expression over the session's
-  bindings. The flat head-arg validator is bootstrap scaffolding that never
-  learned to consult the declared type; the open question is which field
-  types drive which wire shapes, not whether "a verb takes trailing text"
-  becomes a bespoke grammar rule. Lars's call — the ruling is about the
-  type grammar.
+- ~~The observed "misspellings" were type inference~~ — **ruled
+  2026-10-18**: `Source` was never a prose type; it is the language's
+  comptime source-fragment type (`ast.zig`, "captured source code"), and
+  declaring prose fields `Source` was the bastardization. The purge:
+  `say`/`note`/`bind` carry `string`; only `Expression` fields keep
+  bare-text admission (`calc(expr: 2 + 3)`, airline composites `[{...}]`),
+  and its survival is itself unruled — same comptime-only family
+  (`ast.zig:488`). `name<x>` possession typing stays as the real
+  type-directed admission.
 - ~~A permanently-free observer lane can theoretically loop forever~~ —
   proven twice, and the second proof is the sharper one. Task 28
   (2026-10-05): 246 *malformed* observer residues — exempt from the
