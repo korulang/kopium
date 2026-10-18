@@ -22,6 +22,7 @@ Output: bench/results/compare_<suffix>.csv
 from __future__ import annotations
 
 import csv
+import json
 import os
 import sys
 import time
@@ -60,6 +61,41 @@ litellm.model_cost["openrouter/deepseek/deepseek-v4.1-flash"] = {
     "mode": "chat",
 }
 
+# poolside laguna-s-2.1 :free — zero-cost twin for smoke runs and failure
+# forensics. OpenRouter lists $0/$0, 262144 ctx (api/v1/models, 2026-10-18).
+# Registered at exactly $0 so the unknown-price guard passes while the CSV
+# still records a real (zero) cost. Rate limits apply — ~20 req/min, daily
+# cap — so this arm smokes, it does not board.
+litellm.model_cost["openrouter/poolside/laguna-s-2.1:free"] = {
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 262144,
+    "litellm_provider": "openrouter",
+    "mode": "chat",
+}
+
+# poolside laguna-s-2.1 paid — the :free twin's uncapped sibling for boards.
+# $0.09/M prompt, $0.18/M completion, 1M ctx (api/v1/models, 2026-10-18) —
+# ~4x cheaper input than the deepseek default, so a full board costs dimes.
+litellm.model_cost["openrouter/poolside/laguna-s-2.1"] = {
+    "input_cost_per_token": 0.09e-6,
+    "output_cost_per_token": 0.18e-6,
+    "max_tokens": 1048576,
+    "litellm_provider": "openrouter",
+    "mode": "chat",
+}
+
+# meta muse-spark-1.3-contributor — same band as laguna ($0.10/$0.20 per M,
+# 1M ctx; api/v1/models, 2026-10-18), suspected stronger instruction
+# following. Paired smoke arm against the same task ids.
+litellm.model_cost["openrouter/meta/muse-spark-1.3-contributor"] = {
+    "input_cost_per_token": 0.10e-6,
+    "output_cost_per_token": 0.20e-6,
+    "max_tokens": 1048576,
+    "litellm_provider": "openrouter",
+    "mode": "chat",
+}
+
 # A model litellm can't price logs $0 and leaves blank cost columns — the
 # claude29 CSVs recorded ~5.4M tokens at no dollar figure. Unknown-price is a
 # startup error, not a silent zero.
@@ -78,7 +114,7 @@ except Exception:
 REASONING = os.environ.get("KOPIUM_REASONING", "none")
 
 
-def run_one(agent_cls, task, domain, gate=None, receipt_dir=None):
+def run_one(agent_cls, task, domain, gate=None, receipt_dir=None, eval_path=None):
     env = build_environment(domain)
     if agent_cls is KopiumAgent:
         if receipt_dir is not None:
@@ -117,6 +153,10 @@ def run_one(agent_cls, task, domain, gate=None, receipt_dir=None):
     t0 = time.monotonic()
     res = run_simulation(orch, evaluation_type=EvaluationType.ALL)
     wall_s = time.monotonic() - t0
+    if eval_path is not None:
+        Path(eval_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(eval_path).write_text(
+            json.dumps(res.reward_info.model_dump(mode="json"), indent=2))
     r = res.reward_info
     db = getattr(r, "db_check", None)
     dbok = bool(db and db.db_match) if db else None
@@ -221,6 +261,7 @@ def main() -> None:
                         KopiumAgent, task, domain,
                         gate=os.environ.get("KOPIUM_GATE", str(HERE / "tau-agent-binary")),
                         receipt_dir=HERE / "results" / "runs" / f"compare-{suffix}-task{tid}" / "receipts",
+                        eval_path=HERE / "results" / "runs" / f"compare-{suffix}-task{tid}" / "eval.json",
                     )
                 except Exception as e:  # noqa: BLE001
                     kr, kdb, kcalls, kcost, ktok, kwall = None, None, None, None, (None, None), None
@@ -238,7 +279,10 @@ def main() -> None:
                 notes += f" | stock: reused {s['src']}"
             else:
                 try:
-                    (sr, sdb, scalls, scost, stok, swall) = run_one(LLMAgent, task, domain)
+                    (sr, sdb, scalls, scost, stok, swall) = run_one(
+                        LLMAgent, task, domain,
+                        eval_path=HERE / "results" / "runs" / f"compare-{suffix}-task{tid}-stock" / "eval.json",
+                    )
                 except Exception as e:  # noqa: BLE001
                     sr, sdb, scalls, scost, stok, swall = None, None, None, None, (None, None), None
                     notes += f" | stock err: {e}"

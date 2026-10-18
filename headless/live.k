@@ -152,7 +152,7 @@ ask = std/store:query(transcript)
 ! query h |> std/fmt:ln("{{ h:S }}"): hist |> app/wire:agent-body(model, max_tokens, temperature, goal, history: hist.text): body |> send(req: body)
 
 // Append this turn to the conversation, so the next one can reason from it.
-tor record { goal: string, said: string }
+tor record { goal: string, said: string<*@scoped> }
 record = std/store:query(transcript)
 ! query h |> app/wire:msg(role: "user", content: goal): m1 |> std/string:append(s: h, text: m1)
     | ok |> app/wire:msg(role: "assistant", content: said): m2 |> std/string:append(s: h, text: m2)
@@ -166,7 +166,7 @@ record = std/store:query(transcript)
 // tool_call id, and this agent's tool call is a line of Koru rather than a
 // function-call object. The `[tool result]` prefix is doing that work instead
 // — honest about what it is, and the model reads it fine.
-tor observe { text: string }
+tor observe { text: string<*@scoped> }
 observe = std/store:query(transcript)
 ! query h |> app/wire:msg(role: "user", content: text): m |> std/string:append(s: h, text: m)
     | ok |> _
@@ -181,8 +181,13 @@ observe = std/store:query(transcript)
 //
 // Every arm reports. A refusal the agent never hears about is a refusal it
 // will repeat, and turn 4 exists to prove it hears.
-tor act { br: *std/bridge:Bridge<session>, goal: string, source: string }
-act = record(goal, said: source) |> std/bridge:run(br, source)
+tor act { br: *std/bridge:Bridge<session>, goal: string, source: string<*@scoped> }
+act = std/fmt:fmt.blk {
+        {{ source:s }}
+    }: owned |> act-on(br, goal, source: owned)
+
+tor act-on { br: *std/bridge:Bridge<session>, goal: string, source: string<*> }
+act-on = record(goal, said: source) |> std/bridge:run(br, source)
 | result r |> std/interpreter:value.stringify(r.value): v
     |> std/io:print.ln("  ok — returned {{ v:s }}, bridge now holds {{ r.handles:d }} resource(s)")
     |> std/fmt:ln("[tool result] ok, it ran and returned {{ v:s }}. The session now holds {{ r.handles:d }} open resource(s)."): ma
@@ -306,7 +311,7 @@ std/io:read-file(path: "/Users/larsde/.pi/agent/auth.json")
     | ok doc |> koru/yyjson:root(doc): r |> koru/yyjson:object.get(doc, v: r, key: "openrouter")
         | found orv |> koru/yyjson:object.get(doc, v: orv, key: "key")
             | found kv |> koru/yyjson:as.string(doc, v: kv)
-                | ok k |> app/wire:bearer(key: k): auth |> std/io:free(content: k) |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse(model: "meta/muse-spark-1.3-contributor", max_tokens: 100000, temperature: "0")
+                | ok k |> app/wire:bearer(key: k): auth |> std/io:free(content: k) |> app/wire:remember(auth) |> koru/yyjson:close(doc) |> converse(model: "poolside/laguna-s-2.1:free", max_tokens: 100000, temperature: "0")
                 | wrong-type |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: openrouter key is not a string")
             | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter.key in auth store")
         | not-found |> koru/yyjson:close(doc) |> std/io:print.ln("kopium: no openrouter entry in auth store")

@@ -1,0 +1,206 @@
+// gate.kz — the promote gate's receipt book (probe-side host module).
+//
+// The probe's whole question is a comparison: did the candidate verb do the
+// pinned case better than the hand dance, and did it leave the resource world
+// clean? Flow state cannot count across turns, so this module keeps the
+// tally — same pattern as notes.kz's module-held buffers, no allocator.
+//
+// The verdict shape is deliberate: `judge` returns a BRANCH, not a string,
+// because the gate's answer is a routing decision the flow acts on —
+// `| promote` lands the file and its sidecar, `| drop` does neither. A gate
+// that emits prose would be the prose-as-memory failure wearing a robe.
+//
+//   step     — one dispatch group ran; record steps + live holds
+//   refusal  — any wall arm fired (parse/validation/denied/dispatch/...)
+//   defined  — a `define` landed (the candidate being born staged)
+//   verdict  — print one tag's accumulated receipt
+//   judge    — compare cand vs base receipts -> | promote | drop
+//   land     — copy stage/<name>.k -> world/<name>.k, write the sidecar
+//   seed     — write a file (hand-gardening the stage dir is legitimate;
+//              the genome is a directory of programs, read/diff/garden)
+
+const std = @import("std");
+
+const MAX_TAGS = 16;
+
+var tag_buf: [MAX_TAGS][32]u8 = undefined;
+var tag_len: [MAX_TAGS]usize = .{0} ** MAX_TAGS;
+var n_tags: usize = 0;
+
+var steps_ran: [MAX_TAGS]u32 = .{0} ** MAX_TAGS;
+var refused: [MAX_TAGS]u32 = .{0} ** MAX_TAGS;
+var defined_ct: [MAX_TAGS]u32 = .{0} ** MAX_TAGS;
+var held: [MAX_TAGS]u32 = .{0} ** MAX_TAGS;
+
+var msg_buf: [256]u8 = undefined;
+var path_buf: [512]u8 = undefined;
+var side_buf: [1024]u8 = undefined;
+var file_buf: [8192]u8 = undefined;
+
+// ============================================================================
+// THE BOOK
+// ============================================================================
+
+~pub tor step { tag: string, ran: u32, holds: u32 }
+
+~proc step|zig {
+    var i: usize = 0;
+    while (i < $mod.n_tags) : (i += 1) {
+        if (std.mem.eql(u8, $mod.tag_buf[i][0..$mod.tag_len[i]], tag)) break;
+    } else {
+        if (i >= MAX_TAGS) @panic("gate: too many tags");
+        @memcpy($mod.tag_buf[i][0..tag.len], tag);
+        $mod.tag_len[i] = tag.len;
+        $mod.n_tags += 1;
+    }
+    $mod.steps_ran[i] += ran;
+    $mod.held[i] = holds;
+}
+
+~pub tor refusal { tag: string }
+
+~proc refusal|zig {
+    var i: usize = 0;
+    while (i < $mod.n_tags) : (i += 1) {
+        if (std.mem.eql(u8, $mod.tag_buf[i][0..$mod.tag_len[i]], tag)) break;
+    } else {
+        if (i >= MAX_TAGS) @panic("gate: too many tags");
+        @memcpy($mod.tag_buf[i][0..tag.len], tag);
+        $mod.tag_len[i] = tag.len;
+        $mod.n_tags += 1;
+    }
+    $mod.refused[i] += 1;
+}
+
+~pub tor defined { tag: string }
+
+~proc defined|zig {
+    var i: usize = 0;
+    while (i < $mod.n_tags) : (i += 1) {
+        if (std.mem.eql(u8, $mod.tag_buf[i][0..$mod.tag_len[i]], tag)) break;
+    } else {
+        if (i >= MAX_TAGS) @panic("gate: too many tags");
+        @memcpy($mod.tag_buf[i][0..tag.len], tag);
+        $mod.tag_len[i] = tag.len;
+        $mod.n_tags += 1;
+    }
+    $mod.defined_ct[i] += 1;
+}
+
+~pub tor verdict { tag: string }
+
+~proc verdict|zig {
+    var i: usize = 0;
+    while (i < $mod.n_tags) : (i += 1) {
+        if (std.mem.eql(u8, $mod.tag_buf[i][0..$mod.tag_len[i]], tag)) break;
+    } else {
+        std.debug.print("      [gate] {s}: never replayed\n", .{tag});
+        return;
+    }
+    std.debug.print(
+        "      [gate] {s}: {d} step(s) ran, {d} refused, {d} defined, {d} held\n",
+        .{ tag, $mod.steps_ran[i], $mod.refused[i], $mod.defined_ct[i], $mod.held[i] },
+    );
+}
+
+// ============================================================================
+// THE VERDICT
+// ============================================================================
+//
+// Promote iff the candidate replayed cleaner AND cheaper than the baseline:
+//   - any refusal arm in the candidate's replay        -> drop
+//   - any hold still open when the replay ended        -> drop (the install
+//     gate's obligation-honesty edge is still open; the replay is what
+//     catches a leaky body today)
+//   - no fewer steps than doing it by hand             -> drop (KEEP_BASE is
+//     a real answer — a verb that wins nothing earns nothing)
+
+~pub tor judge { name: string, cand: string, base: string }
+| promote string
+| drop string
+
+~proc judge|zig {
+    var ci: usize = MAX_TAGS;
+    var bi: usize = MAX_TAGS;
+    var i: usize = 0;
+    while (i < $mod.n_tags) : (i += 1) {
+        const t = $mod.tag_buf[i][0..$mod.tag_len[i]];
+        if (std.mem.eql(u8, t, cand)) ci = i;
+        if (std.mem.eql(u8, t, base)) bi = i;
+    }
+    if (ci == MAX_TAGS) {
+        return .{ .drop = "candidate was never replayed" };
+    }
+    if ($mod.refused[ci] > 0) {
+        return .{ .drop = std.fmt.bufPrint(&$mod.msg_buf, "refused {d} time(s) at replay", .{$mod.refused[ci]}) catch "refused at replay" };
+    }
+    if ($mod.held[ci] > 0) {
+        return .{ .drop = std.fmt.bufPrint(&$mod.msg_buf, "left {d} hold(s) open at replay's end — the resource world says it leaks", .{$mod.held[ci]}) catch "left holds open" };
+    }
+    const cand_steps = $mod.steps_ran[ci];
+    const base_steps = if (bi == MAX_TAGS) 0 else $mod.steps_ran[bi];
+    if (base_steps > 0 and cand_steps >= base_steps) {
+        return .{ .drop = std.fmt.bufPrint(&$mod.msg_buf, "{d} step(s) vs {d} by hand — wins nothing, earns nothing", .{ cand_steps, base_steps }) catch "no cheaper" };
+    }
+    return .{ .promote = std.fmt.bufPrint(&$mod.msg_buf, "{d} step(s) vs {d} by hand, holds clean", .{ cand_steps, base_steps }) catch "promoted" };
+}
+
+// ============================================================================
+// LAND / SEED — the write path, host-side
+// ============================================================================
+//
+// land copies the staged file into the promoted world and writes the
+// required-field sidecar (<name>.promote.md — cue + evidence, or the
+// promotion does not commit). mount loads *.k only, so the sidecar sits in
+// the genome as readable provenance without entering vocabulary.
+
+~pub tor land { name: string, cand: string, base: string, stage: string, world: string, cue: string }
+
+~proc land|zig {
+    const src_path = std.fmt.bufPrint(&$mod.path_buf, "{s}/{s}.k", .{ stage, name }) catch @panic("gate: path too long");
+    const src = std.fs.cwd().openFile(src_path, .{}) catch @panic("gate: staged candidate vanished between judge and land");
+    const n = src.read(&$mod.file_buf) catch @panic("gate: read failed");
+    src.close();
+
+    std.fs.cwd().makePath(world) catch {};
+    var dst_buf: [512]u8 = undefined;
+    const dst_path = std.fmt.bufPrint(&dst_buf, "{s}/{s}.k", .{ world, name }) catch @panic("gate: path too long");
+    const dst = std.fs.cwd().createFile(dst_path, .{ .truncate = true }) catch @panic("gate: could not land candidate");
+    dst.writeAll($mod.file_buf[0..n]) catch @panic("gate: write failed");
+    dst.close();
+
+    var ci: usize = MAX_TAGS;
+    var bi: usize = MAX_TAGS;
+    var i: usize = 0;
+    while (i < $mod.n_tags) : (i += 1) {
+        const t = $mod.tag_buf[i][0..$mod.tag_len[i]];
+        if (std.mem.eql(u8, t, cand)) ci = i;
+        if (std.mem.eql(u8, t, base)) bi = i;
+    }
+    const cs = if (ci == MAX_TAGS) 0 else $mod.steps_ran[ci];
+    const bs = if (bi == MAX_TAGS) 0 else $mod.steps_ran[bi];
+
+    const side = std.fmt.bufPrint(&$mod.side_buf,
+        "# {s} — promoted\n\n- **cue**: {s}\n- **evidence**: replay `{s}` ran {d} step(s), 0 refused, 0 held — baseline `{s}` ran {d} step(s) by hand\n- **confidence**: mechanical (canned-model replay, receipt diff)\n",
+        .{ name, cue, cand, cs, base, bs },
+    ) catch @panic("gate: sidecar too long");
+    var sp_buf: [512]u8 = undefined;
+    const side_path = std.fmt.bufPrint(&sp_buf, "{s}/{s}.promote.md", .{ world, name }) catch @panic("gate: path too long");
+    const sf = std.fs.cwd().createFile(side_path, .{ .truncate = true }) catch @panic("gate: could not write sidecar");
+    sf.writeAll(side) catch @panic("gate: sidecar write failed");
+    sf.close();
+
+    std.debug.print("      [gate] landed {s}/{s}.k + {s}.promote.md\n", .{ world, name, name });
+}
+
+~pub tor seed { path: string, content: string }
+
+~proc seed|zig {
+    if (std.fs.path.dirname(path)) |dir| {
+        std.fs.cwd().makePath(dir) catch {};
+    }
+    const f = std.fs.cwd().createFile(path, .{ .truncate = true }) catch @panic("gate: seed write failed");
+    f.writeAll(content) catch @panic("gate: seed write failed");
+    f.close();
+    std.debug.print("      [gate] seeded {s}\n", .{path});
+}

@@ -30,3 +30,16 @@ The ruling: a loss is a failure class waiting for evidence, not a score.
 A receipt that cannot show the last emission is an instrument that stops
 one turn short of the answer — and request-only capture had been that
 instrument for every board that preceded this one.
+
+## evolve — 2026-10-18
+
+The receipt grew a second axis: not only *what* the reply was but whether a
+reply existed at all. muse-spark-1.3-contributor on OpenRouter answered
+`reasoning:{"effort":"none"}` with zero-byte content ten times running —
+and session.json recorded them indistinguishably from malformed wire.
+A muted model is a different failure class than a misspelled one: the fix
+is upstream (omit the field — `none` was never an effort literal), not in
+the prompt. `tau_wire:blank` now routes the empty reply to its own
+rejection kind, so the receipt separates silence from grammar. Same
+session confirmed the flip: with the field omitted, muse task 0 scored
+1.0 through the wire — the model was never unable, it was never heard.

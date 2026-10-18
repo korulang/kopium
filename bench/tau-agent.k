@@ -14,7 +14,8 @@
 //
 // Reuses headless/wire only for message shaping (msg). The model's reply
 // reaches std/bridge:run RAW — no fence or whitespace laundering on this
-// path. Request shape: stream:true, reasoning effort none, usage requested.
+// path. Request shape: stream:true, usage requested; reasoning effort comes
+// from KOPIUM_REASONING (default medium) and "none" omits the field entirely.
 
 import std/io
 import std/fmt
@@ -130,21 +131,26 @@ send = app/tau_wire:auth(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |
         transport failed: {{ e.msg:s }}
     }: m |> app/tau_wire:die(msg: m)
 
-// Build this turn's request from transcript + the boot kernel, receipt it,
-// then fire. The grammar/vocabulary/contract the old arm pushed into the
-// system message now lives behind the wire's own pull verbs — the kernel
-// set at boot is the whole static surface.
+// Build this turn's request from the transcript, receipt it, then fire.
+// The system's surface — grammar rules and the live vocabulary — is the
+// system message, rendered fresh by `std/bridge:grammar` on every ask and
+// spliced ahead of the transcript: the same declaration the gate enforces,
+// given to the model rather than fetched, and never stale — a `defined`
+// flow joins the render the very next turn.
 tor ask { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string }
 ask = std/store:query(transcript)
-! query h |> std/fmt:fmt.blk {
-        {{ h:S }}
-    }: hist
+! query h |> std/bridge:grammar(br)
+    | ok g |> headless/wire:msg(role: "system", content: g): sysmsg
+        |> std/fmt:fmt.blk {
+            {{ sysmsg:s }}{{ h:S }}
+        }: hist
         |> app/tau_wire:body(model, max_tokens, temperature, history: hist): req
         |> app/tau_wire:mark-call-start()
         |> app/tau_wire:write-receipt(body: req)
         | written |> send(req) |> app/tau_wire:usage-check()
         | skipped |> app/tau_wire:die(msg: "KOPIUM_RECEIPT_DIR unset — receipts are mandatory")
         | failed m |> app/tau_wire:die(msg: m)
+    | not-found s2 |> app/tau_wire:die(msg: s2)
 
 // Append a chat message to the transcript.
 tor observe { role: string, text: string<*> }
@@ -260,14 +266,19 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
 tor drive { br: *std/bridge:Bridge<session> }
 drive = app/tau_wire:channel()
 | content |> std/store:query(reply)
-    ! query buf |> std/fmt:fmt.blk {
-        {{ buf:S }}
-    }: raw
-        |> std/io:eprint.ln("  wire> {{ raw:s }}")
-        |> app/tau_wire:write-response(text: raw)
-        | written |> act(br, source: raw)
-        | skipped |> act(br, source: raw)
-        | failed m |> act(br, source: raw)
+    ! query buf |> std/string:len(s: buf): n |> app/tau_wire:blank(n)
+        | empty |> app/tau_wire:write-response(text: "")
+            | written |> empty-reply()
+            | skipped |> empty-reply()
+            | failed m |> empty-reply()
+        | wire |> std/fmt:fmt.blk {
+            {{ buf:S }}
+        }: raw
+            |> std/io:eprint.ln("  wire> {{ raw:s }}")
+            |> app/tau_wire:write-response(text: raw)
+            | written |> act(br, source: raw)
+            | skipped |> act(br, source: raw)
+            | failed m |> act(br, source: raw)
 | toolcall |> app/tau_wire:tooltake()
     | programs raw |> std/io:eprint.ln("  wire> {{ raw:s }}")
         |> app/tau_wire:write-response(text: raw)
@@ -275,6 +286,14 @@ drive = app/tau_wire:channel()
         | skipped |> act(br, source: raw)
         | failed m |> act(br, source: raw)
     | none |> no-program()
+
+// Zero bytes reached the wire — not a refused program, a silent turn.
+// The model is told plainly (the empty reply is the observable symptom,
+// e.g. a reasoning model muted by effort:none), and the strike lands under
+// its own kind so session.json separates silence from malformed wire.
+tor empty-reply {}
+empty-reply = observe(role: "user", text: "your reply carried no wire — emit wire text: `say:` reaches the user, `note:` thinks, `verb(field: ...)` calls; `vocabulary()` lists every verb")
+    |> app/tau_wire:count-rejection(kind: "empty")
 
 // The toolcall reply carried no koru program — a rejected turn, observed
 // back like any other.
@@ -335,33 +354,29 @@ tor clear-reply {}
 clear-reply = std/store:query(reply)
 ! query buf |> std/string:clear(s: buf)
 
-// The seed: the language shown first — five lines of wire in one prior
-// turn (say/note spelling, the pull verb, a fielded call, an rN
-// reference) — then the vocabulary dumped behind it, enclosed in the
-// result shape exactly as a real vocabulary() pull would return it. No
-// kernel, no rules: the verbs are in context, the verdicts teach the rest.
-tor seed { vocab: string }
-seed = observe(role: "assistant", text: "say: Booked — your flight is confirmed, economy.\nnote: user confirmed; the certificate covers the fare.\nvocabulary()\nget-user-details(user_id: \"example_user_0\")\nbook-reservation(user_id: \"example_user_0\", flights: r9.flights, payment_methods: [{payment_id: \"example_cert_0\", amount: 250}], total_baggages: 3, nonfree_baggages: 0, insurance: \"no\")")
-    |> headless/wire:seed-result(value: vocab, bound: "r2"): m
-    |> observe(role: "user", text: m)
+// The seed: the language shown by example — ONE assistant turn carrying a
+// multi-line program (note first, a call armed to `u` and chained into a
+// second call that consumes `u.user_id`, say to close). The vocabulary
+// itself is not here: it lives in the system message, given, never fetched.
+tor seed {}
+seed = observe(role: "assistant", text: "note: user confirmed; the certificate covers the fare.\nget-user-details(user_id: \"example_user_0\") | ok u |> book-reservation(user_id: u.user_id, flights: r9.flights, payment_methods: [{payment_id: \"example_cert_0\", amount: 250}], total_baggages: 3, nonfree_baggages: 0, insurance: \"no\")\nsay: Booked — your flight is confirmed, economy.")
 
-// Boot: init (policy — observed in-band as the first transcript entry, no
-// system message, no pushed doc) then the seeded example turn plus the
-// live vocabulary render, then the first user line. Everything else the
-// wire needs arrives through the gate's own refusals and pull verbs.
+// Boot: the system message never enters the transcript — `ask` splices a
+// fresh `std/bridge:grammar` render ahead of the history on every turn, so
+// the declared surface the model sees is always live: wire rules, "Your
+// vocabulary:" with signatures, and this session's defined flows. Boot only
+// seeds the policy line, the example program, and the first user turn.
 tor boot { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string, bound: i64 }
 boot = app/tau_wire:inbound()
 | init p |> observe(role: "user", text: p)
-    |> std/bridge:vocabulary(br)
-    | ok v |> seed(vocab: v) |> app/tau_wire:inbound()
-        | user u |> observe-human(text: u) |> app/tau_wire:auth-ensure()
-            | ok |> loop(br, model, max_tokens, temperature, bound, fails: 0, silents: 0)
-            | failed m |> app/tau_wire:die(msg: m)
-        | init _ | app/tau_wire:die(msg: "second init line")
-        | result _ | app/tau_wire:die(msg: "result with no outstanding call")
-        | eof |> app/tau_wire:session-end()
-        | bad m |> app/tau_wire:die(msg: m)
-    | not-found s2 |> app/tau_wire:die(msg: s2)
+    |> seed() |> app/tau_wire:inbound()
+    | user u |> observe-human(text: u) |> app/tau_wire:auth-ensure()
+        | ok |> loop(br, model, max_tokens, temperature, bound, fails: 0, silents: 0)
+        | failed m |> app/tau_wire:die(msg: m)
+    | init _ | app/tau_wire:die(msg: "second init line")
+    | result _ | app/tau_wire:die(msg: "result with no outstanding call")
+    | eof |> app/tau_wire:session-end()
+    | bad m |> app/tau_wire:die(msg: m)
 | user _ | app/tau_wire:die(msg: "expected init line first")
 | result _ | app/tau_wire:die(msg: "result with no outstanding call")
 | eof |> app/tau_wire:die(msg: "stdin closed before init")

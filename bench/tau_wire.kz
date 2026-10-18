@@ -638,6 +638,7 @@ var rej_scope: u64 = 0;
 var rej_residue: u64 = 0;
 var rej_unhandled: u64 = 0;
 var rej_partial: u64 = 0;
+var rej_empty: u64 = 0;
 var n_defines: u64 = 0;
 var n_say: u64 = 0;
 var n_call: u64 = 0;
@@ -666,6 +667,7 @@ var total_c: i64 = 0;
     if (std.mem.eql(u8, kind, "residue")) rej_residue += 1;
     if (std.mem.eql(u8, kind, "unhandled")) rej_unhandled += 1;
     if (std.mem.eql(u8, kind, "partial")) rej_partial += 1;
+    if (std.mem.eql(u8, kind, "empty")) rej_empty += 1;
 }
 
 // A partial turn that contained wire failures (parse/validation/denied/
@@ -714,6 +716,21 @@ var observer_answered: bool = true;
     return .{ .strike = .{} };
 }
 
+// A model reply that carried zero bytes is not a refused program — nothing
+// reached the wire to refuse. Measured muse-spark-1.3-contributor
+// 2026-10-18: `reasoning:{"effort":"none"}` on a reasoning model routes the
+// whole reply to reasoning_content and content arrives empty; ten of those
+// read identically to ten parse errors in session.json unless they strike
+// as their own kind. The streak still counts toward the bound.
+~pub tor blank { n: usize }
+| empty
+| wire
+
+~proc blank|zig {
+    if (n == 0) return .{ .empty = .{} };
+    return .{ .wire = .{} };
+}
+
 // Residue items the bridge bound (report lines and turn-level messages both
 // carry "residue bound: rN") — prose the model emitted that never became an
 // invocation. Measured separately from rejections: the turn's verdict is
@@ -743,9 +760,10 @@ var observer_answered: bool = true;
     const alloc = std.heap.page_allocator;
     const path = std.fmt.allocPrint(alloc, "{s}/session.json", .{dir}) catch @panic("kopium: OOM");
     const body = std.fmt.allocPrint(alloc,
-        "{{\"model_calls\":{d},\"rejected_turns\":{d},\"silent_turns\":{d},\"rejections_by_kind\":{{\"parse-error\":{d},\"event-denied\":{d},\"validation-error\":{d},\"shape-error\":{d},\"exhausted\":{d},\"scope-not-found\":{d},\"residue\":{d},\"unhandled\":{d},\"partial\":{d}}},\"defines\":{d},\"outbound_say\":{d},\"outbound_call\":{d},\"residue_items\":{d},\"prompt_tokens\":{d},\"completion_tokens\":{d},\"usage_missing\":{d}}}",
+        "{{\"model_calls\":{d},\"rejected_turns\":{d},\"silent_turns\":{d},\"rejections_by_kind\":{{\"parse-error\":{d},\"event-denied\":{d},\"validation-error\":{d},\"shape-error\":{d},\"exhausted\":{d},\"scope-not-found\":{d},\"residue\":{d},\"unhandled\":{d},\"partial\":{d},\"empty\":{d}}},\"defines\":{d},\"outbound_say\":{d},\"outbound_call\":{d},\"residue_items\":{d},\"prompt_tokens\":{d},\"completion_tokens\":{d},\"usage_missing\":{d}}}",
         .{ n_model_calls, n_rejected, n_silent, rej_parse, rej_denied, rej_validation,
-           rej_shape, rej_exhausted, rej_scope, rej_residue, rej_unhandled, rej_partial, n_defines, n_say, n_call,
+           rej_shape, rej_exhausted, rej_scope, rej_residue, rej_unhandled, rej_partial,
+           rej_empty, n_defines, n_say, n_call,
            n_residue, total_p, total_c, n_usage_missing }) catch @panic("kopium: OOM");
     const f = std.fs.cwd().createFile(path, .{}) catch @panic("kopium: session.json create failed");
     defer f.close();
@@ -850,11 +868,10 @@ var observer_answered: bool = true;
 }
 
 // ============================================================================
-// THE REQUEST — no system message, no pushed anything. messages is the
-// transcript and only the transcript: history entries are comma-prefixed,
-// so the first entry loses its comma to open the array. The wire teaches
-// itself through the gate's own refusals; vocabulary()/grammar()/contract()
-// pull what the session contains.
+// THE REQUEST — the transcript verbatim as `messages`, whose first entry
+// is the system message the boot installs (the derived grammar render:
+// wire rules + vocabulary + defined flows). Entries are comma-prefixed,
+// so the first one loses its comma to open the array.
 // ============================================================================
 
 ~pub tor body { model: string, max_tokens: u32, temperature: string, history: string<*> } -> string
@@ -870,10 +887,18 @@ var observer_answered: bool = true;
     out.appendSlice(alloc, budget) catch @panic("kopium: OOM");
     out.appendSlice(alloc, ",\"temperature\":") catch @panic("kopium: OOM");
     out.appendSlice(alloc, temperature) catch @panic("kopium: OOM");
+    // KOPIUM_REASONING picks the reasoning effort; "none" OMITS the field —
+    // it is not an effort literal. Measured 2026-10-18: muse-spark on
+    // OpenRouter answers effort:"none" with zero-byte content every call;
+    // omitting the field restores the provider default (and matches what
+    // the stock arm sends). Historical CSVs recorded "none" while the wire
+    // sent the literal — the semantic was always "no opinion on reasoning".
     const effort = std.posix.getenv("KOPIUM_REASONING") orelse "medium";
-    out.appendSlice(alloc, ",\"reasoning\":{\"effort\":\"") catch @panic("kopium: OOM");
-    out.appendSlice(alloc, effort) catch @panic("kopium: OOM");
-    out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
+    if (!std.mem.eql(u8, effort, "none")) {
+        out.appendSlice(alloc, ",\"reasoning\":{\"effort\":\"") catch @panic("kopium: OOM");
+        out.appendSlice(alloc, effort) catch @panic("kopium: OOM");
+        out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
+    }
     // The toolcall channel: one tool, `koru`, whose `program` argument IS the
     // wire text. tool_choice required — every reply must arrive as a call.
     if (std.mem.eql(u8, std.posix.getenv("KOPIUM_CHANNEL") orelse "content", "toolcall")) {
