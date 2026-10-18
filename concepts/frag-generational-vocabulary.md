@@ -112,3 +112,49 @@ pairs grouped by handle id. And the residual arm's design answered its own
 question: a session cannot omit `bridge:close` (the bridge is itself a
 `<session!>` obligation), so a span left open is legible as exactly what
 it is — a death, not an oversight.
+
+2026-10-18 — **the selection leg exists elsewhere as a product; it hands over
+contract shapes, not scores.** Read google-research/harness2 `core/` end to
+end (~5.7k lines): a recursive-harnessing framework whose editable surface is
+a validated markdown tree (skills, subagents, scripts, always-on prompt), whose
+task loop is probe-then-compose (2k INV/DOM candidates rolled once each, k
+compositions from shared evidence), and whose improvement loop is a per-domain
+library of adopted trees + EXPERIENCE.md. Three shapes transfer directly to
+the promotion edge above:
+
+- **KEEP_BASE is a first-class verdict.** Their stages record `kept_base` /
+  `fell_back` explicitly — "adaptation the evidence does not argue for is a
+  failure." The kopium translation: a define that lands unstaged is the
+  fossilization bug. Promotion wants a gate, not a write path: define lands
+  *staged*, a pinned replay runs with/without the verb, the receipt diff
+  (turns, rejects, holds discharged) decides land-or-drop. Where their probe
+  costs model spend, ours runs on the canned model — the gate is mechanical.
+- **EXPERIENCE.md's required-fields contract.** `cue / lesson / evidence` —
+  missing any field, `add` refuses and nothing commits. That is the concrete
+  shape for this frag's open provenance edge (defined-by, earned-on,
+  use-count): a per-flow sidecar whose `cue` names the shape-of-situation the
+  verb fires on and whose `evidence` cites the replay receipt — required, or
+  the promotion does not land. Prose *about* the artifact, kept beside it;
+  the artifact itself stays a program.
+- **INV/DOM is `world/lib/` vs `world/agent/`.** Their two proposal
+  dimensions — invariant (works regardless of task) vs domain-specific —
+  are the namespacing split the runtime doc already anticipates for the
+  world directory.
+
+Where the read says kopium is ahead — scope-limiting, not comfort: their
+validator exists because the surface is markdown for a foreign runtime;
+"dropped SILENTLY at load" is a failure class they can only warn about,
+while a kopium define *refuses* at install. Their selector is an
+anonymizing LLM judge because candidates are prose; ours are programs, so
+the core of the gate is the compiler plus a receipt diff — an LLM judge is
+reserved for the taste edge, not the mechanical one. Their library carries
+whole-tree snapshots per task; the genome here is finer — one file per
+flow, cumulative. And their grader-scrubbing machinery
+(`assert_no_grader_verdicts`, `leak_globs`, `BenchPrompts` refusing
+measurement-vocabulary) is this repo's frame law built as code — which
+exposes a real gap: no equivalent audit exists on the wire path for
+bench-vocabulary leaking into the model's context. Their numbers exist;
+this leg's don't. This entry is a design confirmation, not a measurement —
+the gate is unbuilt and its dimensions (what a promotion replay pins
+against, where the staged area lives — `world/staging/` vs in-memory) are
+the open edges it leaves.
