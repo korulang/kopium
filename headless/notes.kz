@@ -364,10 +364,10 @@ var quiet: bool = false;
 // It holds no resource and mints no obligation: saying something is the one
 // verb here with nothing to clean up.
 
-~pub tor say { text: Source }
+~pub tor say { text: string }
 
 ~proc say|zig {
-    if (!$mod.quiet) std.debug.print("      {s}\n", .{text.text});
+    if (!$mod.quiet) std.debug.print("      {s}\n", .{text});
 }
 
 // ============================================================================

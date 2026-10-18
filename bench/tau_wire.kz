@@ -99,33 +99,6 @@ fn writeOut(line: []const u8) void {
     stdout.writeAll("\n") catch @panic("kopium: stdout write failed");
 }
 
-fn tauWireIdentStart(c: u8) bool {
-    return std.ascii.isAlphabetic(c) or c == '_';
-}
-
-fn tauWireIdentChar(c: u8) bool {
-    return std.ascii.isAlphanumeric(c) or c == '_' or c == '-';
-}
-
-fn tauIsInvocationHead(line: []const u8) bool {
-    if (std.mem.startsWith(u8, line, "|") or std.mem.startsWith(u8, line, "tor ")) return true;
-    var k: usize = 0;
-    if (k < line.len and !tauWireIdentStart(line[k])) return false;
-    while (k < line.len and tauWireIdentChar(line[k])) k += 1;
-    while (k < line.len and (line[k] == ' ' or line[k] == '\t')) k += 1;
-    return k < line.len and (line[k] == '(' or line[k] == ':');
-}
-
-fn tauIsColonHead(line: []const u8) bool {
-    var k: usize = 0;
-    if (k < line.len and !tauWireIdentStart(line[k])) return false;
-    while (k < line.len and tauWireIdentChar(line[k])) k += 1;
-    while (k < line.len and (line[k] == ' ' or line[k] == '\t')) k += 1;
-    if (k >= line.len or line[k] != ':') return false;
-    while (k < line.len and (line[k] == ' ' or line[k] == '\t')) k += 1;
-    return k < line.len;
-}
-
 // The declared name of a `tor NAME ...` line — the second whitespace token,
 // verbatim, however it spells (koru_std/bridge.session.kz defineName).
 fn tauDefineName(line: []const u8) []const u8 {
@@ -197,18 +170,10 @@ fn tauTurnItemCount(source: []const u8) usize {
     var in_string: ?u8 = null;
     var in_define = false;
     var define_name: []const u8 = "";
-    var in_colon = false;
     while (i <= source.len) : (i += 1) {
         if (i != source.len and source[i] != '\n') continue;
         const raw = source[line_start..i];
         const line = std.mem.trim(u8, raw, " \t\r");
-        const ends_colon = in_colon and line.len > 0 and tauIsInvocationHead(line);
-        if (ends_colon) {
-            paren = 0;
-            brace = 0;
-            bracket = 0;
-            in_string = null;
-        }
         const depth_open = paren + brace + bracket;
         const in_str = in_string != null;
         tauScanLineChars(raw, &paren, &brace, &bracket, &in_string);
@@ -218,18 +183,9 @@ fn tauTurnItemCount(source: []const u8) usize {
         }
         if (cur_start == null) {
             cur_start = line_start;
-            in_colon = !in_define and tauIsColonHead(line);
             if (std.mem.startsWith(u8, line, "tor ")) {
                 in_define = true;
                 define_name = tauDefineName(line);
-            }
-        } else if (in_colon) {
-            if (ends_colon) {
-                count += 1;
-                cur_start = line_start;
-                in_colon = tauIsColonHead(line);
-                in_define = std.mem.startsWith(u8, line, "tor ");
-                if (in_define) define_name = tauDefineName(line);
             }
         } else if (!in_str and depth_open == 0 and !std.mem.startsWith(u8, line, "|")) {
             if (in_define and tauIsImplHead(line, define_name)) {
@@ -237,7 +193,6 @@ fn tauTurnItemCount(source: []const u8) usize {
             } else {
                 count += 1;
                 cur_start = line_start;
-                in_colon = tauIsColonHead(line);
                 if (std.mem.startsWith(u8, line, "tor ")) {
                     in_define = true;
                     define_name = tauDefineName(line);
@@ -683,8 +638,8 @@ var total_c: i64 = 0;
     return .{ .clean = .{} };
 }
 
-// A residue turn the agent aimed at the observer (`note(...)`/`note:` that
-// didn't parse as wire) is the elicited answer, not a rejected reply —
+// A residue turn the agent aimed at the observer (a `note`-headed item
+// that didn't parse as wire) is the elicited answer, not a rejected reply —
 // striking it would punish answering the question we asked. But the
 // exemption is one answer per edge question, not per turn: a model that
 // keeps emitting the same unparseable note is the refusal loop the bound
@@ -695,10 +650,10 @@ var total_c: i64 = 0;
 var observer_answered: bool = true;
 
 // Nothing non-wire reaches the user. Implicit-say — the harness emitting
-// `say: <prose>` on the model's behalf — made refused prose look like a
+// say(...) on the model's behalf — made refused prose look like a
 // working surface: the simulator answered "I'll retrieve your details"
 // turns as if progress happened, so the model never felt pressure to spell
-// `say:` or `verb(...)`. Every residue now strikes; the report quotes the
+// `say(...)` or `verb(...)`. Every residue now strikes; the report quotes the
 // offense and names the real channels. Observer-flagged residue (note
 // attempts, repeat notes after an answered edge) gets one observer answer
 // first. A residue verdict carrying no prose — a mixed multi-item turn —

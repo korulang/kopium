@@ -292,7 +292,7 @@ drive = app/tau_wire:channel()
 // e.g. a reasoning model muted by effort:none), and the strike lands under
 // its own kind so session.json separates silence from malformed wire.
 tor empty-reply {}
-empty-reply = observe(role: "user", text: "your reply carried no wire — emit wire text: `say:` reaches the user, `note:` thinks, `verb(field: ...)` calls; `vocabulary()` lists every verb")
+empty-reply = observe(role: "user", text: "your reply carried no wire — emit wire text: `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls; `vocabulary()` lists every verb")
     |> app/tau_wire:count-rejection(kind: "empty")
 
 // The toolcall reply carried no koru program — a rejected turn, observed
@@ -335,7 +335,7 @@ loop = clear-reply()
             | stop |> app/tau_wire:session-end() |> std/io:eprint.ln("--- eof, session ends")
             | again |> app/tau_wire:bump-fail(n: silents, bound)
                 | edge nf |> std/fmt:fmt.blk {
-                    observer: {{ nf:d }} consecutive replies reached nobody. `say:` reaches the user, `note:` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what are you waiting for?
+                    observer: {{ nf:d }} consecutive replies reached nobody. `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what are you waiting for?
                 }: m |> observe(role: "user", text: m)
                     |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
                 | retry nf |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
@@ -344,7 +344,7 @@ loop = clear-reply()
         | yes |> app/tau_wire:session-end()
         | no |> app/tau_wire:bump-fail(n: fails, bound)
             | edge nf |> std/fmt:fmt.blk {
-                observer: {{ nf:d }} consecutive refused replies. `say:` reaches the user, `note:` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what were you trying to do?
+                observer: {{ nf:d }} consecutive refused replies. `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what were you trying to do?
             }: m |> observe(role: "user", text: m)
                 |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
             | retry nf |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
@@ -360,7 +360,7 @@ clear-reply = std/store:query(reply)
 // splicing its own result into the signoff). The vocabulary itself is not
 // here: it lives in the system message, given, never fetched.
 tor seed {}
-seed = observe(role: "assistant", text: "note: user confirmed; the certificate covers the fare.\nget-user-details(user_id: \"example_user_0\") | ok u |> book-reservation(user_id: u.user_id, flights: r9.flights, payment_methods: [{payment_id: \"example_cert_0\", amount: 250}], total_baggages: 3, nonfree_baggages: 0, insurance: \"no\") | ok b |> say(text: \"Booked {{ b.reservation_id }} — your flight is confirmed, {{ b.cabin }}.\")")
+seed = observe(role: "assistant", text: "note(text: user confirmed; the certificate covers the fare.)\nget-user-details(user_id: \"example_user_0\") | ok u |> book-reservation(user_id: u.user_id, flights: r9.flights, payment_methods: [{payment_id: \"example_cert_0\", amount: 250}], total_baggages: 3, nonfree_baggages: 0, insurance: \"no\") | ok b |> say(text: \"Booked {{ b.reservation_id }} — your flight is confirmed, {{ b.cabin }}.\")")
 
 // Boot: the system message never enters the transcript — `ask` splices a
 // fresh `std/bridge:grammar` render ahead of the history on every turn, so

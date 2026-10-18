@@ -1,6 +1,8 @@
-// PROBE — can say's text field take a bound name / bound field as its value?
-//   read | ok t |> say(text: t)   — whole bound value as text
-// and can it compose?  say(text: "the file says {{ t }}") — literal today?
+// PROBE — say's text field (a plain string now) takes a bound name,
+// interpolates {{ name }} / {{ name.field }}, refuses unbound names, and
+// passes literal braces through. The "colon-form" row is the deleted
+// spelling in chain-step position — it should stay silent (cataloged
+// swallow, 2026-10-18-colon-in-chain) until the step parser refuses it.
 import std/bridge
 import std/io
 import app/notes

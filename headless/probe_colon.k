@@ -1,3 +1,8 @@
+// PROBE — the one-spelling wire: `verb:` colon lines refuse as residue
+// (bare-colon, colon-nobrace, colon-interp rows) while canonical
+// verb(field: "...") dispatch, {{ }} interpolation, and failure-arm
+// say all still fire. The chain-step `|> say: x` swallow is the
+// cataloged gap — challenges/bridge-mirror/2026-10-18-colon-in-chain.md.
 import std/bridge
 import std/io
 import app/notes

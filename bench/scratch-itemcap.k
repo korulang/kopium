@@ -17,6 +17,7 @@ std/runtime:register(scope: "tcap") {
 }
 
 // A `note: storm` line repeated n times — the 2026-10-11 task-10 wedge shape.
+// Colon form is deleted (2026-10-18): each line is its own residue item.
 tor storm-src { n: i64 } -> string
 proc storm-src|zig {
     const a = @import("std").heap.page_allocator;
@@ -51,8 +52,8 @@ real = std/bridge:run(br, source)
 [with]std/bridge:create(id: "tcap", scope: "tcap", introspection: true): br
 |> check(label: "pings3", source: "ping(n: 1)\nping(n: 2)\nping(n: 3)")
 |> real(br, label: "pings3", source: "ping(n: 1)\nping(n: 2)\nping(n: 3)")
-|> check(label: "colonblock", source: "note: first line\nmore prose here\nping(n: 1)")
-|> real(br, label: "colonblock", source: "note: first line\nmore prose here\nping(n: 1)")
+|> check(label: "proseblock", source: "note: first line\nmore prose here\nping(n: 1)")
+|> real(br, label: "proseblock", source: "note: first line\nmore prose here\nping(n: 1)")
 |> check(label: "implhead-space", source: "tor foo\nfoo bar\nping(n: 1)")
 |> real(br, label: "implhead-space", source: "tor foo\nfoo bar\nping(n: 1)")
 |> check(label: "annotated-tor", source: "tor foo[x]\nfoo = ping(n: 1)\nping(n: 2)")

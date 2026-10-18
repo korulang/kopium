@@ -13,8 +13,8 @@ tags: [kopium, wire, interpolation, say, bridge, grammar]
 
 Every invocation argument flows `evaluateExpr` before dispatch
 (`interpreter.run.kz` ~line 784), so one substitution point in the
-quoted-string branch covers every verb and every field type — string,
-Source, Expression alike. `{{ name }}` and `{{ name.field }}` inside a wire
+quoted-string branch covers every verb and every field type — string and
+Expression alike. `{{ name }}` and `{{ name.field }}` inside a wire
 string splice the bound value's text; a name nobody bound refuses with a
 named dispatch-error that teaches `| ok name |>`; `{{` that does not open a
 dotted identifier stays literal, so prose may carry braces. fmt's `:s`
@@ -27,12 +27,19 @@ call. The armed-signoff pattern — `call | ok b |> say(text: "...{{ b.x }}")` �
 is now expressible, and the seed teaches it: the signoff rides the arm,
 conditioned on what the dispatch actually did, in one model call.
 
-The measured boundary: colon form `say: prose` is a reply-item rule
-(runtime.wirescan.kz) and in chain-step position after `|>` it silently
-drops — no dispatch, no rejection, `result` reported (catalog:
-bridge-mirror/2026-10-18-colon-in-chain). Paren form in step position is
-the honest spelling; until the toolchain rules, `say:` outside item-head
-position is a trap.
+Same-day correction, second ruling: the wire has ONE spelling —
+`verb(field: value)`. The colon form `say: prose` is deleted end to end
+(segmenter, scanner, grammar text, teaching); a colon-headed line now
+binds as residue and `440_046` pins the refusal. `Source` is purged from
+wire scope entirely: it is the language's comptime source-fragment type
+(ast.zig — "captured source code"), never a prose field type — `say`,
+`note`, `bind` carry plain `string`, and `{{ }}` makes quoting sufficient.
+`Expression` remains the bare-capture hook for fields whose value is
+expression-shaped (`calc(expr: 2 + 3)`, airline composites `[{...}]`) —
+it is the same ast.zig comptime-only family and Lars has not ruled it
+clean. The surviving gap is positional: `|> say: x` in a chain step still
+silently drops (catalog: bridge-mirror/2026-10-18-colon-in-chain) — the
+program parser's bug, not the item scanner's.
 
 Supersedes-in-part the stale clause in frag-the-harness-delivers-bound-prose
 ("Source captures literally — a bare name in that position is text"): bare
