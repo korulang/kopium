@@ -34,10 +34,16 @@ binds as residue and `440_046` pins the refusal. `Source` is purged from
 wire scope entirely: it is the language's comptime source-fragment type
 (ast.zig — "captured source code"), never a prose field type — `say`,
 `note`, `bind` carry plain `string`, and `{{ }}` makes quoting sufficient.
-`Expression` remains the bare-capture hook for fields whose value is
-expression-shaped (`calc(expr: 2 + 3)`, airline composites `[{...}]`) —
-it is the same ast.zig comptime-only family and Lars has not ruled it
-clean. The chain-step trap is also closed: `|> say: x` silently parsed as
+~~`Expression` remains the bare-capture hook~~ — **ruled clean
+2026-10-18, same day**: `Expression` joins `Source` off the wire. A bare
+value position is now a real Koru expression — parsed by the language's
+own `ExpressionParser`, evaluated against session/arm bindings
+(`calc(expr: 2 + 3)` binds i64 5; `n * 2`, `r3.total > 50`, `q - 1`
+work). There is no capture channel and no type-directed admission:
+`string` fields take `"quoted"` text (airline composites are escaped
+JSON), bare values are expressions the evaluator judges, and text that
+parses but can't evaluate refuses. `Source`/`Expression` keep their real
+comptime jobs in the language; on the wire they are nothing. The chain-step trap is also closed: `|> say: x` silently parsed as
 a branch constructor named `say:` in flow_parser — now a named
 `MalformedNode` parse-error, pinned by `440_048` (catalog:
 bridge-mirror/2026-10-18-colon-in-chain).
