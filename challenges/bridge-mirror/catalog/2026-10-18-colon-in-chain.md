@@ -9,23 +9,21 @@ scope with `say { text: string }` after the same-day colon-form deletion):
 | position | wire | outcome |
 |---|---|---|
 | reply line — `say: hello colon world` | **residue** (was: admitted) — the colon form is gone; `440_046` pins the refusal | refused loudly |
-| chain step — `read(...) \| ok t \|> say: plain colon no braces` | **silently absent**: the read fires, no say output, no rejection, no residue — branch `result` | **gap** |
-| chain step — `read(...) \| ok t \|> say: the file held {{ t }}` | identical silence — the `{{ }}` never gets a chance | **gap** |
+| chain step — `read(...) \| ok t \|> say: plain colon no braces` | **silently absent** at measure time — now **`refused: MalformedNode`** (`440_048`) | fixed |
+| chain step — `read(...) \| ok t \|> say: the file held {{ t }}` | identical silence — now `MalformedNode` | fixed |
 | chain step, paren — `read(...) \| ok t \|> say(text: "…{{ t }}…")` | prints interpolated prose | supported |
 
-## Dispositions
+## Dispositions — resolved same day
 
-- Same-day status change: the colon form is **deleted** — `verb:` prose is
-  residue at reply level now (`440_046` pins it), so a model cannot learn
-  the spelling from the grammar at all. What remains is the step-position
-  half of the bug: `|> say: x` still parses silently — the program parser
-  reads it as a zero-arg invocation with a `: x` bind and drops the rest.
-  The gap narrowed (nobody's taught the spelling anymore) but the swallow
-  is still real: a model that reinvents `verb:` inside a chain loses its
-  step invisibly.
-- Float to the compiler session: `verb: <anything>` after `|>` must refuse
-  loudly — `:` in step position should be a named parse-error, not a
-  silent bind-and-drop. (The reply-level admission it depended on is gone;
-  there is no colon spelling to admit at any position.)
+- The colon form is **deleted** — `verb:` prose is residue at reply level
+  (`440_046` pins it), so a model cannot learn the spelling at all.
+- The step-position half is **fixed**: `flow_parser`'s `parseNode` took
+  `say: the prose` down its "branch constructor with plain value" path —
+  a loose first-char check let `say:` ride in as a branch name, so the
+  step became a label and never dispatched. The guard now requires a
+  plain branch name, `say:` fails it, and the step dies as a named
+  parse-error (`MalformedNode`) the model can see. Pinned red by
+  `440_048_colon_in_chain_step_is_refused`: the same wire also proves the
+  canonical `|> say(text: "...{{ t }}")` step still dispatches.
 
-Would correct this row: the step refuses `say: x` with a named refusal.
+This row is corrected: the step refuses `say: x` with a named refusal.

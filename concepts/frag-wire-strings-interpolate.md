@@ -37,9 +37,10 @@ wire scope entirely: it is the language's comptime source-fragment type
 `Expression` remains the bare-capture hook for fields whose value is
 expression-shaped (`calc(expr: 2 + 3)`, airline composites `[{...}]`) —
 it is the same ast.zig comptime-only family and Lars has not ruled it
-clean. The surviving gap is positional: `|> say: x` in a chain step still
-silently drops (catalog: bridge-mirror/2026-10-18-colon-in-chain) — the
-program parser's bug, not the item scanner's.
+clean. The chain-step trap is also closed: `|> say: x` silently parsed as
+a branch constructor named `say:` in flow_parser — now a named
+`MalformedNode` parse-error, pinned by `440_048` (catalog:
+bridge-mirror/2026-10-18-colon-in-chain).
 
 Supersedes-in-part the stale clause in frag-the-harness-delivers-bound-prose
 ("Source captures literally — a bare name in that position is text"): bare
