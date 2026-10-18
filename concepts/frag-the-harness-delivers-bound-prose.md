@@ -124,3 +124,13 @@ through a working wire (task 7 communicates $708 where $1,628 is expected;
 task 18 pins `gift_card_3481935` as payment_id on all five refunds; task 23
 stalls re-asking confirmation instead of dispatching the three bookings).
 None are wire deaths; every rejected turn is legible in session.json.
+
+## Evolved 2026-10-18 — the colon form itself is deleted
+
+The construct this fragment tracked — `verb: prose` admitted at line head —
+is gone. Lars ruled the second spelling itself the defect: either the wire
+calls `tor`s or it cannot. `say:`/`note:`/generic `verb:` lines now bind
+residue (`440_046` pins it); `say`'s `text` is a plain `string` and
+`{{ }}` interpolation covers the composition the colon form was spared
+for. What survives: the program parser still silently drops `|> say: x`
+in chain-step position (catalog: bridge-mirror/2026-10-18-colon-in-chain).
