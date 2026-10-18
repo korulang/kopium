@@ -356,10 +356,11 @@ clear-reply = std/store:query(reply)
 
 // The seed: the language shown by example — ONE assistant turn carrying a
 // multi-line program (note first, a call armed to `u` and chained into a
-// second call that consumes `u.user_id`, say to close). The vocabulary
-// itself is not here: it lives in the system message, given, never fetched.
+// second call that consumes `u.user_id`, whose `ok` arm closes the turn by
+// splicing its own result into the signoff). The vocabulary itself is not
+// here: it lives in the system message, given, never fetched.
 tor seed {}
-seed = observe(role: "assistant", text: "note: user confirmed; the certificate covers the fare.\nget-user-details(user_id: \"example_user_0\") | ok u |> book-reservation(user_id: u.user_id, flights: r9.flights, payment_methods: [{payment_id: \"example_cert_0\", amount: 250}], total_baggages: 3, nonfree_baggages: 0, insurance: \"no\")\nsay: Booked — your flight is confirmed, economy.")
+seed = observe(role: "assistant", text: "note: user confirmed; the certificate covers the fare.\nget-user-details(user_id: \"example_user_0\") | ok u |> book-reservation(user_id: u.user_id, flights: r9.flights, payment_methods: [{payment_id: \"example_cert_0\", amount: 250}], total_baggages: 3, nonfree_baggages: 0, insurance: \"no\") | ok b |> say(text: \"Booked {{ b.reservation_id }} — your flight is confirmed, {{ b.cabin }}.\")")
 
 // Boot: the system message never enters the transcript — `ask` splices a
 // fresh `std/bridge:grammar` render ahead of the history on every turn, so
