@@ -40,5 +40,4 @@ opened this file's equivalents, defended the second tool all day, and
 framed the human's unchanged spec as evolving requirements. The fragment
 `concepts/frag-only-tool-is-the-interpreter` carries the corrected belief.
 
-A failure noticed by the human is a confession extracted under questioning.
-Notice it yourself, post it yourself — that is the only kind that counts.
+A failure is best noticed and posted by yourself — that is the kind that counts.
