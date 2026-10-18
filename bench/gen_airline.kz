@@ -4,9 +4,9 @@
 // by dump_airline_schema.py (transport only: it serializes what tau2
 // already hands stock agents and makes no vocabulary decision). Every
 // semantic choice lives HERE: the schema-type -> wire-type mapping
-// (composites become Expression — captured raw JSON admitted bare or
-// "quoted"; a string param named `expression` becomes Expression — math
-// text admitted bare), the underscore->hyphen name map, write-vs-read
+// (composites become `string` — JSON text carried "quoted" on the wire;
+// a string param named `expression` stays `string` — math text quoted),
+// the underscore->hyphen name map, write-vs-read
 // costs, doc wording, the register block, the emitted proc plumbing.
 //
 // name<x> possession types are deliberately NOT emitted — the
@@ -62,11 +62,11 @@ fn hyphenate(n: []const u8, buf: []u8) []const u8 {
 }
 
 // The wire-type ruling: JSON-schema type -> declared Koru field type.
-// Composite params (arrays, objects, $ref/anyOf shapes) are Expression —
-// the wire captures the literal text, so `flights: [{...}]` writes bare.
-// A string param named `expression` is Expression — bare math text.
-// Scalars keep their strict types: bare prose on a `string` field still
-// refuses.
+// Composite params (arrays, objects, $ref/anyOf shapes) are `string` —
+// the wire carries them "quoted" as JSON text. A string param named
+// `expression` stays `string` — quoted math text. Scalars keep their
+// strict types; a bare value must be a Koru expression the evaluator
+// judges — bare prose on a `string` field refuses.
 const Kind = enum { str, int, num, boolean, source, expr };
 
 fn fieldKind(name: []const u8, prop: *yyj.Value) Kind {
@@ -90,8 +90,8 @@ fn koruType(k: Kind) []const u8 {
         .int => "i64",
         .num => "f64",
         .boolean => "bool",
-        .source => "Expression",
-        .expr => "Expression",
+        .source => "string",
+        .expr => "string",
     };
 }
 
@@ -126,7 +126,7 @@ fn emitShape(name: []const u8, prop: *yyj.Value, defs: ?*yyj.Value) bool {
     const d = defs orelse return false;
     const shape = jget(d, ref["#/$defs/".len..]) orelse return false;
     const sprops = jget(shape, "properties") orelse return false;
-    putf(&docs_out, "  {s}: Expression — array/object, bare or \"quoted\"; bare record keys (k: v) normalize to JSON — {{", .{name});
+    putf(&docs_out, "  {s}: string — array/object as \"quoted\" JSON text — {{", .{name});
     var oi: yyj.c.yyjson_obj_iter = undefined;
     var first = true;
     if (yyj.c.yyjson_obj_iter_init(sprops, &oi)) {
@@ -193,9 +193,9 @@ fn emitTool(v: *yyj.Value) void {
 
     // proc — serializes inputs to the tau2 JSON args object, emits the
     // outbound CALL line under this tor's own tau2 name, blocks for the
-    // result. Expression fields splice the captured text through
-    // __jsonKeys — bare record keys normalize to JSON so the wire stays
-    // Koru-shaped.
+    // result. JSON-text fields splice the quoted payload through
+    // __jsonKeys — bare record keys still normalize to JSON if the model
+    // writes them, so the wire stays Koru-shaped.
     putf(&tors_out, "~proc {s}|zig {{\n    const __W = @import(\"root\").koru_app.koru_tau_wire;\n", .{kname});
     if (nf == 0) {
         putf(&tors_out, "    return __W.callIO(\"{s}\", \"{{}}\");\n}}\n\n", .{name});
@@ -245,7 +245,7 @@ fn emitTool(v: *yyj.Value) void {
     putf(&reg_out, "    {s}({d})\n", .{ kname, if (write) @as(u8, 10) else 1 });
 
     // doc block — derived from schema; declared wire types shown for the
-    // captured fields (Expression), schema types for scalars.
+    // JSON-text fields (string), schema types for scalars.
     const desc = std.mem.trim(u8, jstr(jget(func, "description")), " \n\t");
     putf(&docs_out, "{s} — {s}\n", .{ kname, desc });
     for (fields[0..nf]) |f| {
@@ -253,14 +253,14 @@ fn emitTool(v: *yyj.Value) void {
             .source => {
                 if (!emitShape(f.name, f.prop, defs)) {
                     const t = jstr(jget(f.prop, "type"));
-                    putf(&docs_out, "  {s}: Expression — JSON {s}, bare or \"quoted\"; bare record keys (k: v) normalize to JSON", .{ f.name, if (t.len != 0) t else "value" });
+                    putf(&docs_out, "  {s}: string — JSON {s}, \"quoted\"", .{ f.name, if (t.len != 0) t else "value" });
                     const pd = std.mem.trim(u8, jstr(jget(f.prop, "description")), " \n\t");
                     if (pd.len != 0) putf(&docs_out, " — {s}", .{pd});
                     put(&docs_out, "\n");
                 }
             },
             .expr => {
-                putf(&docs_out, "  {s}: Expression — bare math/expression text", .{f.name});
+                putf(&docs_out, "  {s}: string — math/expression text, \"quoted\"", .{f.name});
                 const pd = std.mem.trim(u8, jstr(jget(f.prop, "description")), " \n\t");
                 if (pd.len != 0) putf(&docs_out, " — {s}", .{pd});
                 put(&docs_out, "\n");
@@ -335,9 +335,9 @@ const GENERATED_HEADER =
     \\//
     \\// Field types are type-directed: scalars map straight (integer ->
     \\// i64, number -> f64, boolean -> bool); composite params are
-    \\// Expression — the wire captures raw JSON text, admitted bare
-    \\// (flights: [{...}]) or "quoted"; a string param named `expression`
-    \\// is Expression — math text admitted bare. Captured fields splice
+    \\// `string` — JSON text carried "quoted" on the wire
+    \\// (flights: \"[{...}]\"); a string param named `expression`
+    \\// is `string` — math text quoted. JSON-text fields splice
     \\// through __jsonKeys (bare record keys -> quoted) into the
     \\// args JSON so real arrays reach tau2's typed executor.
     \\//
@@ -382,12 +382,11 @@ const GENERATED_HEADER =
     \\    return buf[0..i];
     \\}
     \\
-    \\// Normalize captured Expression text for splicing into the args JSON:
+    \\// Normalize JSON-text fields for splicing into the args JSON:
     \\// quote a bare identifier sitting in object-key position (right
-    \\// after `{` or `,` outside strings). The wire's own record
-    \\// spelling `{flight_number: "HAT028"}` is legal Koru — the
-    \\// marshal translates it; tau2's JSON quoting never reaches the
-    \\// model's surface. Everything else copies verbatim.
+    \\// after `{` or `,` outside strings), in case the model wrote
+    \\// record-style keys inside the quoted payload. Everything else
+    \\// copies verbatim.
     \\fn __jsonKeys(s: []const u8, buf: []u8) []const u8 {
     \\    var i: usize = 0;
     \\    var r: usize = 0;
@@ -469,11 +468,10 @@ const DOC_PREAMBLE =
     \\
     \\Every entry below is translated verbatim from the tool schema the
     \\stock interface advertises (descriptions, types, enums, nested field
-    \\shapes). An `Expression` field takes its text bare — an
-    \\array/object (`flights: [{...}]`, record keys `k: v` normalize to
-    \\JSON) or math text (`calculate(expression: 2 + 2)`) — and quotes it
-    \\when the text carries a comma, a `)`, or a newline. Scalar strings
-    \\still need "double quotes".
+    \\shapes). Composite and math fields are `string` — carry the payload
+    \\as "quoted" JSON/expression text, escaping inner quotes
+    \\(`flights: \"[{...}]\"`, `calculate(expression: \"2 + 2\")`). Scalar
+    \\strings need "double quotes" too; bare values are Koru expressions.
     \\
     \\say(text: string) — the voice channel: what the user hears. Always
     \\"quoted" — {{ }} inside splices bound values into the line.

@@ -2,11 +2,10 @@
 
 Every entry below is translated verbatim from the tool schema the
 stock interface advertises (descriptions, types, enums, nested field
-shapes). An `Expression` field takes its text bare — an
-array/object (`flights: [{...}]`, record keys `k: v` normalize to
-JSON) or math text (`calculate(expression: 2 + 2)`) — and quotes it
-when the text carries a comma, a `)`, or a newline. Scalar strings
-still need "double quotes".
+shapes). Composite and math fields are `string` — carry the payload
+as "quoted" JSON/expression text, escaping inner quotes
+(`flights: \"[{...}]\"`, `calculate(expression: \"2 + 2\")`). Scalar
+strings need "double quotes" too; bare values are Koru expressions.
 
 say(text: string) — the voice channel: what the user hears. Always
 "quoted" — {{ }} inside splices bound values into the line.
@@ -17,15 +16,15 @@ book-reservation — Book a reservation.
   destination: string — The IATA code for the destination city such as 'JFK'.
   flight_type: string — one of round_trip | one_way — The type of flight such as 'one_way' or 'round_trip'.
   cabin: string — one of business | economy | basic_economy — The cabin class such as 'basic_economy', 'economy', or 'business'.
-  flights: Expression — array/object, bare or "quoted"; bare record keys (k: v) normalize to JSON — {flight_number: string — Flight number, such as 'HAT001'.; date: string — The date for the flight in the format 'YYYY-MM-DD', such as '2024-05-01'.}
-  passengers: Expression — array/object, bare or "quoted"; bare record keys (k: v) normalize to JSON — {first_name: string — Passenger's first name; last_name: string — Passenger's last name; dob: string — Date of birth in YYYY-MM-DD format}
-  payment_methods: Expression — array/object, bare or "quoted"; bare record keys (k: v) normalize to JSON — {payment_id: string — Unique identifier for the payment; amount: integer — Payment amount in dollars}
+  flights: string — array/object as "quoted" JSON text — {flight_number: string — Flight number, such as 'HAT001'.; date: string — The date for the flight in the format 'YYYY-MM-DD', such as '2024-05-01'.}
+  passengers: string — array/object as "quoted" JSON text — {first_name: string — Passenger's first name; last_name: string — Passenger's last name; dob: string — Date of birth in YYYY-MM-DD format}
+  payment_methods: string — array/object as "quoted" JSON text — {payment_id: string — Unique identifier for the payment; amount: integer — Payment amount in dollars}
   total_baggages: integer — The total number of baggage items to book the reservation.
   nonfree_baggages: integer — The number of non-free baggage items to book the reservation.
   insurance: string — one of yes | no — Whether the reservation has insurance.
 
 calculate — Calculate the result of a mathematical expression.
-  expression: Expression — bare math/expression text — The mathematical expression to calculate, such as '2 + 2'. The expression can contain numbers, operators (+, -, *, /), parentheses, and spaces.
+  expression: string — math/expression text, "quoted" — The mathematical expression to calculate, such as '2 + 2'. The expression can contain numbers, operators (+, -, *, /), parentheses, and spaces.
 
 cancel-reservation — Cancel the whole reservation.
   reservation_id: string — The reservation ID, such as 'ZFA04Y'.
@@ -72,10 +71,10 @@ update-reservation-baggages — Update the baggage information of a reservation.
 update-reservation-flights — Update the flight information of a reservation.
   reservation_id: string — The reservation ID, such as 'ZFA04Y'.
   cabin: string — one of business | economy | basic_economy — The cabin class of the reservation
-  flights: Expression — array/object, bare or "quoted"; bare record keys (k: v) normalize to JSON — {flight_number: string — Flight number, such as 'HAT001'.; date: string — The date for the flight in the format 'YYYY-MM-DD', such as '2024-05-01'.}
+  flights: string — array/object as "quoted" JSON text — {flight_number: string — Flight number, such as 'HAT001'.; date: string — The date for the flight in the format 'YYYY-MM-DD', such as '2024-05-01'.}
   payment_id: string — The payment id stored in user profile, such as 'credit_card_7815826', 'gift_card_7815826', 'certificate_7815826'.
 
 update-reservation-passengers — Update the passenger information of a reservation.
   reservation_id: string — The reservation ID, such as 'ZFA04Y'.
-  passengers: Expression — array/object, bare or "quoted"; bare record keys (k: v) normalize to JSON — {first_name: string — Passenger's first name; last_name: string — Passenger's last name; dob: string — Date of birth in YYYY-MM-DD format}
+  passengers: string — array/object as "quoted" JSON text — {first_name: string — Passenger's first name; last_name: string — Passenger's last name; dob: string — Date of birth in YYYY-MM-DD format}
 
