@@ -46,10 +46,10 @@ signal only as failure deepens, and no rung rescues the run.
   2026-10-18**: `Source` was never a prose type; it is the language's
   comptime source-fragment type (`ast.zig`, "captured source code"), and
   declaring prose fields `Source` was the bastardization. The purge:
-  `say`/`note`/`bind` carry `string`; only `Expression` fields keep
-  bare-text admission (`calc(expr: 2 + 3)`, airline composites `[{...}]`),
-  and its survival is itself unruled — same comptime-only family
-  (`ast.zig:488`). `name<x>` possession typing stays as the real
+  `say`/`note`/`bind` carry `string` — and **ruled later that day**,
+  `Expression` fields are `string` too: the wire has no capture channel;
+  a bare value is a real Koru expression evaluated against the bindings,
+  composites carry "quoted" JSON text. `name<x>` possession typing stays as the real
   type-directed admission.
 - ~~A permanently-free observer lane can theoretically loop forever~~ —
   proven twice, and the second proof is the sharper one. Task 28
