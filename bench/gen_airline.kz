@@ -221,15 +221,20 @@ fn emitTool(v: *yyj.Value) void {
         };
         dlen += 1;
     }
+    // Every tool tor declares two outcomes: `ok` for a dispatched result,
+    // `error` for tau2's raised failure (the marshal forwards the env's
+    // error flag). An error can never bind inside an `ok` arm — an unarmed
+    // `error` outcome stops the reply as unhandled-branch, and a model that
+    // wants to act on a failure must write `| error e |>` on purpose.
     if (nf == 0) {
-        putf(&tors_out, "[\n- doc\n{s}\n]\npub tor {s} {{}} -> string\n\n", .{ dbuf[0..dlen], kname });
+        putf(&tors_out, "[\n- doc\n{s}\n]\npub tor {s} {{}}\n| ok string\n| error string\n\n", .{ dbuf[0..dlen], kname });
     } else {
         putf(&tors_out, "[\n- doc\n{s}\n]\npub tor {s} {{ ", .{ dbuf[0..dlen], kname });
         for (fields[0..nf], 0..) |f, i| {
             if (i != 0) put(&tors_out, ", ");
             putf(&tors_out, "{s}: {s}", .{ f.name, koruType(f.kind) });
         }
-        put(&tors_out, " } -> string\n\n");
+        put(&tors_out, " }\n| ok string\n| error string\n\n");
     }
 
     // proc — serializes inputs to the tau2 JSON args object, emits the
@@ -239,7 +244,7 @@ fn emitTool(v: *yyj.Value) void {
     // writes them, so the wire stays Koru-shaped.
     putf(&tors_out, "proc {s}|zig {{\n    const __W = @import(\"root\").koru_app.koru_tau_wire;\n", .{kname});
     if (nf == 0) {
-        putf(&tors_out, "    return __W.callIO(\"{s}\", \"{{}}\");\n}}\n\n", .{name});
+        putf(&tors_out, "    const __r = __W.callIO(\"{s}\", \"{{}}\");\n    if (__r.err) return .{{ .error = __r.content }};\n    return .{{ .ok = __r.content }};\n}}\n\n", .{name});
     } else {
         var buf: usize = 1024;
         for (fields[0..nf]) |f| {
@@ -279,7 +284,7 @@ fn emitTool(v: *yyj.Value) void {
                 },
             }
         }
-        putf(&tors_out, "    const __args = std.fmt.bufPrint(&__S.buf,\n        \"{{{{{s}}}}}\",\n        .{{ {s} }}) catch @panic(\"kopium: {s} args exceed scratch\");\n    return __W.callIO(\"{s}\", __args);\n}}\n\n", .{ fmtbuf.items, argbuf.items, name, name });
+        putf(&tors_out, "    const __args = std.fmt.bufPrint(&__S.buf,\n        \"{{{{{s}}}}}\",\n        .{{ {s} }}) catch @panic(\"kopium: {s} args exceed scratch\");\n    const __r = __W.callIO(\"{s}\", __args);\n    if (__r.err) return .{{ .error = __r.content }};\n    return .{{ .ok = __r.content }};\n}}\n\n", .{ fmtbuf.items, argbuf.items, name, name });
     }
 
     // register line — WRITE tools cost more (commitment vs read).
@@ -397,8 +402,11 @@ const GENERATED_HEADER =
     \\//
     \\// Each proc IS the southbound effect: it emits the outbound CALL
     \\// line with its own tau2 schema name baked in and blocks on stdin
-    \\// for the matching result, which becomes the proc's return value
-    \\// (auto-bound r{N} by the bridge). The wire protocol itself lives in
+    \\// for the matching result. Every tor declares two outcomes —
+    \\// `| ok string | error string` — and the proc classifies the
+    \\// result on tau2's error flag, so a raised failure binds under
+    \\// `error`, never inside an ok payload (auto-bound r{N} either way).
+    \\// The wire protocol itself lives in
     \\// app/tau_wire — the JSON splice helpers (jsonEsc/jsonKeys) too;
     \\// this file is pure Koru constructs and carries no host lines.
     \\
@@ -442,6 +450,13 @@ const DOC_PREAMBLE =
     \\
     \\say(text: string) — the voice channel: what the user hears. Always
     \\"quoted" — {{ }} inside splices bound values into the line.
+    \\
+    \\Every tool answers one of two outcomes: `ok` carries the result
+    \\payload; `error` carries the failure text ("not found", "not enough
+    \\seats", ...). `call(...) | ok r |>` arms success only — an error
+    \\that fires unarmed stops the reply right there (unhandled-branch,
+    \\nothing else in the program runs). To act on a failure, arm it:
+    \\`| error e |> say(text: "...")` and read `e` for the reason.
     \\
     \\
 ;

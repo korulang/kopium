@@ -77,7 +77,9 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     return @import("root").koru_app.koru_tau_wire.sayIO(text);
 }
 
-~pub tor search-direct-flight { origin: string, destination: string, date: string } -> string<found!>
+~pub tor search-direct-flight { origin: string, destination: string, date: string }
+| ok string<found!>
+| error string
 
 ~proc search-direct-flight|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -90,10 +92,14 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"origin\": \"{s}\", \"destination\": \"{s}\", \"date\": \"{s}\"}}",
         .{ origin_v, destination_v, date_v }) catch @panic("kopium: search_direct_flight args exceed scratch");
-    return @import("root").koru_app.koru_tau_wire.callIO("search_direct_flight", __args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("search_direct_flight", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
-~pub tor search-onestop-flight { origin: string, destination: string, date: string } -> string<found!>
+~pub tor search-onestop-flight { origin: string, destination: string, date: string }
+| ok string<found!>
+| error string
 
 ~proc search-onestop-flight|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -106,10 +112,14 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"origin\": \"{s}\", \"destination\": \"{s}\", \"date\": \"{s}\"}}",
         .{ origin_v, destination_v, date_v }) catch @panic("kopium: search_onestop_flight args exceed scratch");
-    return @import("root").koru_app.koru_tau_wire.callIO("search_onestop_flight", __args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("search_onestop_flight", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
-~pub tor get-user-details { user_id: string } -> string<user-known!>
+~pub tor get-user-details { user_id: string }
+| ok string<user-known!>
+| error string
 
 ~proc get-user-details|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -118,10 +128,14 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"user_id\": \"{s}\"}}",
         .{ user_id_v }) catch @panic("kopium: get_user_details args exceed scratch");
-    return @import("root").koru_app.koru_tau_wire.callIO("get_user_details", __args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("get_user_details", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
-~pub tor get-reservation-details { reservation_id: string } -> string<reservation-known!>
+~pub tor get-reservation-details { reservation_id: string }
+| ok string<reservation-known!>
+| error string
 
 ~proc get-reservation-details|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -130,10 +144,14 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\"}}",
         .{ reservation_id_v }) catch @panic("kopium: get_reservation_details args exceed scratch");
-    return @import("root").koru_app.koru_tau_wire.callIO("get_reservation_details", __args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("get_reservation_details", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
-~pub tor get-flight-status { flight_number: string, date: string } -> string
+~pub tor get-flight-status { flight_number: string, date: string }
+| ok string
+| error string
 
 ~proc get-flight-status|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -144,16 +162,24 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"flight_number\": \"{s}\", \"date\": \"{s}\"}}",
         .{ flight_number_v, date_v }) catch @panic("kopium: get_flight_status args exceed scratch");
-    return @import("root").koru_app.koru_tau_wire.callIO("get_flight_status", __args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("get_flight_status", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
-~pub tor list-all-airports {} -> string
+~pub tor list-all-airports {}
+| ok string
+| error string
 
 ~proc list-all-airports|zig {
-    return @import("root").koru_app.koru_tau_wire.callIO("list_all_airports", "{}");
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("list_all_airports", "{}");
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
-~pub tor calculate { expression: string } -> string
+~pub tor calculate { expression: string }
+| ok string
+| error string
 
 ~proc calculate|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -162,7 +188,9 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"expression\": \"{s}\"}}",
         .{ expression_v }) catch @panic("kopium: calculate args exceed scratch");
-    return @import("root").koru_app.koru_tau_wire.callIO("calculate", __args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("calculate", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 // ============================================================================
@@ -329,17 +357,23 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     return "released — the booking was not placed";
 }
 
-~pub tor confirm { held: string<!held> } -> string<reservation-known!>
+~pub tor confirm { held: string<!held> }
+| ok string<reservation-known!>
+| error string
 
 ~proc confirm|zig {
-    return @import("root").koru_app.koru_tau_wire.callIO("book_reservation", held);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("book_reservation", held);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 // ============================================================================
 // RESERVATION LIFECYCLE — borrow the minted record, extract the real id
 // ============================================================================
 
-~pub tor cancel-reservation { reservation: string<reservation-known> } -> string
+~pub tor cancel-reservation { reservation: string<reservation-known> }
+| ok string
+| error string
 
 ~proc cancel-reservation|zig {
     const doc = yj.c.yyjson_read(@constCast(reservation.ptr), reservation.len, 0) orelse
@@ -352,10 +386,14 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     var buf: [512]u8 = undefined;
     const args = std.fmt.bufPrint(&buf,
         "{{\"reservation_id\": \"{s}\"}}", .{rid_v}) catch @panic("kopium: cancel args exceed scratch");
-    return @import("root").koru_app.koru_tau_wire.callIO("cancel_reservation", args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("cancel_reservation", args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
-~pub tor update-reservation-flights { reservation: string<reservation-known>, flights: string<chosen>, cabin: string, payment_id: string } -> string<reservation-known!>
+~pub tor update-reservation-flights { reservation: string<reservation-known>, flights: string<chosen>, cabin: string, payment_id: string }
+| ok string<reservation-known!>
+| error string
 
 ~proc update-reservation-flights|zig {
     const rdoc = yj.c.yyjson_read(@constCast(reservation.ptr), reservation.len, 0) orelse
@@ -382,10 +420,14 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const args = std.fmt.allocPrint(std.heap.page_allocator,
         "{{\"reservation_id\": \"{s}\", \"cabin\": \"{s}\", \"flights\": {s}, \"payment_id\": \"{s}\"}}",
         .{ rid_v, cab_v, legs_raw[0..legs_len], pid_v }) catch @panic("kopium: update_reservation_flights args OOM");
-    return @import("root").koru_app.koru_tau_wire.callIO("update_reservation_flights", args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("update_reservation_flights", args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
-~pub tor update-reservation-baggages { reservation: string<reservation-known>, total_baggages: i64, nonfree_baggages: i64, payment_id: string } -> string<reservation-known!>
+~pub tor update-reservation-baggages { reservation: string<reservation-known>, total_baggages: i64, nonfree_baggages: i64, payment_id: string }
+| ok string<reservation-known!>
+| error string
 
 ~proc update-reservation-baggages|zig {
     const rdoc = yj.c.yyjson_read(@constCast(reservation.ptr), reservation.len, 0) orelse
@@ -400,10 +442,14 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const args = std.fmt.allocPrint(std.heap.page_allocator,
         "{{\"reservation_id\": \"{s}\", \"total_baggages\": {d}, \"nonfree_baggages\": {d}, \"payment_id\": \"{s}\"}}",
         .{ rid_v, total_baggages, nonfree_baggages, pid_v }) catch @panic("kopium: update_reservation_baggages args OOM");
-    return @import("root").koru_app.koru_tau_wire.callIO("update_reservation_baggages", args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("update_reservation_baggages", args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
-~pub tor update-reservation-passengers { reservation: string<reservation-known>, passengers: string } -> string<reservation-known!>
+~pub tor update-reservation-passengers { reservation: string<reservation-known>, passengers: string }
+| ok string<reservation-known!>
+| error string
 
 ~proc update-reservation-passengers|zig {
     const rdoc = yj.c.yyjson_read(@constCast(reservation.ptr), reservation.len, 0) orelse
@@ -416,7 +462,9 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const args = std.fmt.allocPrint(std.heap.page_allocator,
         "{{\"reservation_id\": \"{s}\", \"passengers\": {s}}}",
         .{ rid_v, passengers }) catch @panic("kopium: update_reservation_passengers args OOM");
-    return @import("root").koru_app.koru_tau_wire.callIO("update_reservation_passengers", args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("update_reservation_passengers", args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 // What a minted handle CARRIES — the possession type says you hold it, this
@@ -461,7 +509,9 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     return "reservation record dropped";
 }
 
-~pub tor send-certificate { user: string<user-known>, amount: i64 } -> string
+~pub tor send-certificate { user: string<user-known>, amount: i64 }
+| ok string
+| error string
 
 ~proc send-certificate|zig {
     const udoc = yj.c.yyjson_read(@constCast(user.ptr), user.len, 0) orelse
@@ -473,10 +523,14 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const uid_v = __jsonEsc(uid, &e0);
     const args = std.fmt.allocPrint(std.heap.page_allocator,
         "{{\"user_id\": \"{s}\", \"amount\": {d}}}", .{ uid_v, amount }) catch @panic("kopium: send_certificate args OOM");
-    return @import("root").koru_app.koru_tau_wire.callIO("send_certificate", args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("send_certificate", args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
-~pub tor transfer-to-human-agents { summary: string } -> string
+~pub tor transfer-to-human-agents { summary: string }
+| ok string
+| error string
 
 ~proc transfer-to-human-agents|zig {
     var e0: [1024]u8 = undefined;
@@ -484,7 +538,9 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     var buf: [2048]u8 = undefined;
     const args = std.fmt.bufPrint(&buf,
         "{{\"summary\": \"{s}\"}}", .{summary_v}) catch @panic("kopium: transfer args exceed scratch");
-    return @import("root").koru_app.koru_tau_wire.callIO("transfer_to_human_agents", args);
+    const __r = @import("root").koru_app.koru_tau_wire.callIO("transfer_to_human_agents", args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 // release BEFORE confirm is load-bearing: `get_discharge_event` returns the

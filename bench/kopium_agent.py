@@ -169,10 +169,12 @@ class KopiumAgent(HalfDuplexAgent[KopiumAgentState]):
         if isinstance(message, MultiToolMessage):
             for tm in message.tool_messages:
                 self._send({"kind": "result", "id": tm.id or "",
-                            "content": tm.content or ""})
+                            "content": tm.content or "",
+                            "error": bool(tm.error)})
         elif isinstance(message, ToolMessage):
             self._send({"kind": "result", "id": message.id or "",
-                        "content": message.content or ""})
+                        "content": message.content or "",
+                        "error": bool(message.error)})
         elif isinstance(message, UserMessage):
             self._send({"kind": "user", "text": message.content or ""})
         else:

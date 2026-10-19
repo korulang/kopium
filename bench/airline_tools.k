@@ -15,8 +15,11 @@
 //
 // Each proc IS the southbound effect: it emits the outbound CALL
 // line with its own tau2 schema name baked in and blocks on stdin
-// for the matching result, which becomes the proc's return value
-// (auto-bound r{N} by the bridge). The wire protocol itself lives in
+// for the matching result. Every tor declares two outcomes —
+// `| ok string | error string` — and the proc classifies the
+// result on tau2's error flag, so a raised failure binds under
+// `error`, never inside an ok payload (auto-bound r{N} either way).
+// The wire protocol itself lives in
 // app/tau_wire — the JSON splice helpers (jsonEsc/jsonKeys) too;
 // this file is pure Koru constructs and carries no host lines.
 
@@ -41,7 +44,9 @@ proc say|zig {
 - doc
 Book a reservation.
 ]
-pub tor book-reservation { user_id: string, origin: string, destination: string, flight_type: string, cabin: string, flights: string, passengers: string, payment_methods: string, total_baggages: i64, nonfree_baggages: i64, insurance: string } -> string
+pub tor book-reservation { user_id: string, origin: string, destination: string, flight_type: string, cabin: string, flights: string, passengers: string, payment_methods: string, total_baggages: i64, nonfree_baggages: i64, insurance: string }
+| ok string
+| error string
 
 proc book-reservation|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -68,14 +73,18 @@ proc book-reservation|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"user_id\": \"{s}\", \"origin\": \"{s}\", \"destination\": \"{s}\", \"flight_type\": \"{s}\", \"cabin\": \"{s}\", \"flights\": {s}, \"passengers\": {s}, \"payment_methods\": {s}, \"total_baggages\": {d}, \"nonfree_baggages\": {d}, \"insurance\": \"{s}\"}}",
         .{ user_id_v, origin_v, destination_v, flight_type_v, cabin_v, flights_v, passengers_v, payment_methods_v, total_baggages, nonfree_baggages, insurance_v }) catch @panic("kopium: book_reservation args exceed scratch");
-    return __W.callIO("book_reservation", __args);
+    const __r = __W.callIO("book_reservation", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Calculate the result of a mathematical expression.
 ]
-pub tor calculate { expression: string } -> string
+pub tor calculate { expression: string }
+| ok string
+| error string
 
 proc calculate|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -86,14 +95,18 @@ proc calculate|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"expression\": \"{s}\"}}",
         .{ expression_v }) catch @panic("kopium: calculate args exceed scratch");
-    return __W.callIO("calculate", __args);
+    const __r = __W.callIO("calculate", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Cancel the whole reservation.
 ]
-pub tor cancel-reservation { reservation_id: string } -> string
+pub tor cancel-reservation { reservation_id: string }
+| ok string
+| error string
 
 proc cancel-reservation|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -104,14 +117,18 @@ proc cancel-reservation|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\"}}",
         .{ reservation_id_v }) catch @panic("kopium: cancel_reservation args exceed scratch");
-    return __W.callIO("cancel_reservation", __args);
+    const __r = __W.callIO("cancel_reservation", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Get the status of a flight.
 ]
-pub tor get-flight-status { flight_number: string, date: string } -> string
+pub tor get-flight-status { flight_number: string, date: string }
+| ok string
+| error string
 
 proc get-flight-status|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -124,14 +141,18 @@ proc get-flight-status|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"flight_number\": \"{s}\", \"date\": \"{s}\"}}",
         .{ flight_number_v, date_v }) catch @panic("kopium: get_flight_status args exceed scratch");
-    return __W.callIO("get_flight_status", __args);
+    const __r = __W.callIO("get_flight_status", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Get the details of a reservation.
 ]
-pub tor get-reservation-details { reservation_id: string } -> string
+pub tor get-reservation-details { reservation_id: string }
+| ok string
+| error string
 
 proc get-reservation-details|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -142,14 +163,18 @@ proc get-reservation-details|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\"}}",
         .{ reservation_id_v }) catch @panic("kopium: get_reservation_details args exceed scratch");
-    return __W.callIO("get_reservation_details", __args);
+    const __r = __W.callIO("get_reservation_details", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Get the details of a user, including their reservations.
 ]
-pub tor get-user-details { user_id: string } -> string
+pub tor get-user-details { user_id: string }
+| ok string
+| error string
 
 proc get-user-details|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -160,25 +185,33 @@ proc get-user-details|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"user_id\": \"{s}\"}}",
         .{ user_id_v }) catch @panic("kopium: get_user_details args exceed scratch");
-    return __W.callIO("get_user_details", __args);
+    const __r = __W.callIO("get_user_details", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Returns a list of all available airports.
 ]
-pub tor list-all-airports {} -> string
+pub tor list-all-airports {}
+| ok string
+| error string
 
 proc list-all-airports|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
-    return __W.callIO("list_all_airports", "{}");
+    const __r = __W.callIO("list_all_airports", "{}");
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Search for direct flights between two cities on a specific date.
 ]
-pub tor search-direct-flight { origin: string, destination: string, date: string } -> string
+pub tor search-direct-flight { origin: string, destination: string, date: string }
+| ok string
+| error string
 
 proc search-direct-flight|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -193,14 +226,18 @@ proc search-direct-flight|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"origin\": \"{s}\", \"destination\": \"{s}\", \"date\": \"{s}\"}}",
         .{ origin_v, destination_v, date_v }) catch @panic("kopium: search_direct_flight args exceed scratch");
-    return __W.callIO("search_direct_flight", __args);
+    const __r = __W.callIO("search_direct_flight", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Search for one-stop flights between two cities on a specific date.
 ]
-pub tor search-onestop-flight { origin: string, destination: string, date: string } -> string
+pub tor search-onestop-flight { origin: string, destination: string, date: string }
+| ok string
+| error string
 
 proc search-onestop-flight|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -215,14 +252,18 @@ proc search-onestop-flight|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"origin\": \"{s}\", \"destination\": \"{s}\", \"date\": \"{s}\"}}",
         .{ origin_v, destination_v, date_v }) catch @panic("kopium: search_onestop_flight args exceed scratch");
-    return __W.callIO("search_onestop_flight", __args);
+    const __r = __W.callIO("search_onestop_flight", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Send a certificate to a user. Be careful!
 ]
-pub tor send-certificate { user_id: string, amount: i64 } -> string
+pub tor send-certificate { user_id: string, amount: i64 }
+| ok string
+| error string
 
 proc send-certificate|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -233,14 +274,18 @@ proc send-certificate|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"user_id\": \"{s}\", \"amount\": {d}}}",
         .{ user_id_v, amount }) catch @panic("kopium: send_certificate args exceed scratch");
-    return __W.callIO("send_certificate", __args);
+    const __r = __W.callIO("send_certificate", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Transfer the user to a human agent, with a summary of the user's issue.  Only transfer if  -  the user explicitly asks for a human agent  -  given the policy and the available tools, you cannot solve the user's issue.
 ]
-pub tor transfer-to-human-agents { summary: string } -> string
+pub tor transfer-to-human-agents { summary: string }
+| ok string
+| error string
 
 proc transfer-to-human-agents|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -251,14 +296,18 @@ proc transfer-to-human-agents|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"summary\": \"{s}\"}}",
         .{ summary_v }) catch @panic("kopium: transfer_to_human_agents args exceed scratch");
-    return __W.callIO("transfer_to_human_agents", __args);
+    const __r = __W.callIO("transfer_to_human_agents", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Update the baggage information of a reservation.
 ]
-pub tor update-reservation-baggages { reservation_id: string, total_baggages: i64, nonfree_baggages: i64, payment_id: string } -> string
+pub tor update-reservation-baggages { reservation_id: string, total_baggages: i64, nonfree_baggages: i64, payment_id: string }
+| ok string
+| error string
 
 proc update-reservation-baggages|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -271,14 +320,18 @@ proc update-reservation-baggages|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\", \"total_baggages\": {d}, \"nonfree_baggages\": {d}, \"payment_id\": \"{s}\"}}",
         .{ reservation_id_v, total_baggages, nonfree_baggages, payment_id_v }) catch @panic("kopium: update_reservation_baggages args exceed scratch");
-    return __W.callIO("update_reservation_baggages", __args);
+    const __r = __W.callIO("update_reservation_baggages", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Update the flight information of a reservation.
 ]
-pub tor update-reservation-flights { reservation_id: string, cabin: string, flights: string, payment_id: string } -> string
+pub tor update-reservation-flights { reservation_id: string, cabin: string, flights: string, payment_id: string }
+| ok string
+| error string
 
 proc update-reservation-flights|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -295,14 +348,18 @@ proc update-reservation-flights|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\", \"cabin\": \"{s}\", \"flights\": {s}, \"payment_id\": \"{s}\"}}",
         .{ reservation_id_v, cabin_v, flights_v, payment_id_v }) catch @panic("kopium: update_reservation_flights args exceed scratch");
-    return __W.callIO("update_reservation_flights", __args);
+    const __r = __W.callIO("update_reservation_flights", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 [
 - doc
 Update the passenger information of a reservation.
 ]
-pub tor update-reservation-passengers { reservation_id: string, passengers: string } -> string
+pub tor update-reservation-passengers { reservation_id: string, passengers: string }
+| ok string
+| error string
 
 proc update-reservation-passengers|zig {
     const __W = @import("root").koru_app.koru_tau_wire;
@@ -315,7 +372,9 @@ proc update-reservation-passengers|zig {
     const __args = std.fmt.bufPrint(&__S.buf,
         "{{\"reservation_id\": \"{s}\", \"passengers\": {s}}}",
         .{ reservation_id_v, passengers_v }) catch @panic("kopium: update_reservation_passengers args exceed scratch");
-    return __W.callIO("update_reservation_passengers", __args);
+    const __r = __W.callIO("update_reservation_passengers", __args);
+    if (__r.err) return .{ .error = __r.content };
+    return .{ .ok = __r.content };
 }
 
 // The tool contract — scope documentation, not a call.
@@ -334,6 +393,13 @@ strings need "double quotes" too; bare values are Koru expressions.
 
 say(text: string) — the voice channel: what the user hears. Always
 "quoted" — {{ }} inside splices bound values into the line.
+
+Every tool answers one of two outcomes: `ok` carries the result
+payload; `error` carries the failure text ("not found", "not enough
+seats", ...). `call(...) | ok r |>` arms success only — an error
+that fires unarmed stops the reply right there (unhandled-branch,
+nothing else in the program runs). To act on a failure, arm it:
+`| error e |> say(text: "...")` and read `e` for the reason.
 
 book-reservation — Book a reservation.
 · user_id: string — The ID of the user to book the reservation such as 'sara_doe_496'`.

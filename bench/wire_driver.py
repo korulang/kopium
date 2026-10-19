@@ -162,7 +162,8 @@ def main() -> None:
                         content = tm.content or ""
                         disp = content if len(content) < 600 else content[:600] + "…"
                         print(f"RESULT {obj['id']}: {disp}", flush=True)
-                        send({"kind": "result", "id": obj["id"], "content": content})
+                        send({"kind": "result", "id": obj["id"],
+                              "content": content, "error": bool(tm.error)})
                     elif kind == "report":
                         print(f"REPORT: {obj['text']}", flush=True)
                         if "abandoned" in obj["text"]:

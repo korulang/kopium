@@ -25,6 +25,10 @@ const std = @import("std");
 // main files that happen to call a koru/yyjson tor in flow code.
 ~import koru/yyjson
 
+// body's history param is *std/string:String — a consumer that never imports
+// std/string itself still has to resolve the qualified host type.
+~import std/string
+
 // ============================================================================
 // STATE — process-lifetime counters and buffers. Session state lives in the
 // program's stores; this is transport, not conversation.
@@ -268,6 +272,16 @@ fn jsonStr(line: []const u8, key: []const u8) ?[]const u8 {
     };
 }
 
+// Optional bool field — absent means false (older marshals never sent it).
+fn jsonBool(line: []const u8, key: []const u8) bool {
+    const doc = yj.c.yyjson_read(@constCast(line.ptr), line.len, 0) orelse
+        return false;
+    defer yj.c.yyjson_doc_free(doc);
+    const root = yj.c.yyjson_doc_get_root(doc);
+    const v = yj.c.yyjson_obj_getn(root, key.ptr, key.len) orelse return false;
+    return yj.c.yyjson_is_true(v);
+}
+
 fn fieldKind(line: []const u8) []const u8 {
     return jsonStr(line, "kind") orelse @panic("kopium: inbound line has no kind");
 }
@@ -304,11 +318,17 @@ fn sayIO(text: []const u8) []const u8 {
     return text;
 }
 
+// A tool call's result split the way tau2 sends it: content text plus the
+// environment's error flag. Every tool tor declares `| ok string | error
+// string` — the flag picks the branch; an error payload can no longer ride
+// inside an ok-bound value and reach a `{{ r.field }}` splice as a lie.
+const CallResult = struct { content: []const u8, err: bool };
+
 // Every tool tor — emit the CALL line with the tau2 schema name baked in,
-// then block for the matching result and return its content as the proc's
-// value. The bridge auto-binds it r{N}; a JSON-object datum gains fields,
-// so r{N}.user_id resolves on later turns.
-fn callIO(tau_name: []const u8, args_json: []const u8) []const u8 {
+// then block for the matching result and return its content + error flag as
+// the proc's value. The bridge auto-binds it r{N}; a JSON-object datum gains
+// fields, so r{N}.user_id resolves on later turns.
+fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
     n_call += 1;
     const alloc = std.heap.page_allocator;
     call_seq += 1;
@@ -327,7 +347,12 @@ fn callIO(tau_name: []const u8, args_json: []const u8) []const u8 {
     // the user's say-reply before this call's result — pend it and keep
     // reading until the result arrives.
     while (true) {
-        const line = readInboundLine() orelse return "";
+        // Inbound closed mid-call is a protocol abort — it surfaces as an
+        // error branch, not a silent empty ok.
+        const line = readInboundLine() orelse return .{
+            .content = "inbound closed while the call was outstanding",
+            .err = true,
+        };
         const kind = fieldKind(line);
         if (std.mem.eql(u8, kind, "user")) {
             const t = jsonStr(line, "text") orelse @panic("kopium: user line without text");
@@ -344,7 +369,11 @@ fn callIO(tau_name: []const u8, args_json: []const u8) []const u8 {
         const rid = jsonStr(line, "id") orelse @panic("kopium: result line without id");
         if (!std.mem.eql(u8, rid, id))
             @panic("kopium: result id does not match the outstanding call");
-        return jsonStr(line, "content") orelse @panic("kopium: result line without content");
+        return .{
+            .content = jsonStr(line, "content") orelse
+                @panic("kopium: result line without content"),
+            .err = jsonBool(line, "error"),
+        };
     }
 }
 

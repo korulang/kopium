@@ -10,6 +10,13 @@ strings need "double quotes" too; bare values are Koru expressions.
 say(text: string) — the voice channel: what the user hears. Always
 "quoted" — {{ }} inside splices bound values into the line.
 
+Every tool answers one of two outcomes: `ok` carries the result
+payload; `error` carries the failure text ("not found", "not enough
+seats", ...). `call(...) | ok r |>` arms success only — an error
+that fires unarmed stops the reply right there (unhandled-branch,
+nothing else in the program runs). To act on a failure, arm it:
+`| error e |> say(text: "...")` and read `e` for the reason.
+
 book-reservation — Book a reservation.
 · user_id: string — The ID of the user to book the reservation such as 'sara_doe_496'`.
 · origin: string — The IATA code for the origin city such as 'SFO'.
