@@ -1,0 +1,6 @@
+name: refinement
+kind: inferred
+shape: categorical
+face: in
+membrane: false
+note: a belief gained resolution — sharper boundary, mechanism, or scope — without flipping the prior claim
