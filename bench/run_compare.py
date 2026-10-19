@@ -11,6 +11,9 @@ tools) on the same tasks, same seed, same model. Writes a CSV.
            --stock-from results/compare_full50_taught.csv \
            --stock-from results/compare_smoke_r.csv    # later files win
        ... --koru-from results/compare_smoke_koru.csv  # same, for the koru arm
+       run_compare.py 0 50 --suffix board --no-stock --resume
+       # --no-stock: koru arm only, stock columns blank (never runs LLMAgent)
+       # --resume: reload this suffix's own CSV and skip tasks already done
 
 Output: bench/results/compare_<suffix>.csv
   task, koru_reward, koru_db, koru_calls, koru_prompt_tokens,
@@ -33,6 +36,7 @@ from tau2.agent.llm_agent import LLMAgent
 from tau2.config import DEFAULT_MAX_ERRORS, DEFAULT_MAX_STEPS
 from tau2.orchestrator.orchestrator import Orchestrator
 from tau2.runner import build_environment, build_user, get_tasks, run_simulation
+from tau2.data_model.message import AssistantMessage
 from tau2.evaluator.evaluator import EvaluationType
 from tau2.utils.llm_utils import get_token_usage
 
@@ -85,6 +89,30 @@ litellm.model_cost["openrouter/poolside/laguna-s-2.1"] = {
     "mode": "chat",
 }
 
+# z-ai glm-flash — the ~alias resolves server-side to z-ai/glm-5.3-flash, so
+# both spellings are registered ($0.048/M prompt, $0.16/M completion;
+# api/v1/models, 2026-10-19).
+litellm.model_cost["openrouter/~z-ai/glm-flash-latest"] = {
+    "input_cost_per_token": 0.048e-6,
+    "output_cost_per_token": 0.16e-6,
+    "max_tokens": 131072,
+    "litellm_provider": "openrouter",
+    "mode": "chat",
+}
+litellm.model_cost["openrouter/z-ai/glm-5.3-flash"] = dict(
+    litellm.model_cost["openrouter/~z-ai/glm-flash-latest"])
+
+# moonshotai kimi-k3 — smart-smart probe tier. $0.24/M prompt, $11.94/M
+# completion (api/v1/models, 2026-10-19): output is ~50x the cheap tier, so
+# this arm is for single-task probes, not boards.
+litellm.model_cost["openrouter/moonshotai/kimi-k3"] = {
+    "input_cost_per_token": 0.239e-6,
+    "output_cost_per_token": 11.936e-6,
+    "max_tokens": 262144,
+    "litellm_provider": "openrouter",
+    "mode": "chat",
+}
+
 # meta muse-spark-1.3-contributor — same band as laguna ($0.10/$0.20 per M,
 # 1M ctx; api/v1/models, 2026-10-18), suspected stronger instruction
 # following. Paired smoke arm against the same task ids.
@@ -112,6 +140,35 @@ except Exception:
 # runs exactly as tau2 ships it — provider defaults — because that is the
 # opponent; recorded per row so the koru setting behind every number is visible.
 REASONING = os.environ.get("KOPIUM_REASONING", "none")
+# The binary reads KOPIUM_REASONING from its own env, and the spawned env
+# inherits ours — but an UNSET var meant this label ("none") diverged from
+# the wire (the binary's own default "medium"). Export the resolved value so
+# the CSV's reasoning column and the request body can never disagree again.
+os.environ["KOPIUM_REASONING"] = REASONING
+
+# Stock arm decoding controls. Stock's litellm request otherwise carries ONLY
+# model+messages+tools — provider defaults for temperature, max_tokens and
+# reasoning, which is exactly the asymmetry that made the deepseek pair
+# uninterpretable (koru temp:0/medium vs stock defaults, measured 2026-10-19).
+# STOCK_REASONING mirrors KOPIUM_REASONING: "none" → enabled:false via
+# extra_body, "default" → omit the field, an effort literal → {"effort": X}.
+# STOCK_TEMPERATURE sets temperature explicitly; unset stays provider default.
+STOCK_REASONING = os.environ.get("STOCK_REASONING", "default")
+STOCK_TEMPERATURE = os.environ.get("STOCK_TEMPERATURE")
+stock_llm_args: dict = {}
+if STOCK_REASONING == "none":
+    stock_llm_args["extra_body"] = {"reasoning": {"enabled": False}}
+elif STOCK_REASONING != "default":
+    stock_llm_args["extra_body"] = {"reasoning": {"effort": STOCK_REASONING}}
+if STOCK_TEMPERATURE is not None:
+    stock_llm_args["temperature"] = float(STOCK_TEMPERATURE)
+
+# The koru agent's wire requests already carry temperature:0 (receipt-verified).
+# The user simulator ran at provider default — an unmeasured variance source:
+# the sim samples a different conversation path each run, which alone flips
+# pass/fail draws. tau2's own default is 0.0; USER_TEMPERATURE overrides.
+USER_TEMPERATURE = os.environ.get("USER_TEMPERATURE", "0")
+user_llm_args: dict = {"temperature": float(USER_TEMPERATURE)}
 
 
 def run_one(agent_cls, task, domain, gate=None, receipt_dir=None, eval_path=None):
@@ -134,8 +191,10 @@ def run_one(agent_cls, task, domain, gate=None, receipt_dir=None, eval_path=None
             tools=env.get_tools(),
             domain_policy=env.get_policy(),
             llm=LLM,
+            llm_args=stock_llm_args or None,
         )
-    user = build_user("user_simulator", env, task, llm=LLM)
+    user = build_user("user_simulator", env, task, llm=LLM,
+                      llm_args=user_llm_args)
     orch = Orchestrator(
         domain=domain,
         agent=agent,
@@ -161,12 +220,17 @@ def run_one(agent_cls, task, domain, gate=None, receipt_dir=None, eval_path=None
     db = getattr(r, "db_check", None)
     dbok = bool(db and db.db_match) if db else None
     calls = getattr(agent, "call_count", None)
-    usage = get_token_usage(res.messages or [])
+    # Agent tokens only: the simulator stamps its own call's usage onto each
+    # UserMessage (user_simulator.py), so a whole-transcript sum mixes sim
+    # tokens into the agent's column. AssistantMessage.usage is the agent's
+    # per-call usage for both arms (verified: koru's sum == session.json).
+    usage = get_token_usage(
+        [m for m in (res.messages or []) if isinstance(m, AssistantMessage)])
     tokens = (
         usage.get("prompt_tokens", 0),
         usage.get("completion_tokens", 0),
     )
-    cost = (res.agent_cost or 0.0) + (res.user_cost or 0.0)
+    cost = res.agent_cost or 0.0
     return r.reward, dbok, calls, cost, tokens, wall_s
 
 
@@ -174,6 +238,22 @@ def main() -> None:
     suffix = "full"
     if "--suffix" in sys.argv:
         suffix = sys.argv[sys.argv.index("--suffix") + 1]
+
+    out_dir = HERE / "results"
+    out_dir.mkdir(exist_ok=True)
+    out_path = out_dir / f"compare_{suffix}.csv"
+
+    no_stock = "--no-stock" in sys.argv
+    while "--no-stock" in sys.argv:
+        sys.argv.remove("--no-stock")
+
+    # --resume: this run's own CSV is already flushed one row per completed
+    # task, so a killed sweep resumes by reusing its own rows.
+    if "--resume" in sys.argv:
+        sys.argv.remove("--resume")
+        if out_path.exists():
+            sys.argv += ["--koru-from", str(out_path),
+                         "--stock-from", str(out_path)]
     # Early-exit guard: if koru is demonstrably losing by this many tasks and
     # this large a margin, stop the run instead of burning hours on a verdict
     # the first N tasks already delivered. `--no-guard` disables.
@@ -192,7 +272,8 @@ def main() -> None:
     # frozen: results/stock_baseline.csv loads automatically unless
     # --stock-from is given or --stock-fresh forces a re-run (headline
     # boards only — a fresh baseline is set by copying a chosen CSV there).
-    if ("--stock-from" not in sys.argv and "--stock-fresh" not in sys.argv
+    if (not no_stock
+            and "--stock-from" not in sys.argv and "--stock-fresh" not in sys.argv
             and (HERE / "results" / "stock_baseline.csv").exists()):
         sys.argv += ["--stock-from", str(HERE / "results" / "stock_baseline.csv")]
     while "--stock-fresh" in sys.argv:
@@ -231,11 +312,7 @@ def main() -> None:
         count = int(sys.argv[2]) if len(sys.argv) > 2 else 50
         tasks = get_tasks(domain)
         tasks = tasks[start : start + count]
-    out_dir = HERE / "results"
-    out_dir.mkdir(exist_ok=True)
-    out_path = out_dir / f"compare_{suffix}.csv"
-
-    print(f"domain={domain} tasks={len(tasks)} suffix={suffix} model={LLM} koru_reasoning={REASONING} stock=tau2 defaults", flush=True)
+    print(f"domain={domain} tasks={len(tasks)} suffix={suffix} model={LLM} koru_reasoning={REASONING} stock_reasoning={STOCK_REASONING} stock_temp={STOCK_TEMPERATURE or 'provider-default'} no_stock={no_stock}", flush=True)
     rows = []
     with open(out_path, "w", newline="") as f:
         w = csv.writer(f)
@@ -277,6 +354,8 @@ def main() -> None:
                 stok = (s["ptok"], s["ctok"])
                 scost, swall = s["cost"], s["wall"]
                 notes += f" | stock: reused {s['src']}"
+            elif no_stock:
+                sr, sdb, scalls, scost, stok, swall = None, None, None, None, (None, None), None
             else:
                 try:
                     (sr, sdb, scalls, scost, stok, swall) = run_one(

@@ -27,3 +27,21 @@ across the translation, or the harness will measure the silent party
 (the side that never rewrites) as free. Applies to every future
 bridge-arm: vocabulary agents, gate-mediated arms, anything that emits a
 different message than the provider returned.
+
+## Second vector: usage stamped on the wrong message class (2026-10-19)
+
+The reciprocal failure, measured on the 50-task koru board: tau2's user
+simulator copies `assistant_message.usage` onto each `UserMessage` it
+emits (`user_simulator.py:257`), so a transcript filtered only by
+"messages that carry usage" sums the *simulator's* calls into the
+*agent's* column. Every compare row produced before the fix inflated
+both arms by the sim's spend — agent-only comparisons like task 23's
+(177,820 vs 295,464 total) exist only because the counting was rebuilt
+to filter `isinstance(m, AssistantMessage)` in `bench/run_compare.py`.
+
+Same belief, second mechanism: usage must be summed over the *agent's
+own message class* — presence of a `usage` field is not evidence the
+field measures the agent. Two independent contamination paths, both
+silent: usage absent (unstamped) and usage misattributed (stamped onto
+the sim's objects). `cached_tokens` rides along: it is a subset of
+`prompt_tokens`, never additive — `uncached = prompt - cached`.
