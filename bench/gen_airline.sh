@@ -1,5 +1,5 @@
 #!/bin/sh
-# gen_airline.sh — regenerate airline_tools.kz + airline_vocab_doc.md.
+# gen_airline.sh — regenerate airline_tools.k + airline_vocab_doc.md.
 #
 # dump_airline_schema.py marshals tau2's openai_schema to JSON (transport
 # only); gen_airline.kz — a Koru program — owns every semantic decision:

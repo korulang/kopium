@@ -39,6 +39,12 @@ std/store:new(transcript, capacity: 2) { *std/string:String<instance!> }
 // This turn's streamed reply, cleared before each ask.
 std/store:new(reply, capacity: 2) { *std/string:String<instance!> }
 
+// The init's domain policy, wrapped once at boot and spliced into the
+// system render after the grammar on every ask — domain law with the
+// contract's authority, not a user message mid-history. Empty when no
+// init has arrived.
+std/store:new(domain_policy, capacity: 2) { *std/string:String<instance!> }
+
 
 
 tor collect { text: string<*> }
@@ -48,26 +54,41 @@ collect = std/store:query(reply)
     | err e |> app/tau_wire:die(msg: e)
 
 // The SSE terminal payload carries usage; fold it into the counters the
-// next outbound line will carry.
+// next outbound line will carry. `cost` is OpenRouter's billed figure —
+// already net of any cache discount; `cached_tokens` (from
+// prompt_tokens_details) records the cached share of the prompt so the
+// receipts can say what the discount actually was.
 tor note-usage { doc: *koru/yyjson:Doc<open>, r: *koru/yyjson:Value }
 note-usage = koru/yyjson:object.get(doc, v: r, key: "usage")
 | found u |> koru/yyjson:object.get(doc, v: u, key: "prompt_tokens")
     | found pv |> koru/yyjson:as.int(doc, v: pv)
         | ok p |> koru/yyjson:object.get(doc, v: u, key: "completion_tokens")
             | found cv |> koru/yyjson:as.int(doc, v: cv)
-                | ok c |> koru/yyjson:object.get(doc, v: u, key: "cost")
-                    | found fv |> koru/yyjson:as.double(doc, v: fv)
-                        | ok cost |> app/tau_wire:add-usage(p, c, cost, has_cost: true)
-                            |> std/io:eprint.ln("  [usage] prompt {{ p:d }} completion {{ c:d }}")
-                        | wrong-type |> app/tau_wire:add-usage(p, c, cost: 0.0, has_cost: false)
-                            |> std/io:eprint.ln("  [usage] prompt {{ p:d }} completion {{ c:d }}")
-                    | not-found |> app/tau_wire:add-usage(p, c, cost: 0.0, has_cost: false)
-                        |> std/io:eprint.ln("  [usage] prompt {{ p:d }} completion {{ c:d }}")
+                | ok c |> note-usage-cached(doc, u, p, c)
                 | wrong-type |> _
             | not-found |> _
         | wrong-type |> _
     | not-found |> _
 | not-found |> _
+
+tor note-usage-cached { doc: *koru/yyjson:Doc<open>, u: *koru/yyjson:Value, p: i64, c: i64 }
+note-usage-cached = koru/yyjson:object.get(doc, v: u, key: "prompt_tokens_details")
+| found pd |> koru/yyjson:object.get(doc, v: pd, key: "cached_tokens")
+    | found ctv |> koru/yyjson:as.int(doc, v: ctv)
+        | ok cached |> note-usage-cost(doc, u, p, c, cached)
+        | wrong-type |> note-usage-cost(doc, u, p, c, cached: 0)
+    | not-found |> note-usage-cost(doc, u, p, c, cached: 0)
+| not-found |> note-usage-cost(doc, u, p, c, cached: 0)
+
+tor note-usage-cost { doc: *koru/yyjson:Doc<open>, u: *koru/yyjson:Value, p: i64, c: i64, cached: i64 }
+note-usage-cost = koru/yyjson:object.get(doc, v: u, key: "cost")
+| found fv |> koru/yyjson:as.double(doc, v: fv)
+    | ok cost |> app/tau_wire:add-usage(p, c, cost, has_cost: true, cached)
+        |> std/io:eprint.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} cached {{ cached:d }}")
+    | wrong-type |> app/tau_wire:add-usage(p, c, cost: 0.0, has_cost: false, cached)
+        |> std/io:eprint.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} cached {{ cached:d }}")
+| not-found |> app/tau_wire:add-usage(p, c, cost: 0.0, has_cost: false, cached)
+    |> std/io:eprint.ln("  [usage] prompt {{ p:d }} completion {{ c:d }} cached {{ cached:d }}")
 
 // Toolcall channel: `choices[0].delta.tool_calls[].function.arguments`
 // streams in as string fragments — each entry's fragment accumulates into
@@ -122,34 +143,51 @@ handle-delta = koru/yyjson:parse(text: payload)
 tor send { req: string }
 send = app/tau_wire:auth(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: req, headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
 | started p |> koru/curl:await(p)
-    ! chunk ch |> koru/sse:feed(s, bytes: ch.data)
+    ! chunk ch |> app/tau_wire:buffer-resp(ch.data) |> koru/sse:feed(s, bytes: ch.data)
         ! data d |> handle-delta(payload: d)
         | ok |> _
-    ! finished r |> koru/curl:close(resp: r)
+    ! finished r |> koru/curl:status(resp: r): st |> koru/curl:close(resp: r) |> app/tau_wire:transport-check(status: st)
     | done m |> koru/curl:multi.close(m) |> koru/sse:close(s)
 | failed e |> koru/sse:close(s) |> std/fmt:fmt.blk {
         transport failed: {{ e.msg:s }}
     }: m |> app/tau_wire:die(msg: m)
 
+// Fold the init's policy into the system suffix `ask` renders. The
+// policy is the domain's law — every action judged against these rules,
+// records read against these conditions — so it rides the system
+// message, not a user-role turn.
+tor policy-note { text: string<*> }
+policy-note = std/store:query(domain_policy)
+! query dp |> std/fmt:fmt.blk {
+
+DOMAIN POLICY — the rules every action must satisfy. Judge each request
+against these conditions, reading them against the records you fetch.
+
+{{ text:s }}
+    }: dptxt
+    |> std/string:append(s: dp, text: dptxt)
+        | ok |> _
+        | err e |> app/tau_wire:die(msg: e)
+
 // Build this turn's request from the transcript, receipt it, then fire.
-// The system's surface — grammar rules and the live vocabulary — is the
-// system message, rendered fresh by `std/bridge:grammar` on every ask and
-// spliced ahead of the transcript: the same declaration the gate enforces,
-// given to the model rather than fetched, and never stale — a `defined`
-// flow joins the render the very next turn.
+// The system's surface — grammar rules, the live vocabulary, the domain
+// policy — is the system message, rendered fresh on every ask and
+// spliced ahead of the transcript: the same declaration the gate
+// enforces, given to the model rather than fetched, and never stale — a
+// `defined` flow joins the render the very next turn.
 tor ask { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string }
 ask = std/store:query(transcript)
 ! query h |> std/bridge:grammar(br)
-    | ok g |> headless/wire:msg(role: "system", content: g): sysmsg
-        |> std/fmt:fmt.blk {
-            {{ sysmsg:s }}{{ h:S }}
-        }: hist
-        |> app/tau_wire:body(model, max_tokens, temperature, history: hist): req
-        |> app/tau_wire:mark-call-start()
-        |> app/tau_wire:write-receipt(body: req)
-        | written |> send(req) |> app/tau_wire:usage-check()
-        | skipped |> app/tau_wire:die(msg: "KOPIUM_RECEIPT_DIR unset — receipts are mandatory")
-        | failed m |> app/tau_wire:die(msg: m)
+    | ok g |> std/store:query(domain_policy)
+        ! query dp |> std/fmt:fmt.blk {
+{{ g:s }}{{ dp:S }}
+            }: sysg |> headless/wire:msg(role: "system", content: sysg): sysmsg
+            |> app/tau_wire:body(model, max_tokens, temperature, syshead: sysmsg, history: h): req
+            |> app/tau_wire:mark-call-start()
+            |> app/tau_wire:write-receipt(body: req)
+            | written |> send(req) |> app/tau_wire:usage-check()
+            | skipped |> app/tau_wire:die(msg: "KOPIUM_RECEIPT_DIR unset — receipts are mandatory")
+            | failed m |> app/tau_wire:die(msg: m)
     | not-found s2 |> app/tau_wire:die(msg: s2)
 
 // Append a chat message to the transcript.
@@ -292,7 +330,7 @@ drive = app/tau_wire:channel()
 // e.g. a reasoning model muted by effort:none), and the strike lands under
 // its own kind so session.json separates silence from malformed wire.
 tor empty-reply {}
-empty-reply = observe(role: "user", text: "your reply carried no wire — emit wire text: `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls; `vocabulary()` lists every verb")
+empty-reply = observe(role: "user", text: "your reply carried no wire — emit wire text: `say(text: ...)` reaches the user, `verb(field: ...)` calls; `vocabulary()` lists every verb")
     |> app/tau_wire:count-rejection(kind: "empty")
 
 // The toolcall reply carried no koru program — a rejected turn, observed
@@ -335,7 +373,7 @@ loop = clear-reply()
             | stop |> app/tau_wire:session-end() |> std/io:eprint.ln("--- eof, session ends")
             | again |> app/tau_wire:bump-fail(n: silents, bound)
                 | edge nf |> std/fmt:fmt.blk {
-                    observer: {{ nf:d }} consecutive replies reached nobody. `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what are you waiting for?
+                    observer: {{ nf:d }} consecutive replies reached nobody. `say(text: ...)` reaches the user, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what are you waiting for?
                 }: m |> observe(role: "user", text: m)
                     |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
                 | retry nf |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
@@ -344,7 +382,7 @@ loop = clear-reply()
         | yes |> app/tau_wire:session-end()
         | no |> app/tau_wire:bump-fail(n: fails, bound)
             | edge nf |> std/fmt:fmt.blk {
-                observer: {{ nf:d }} consecutive refused replies. `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what were you trying to do?
+                observer: {{ nf:d }} consecutive refused replies. `say(text: ...)` reaches the user, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what were you trying to do?
             }: m |> observe(role: "user", text: m)
                 |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
             | retry nf |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
@@ -355,30 +393,32 @@ clear-reply = std/store:query(reply)
 ! query buf |> std/string:clear(s: buf)
 
 // The seed: the language shown by example — ONE assistant turn carrying a
-// multi-line program (note first, a call armed to `u` and chained into a
-// second call that consumes `u.user_id`, whose `ok` arm closes the turn by
-// splicing its own result into the signoff). The vocabulary itself is not
-// here: it lives in the system message, given, never fetched.
+// two-item program (a call armed to `u`, then a `say` splicing `u`'s
+// fields). The vocabulary itself is not here: it lives in the system
+// message, given, never fetched.
 tor seed {}
-seed = observe(role: "assistant", text: "note(text: user confirmed; the certificate covers the fare.)\nget-user-details(user_id: \"example_user_0\") | ok u |> book-reservation(user_id: u.user_id, flights: r9.flights, payment_methods: [{payment_id: \"example_cert_0\", amount: 250}], total_baggages: 3, nonfree_baggages: 0, insurance: \"no\") | ok b |> say(text: \"Booked {{ b.reservation_id }} — your flight is confirmed, {{ b.cabin }}.\")")
+seed = observe(role: "assistant", text: "get-user-details(user_id: \"example_user_0\") | ok u |>\nsay(text: \"Welcome back, {{ u.user_id }} — membership {{ u.membership }}.\")")
 
 // Boot: the system message never enters the transcript — `ask` splices a
-// fresh `std/bridge:grammar` render ahead of the history on every turn, so
-// the declared surface the model sees is always live: wire rules, "Your
-// vocabulary:" with signatures, and this session's defined flows. Boot only
-// seeds the policy line, the example program, and the first user turn.
+// fresh `sysdoc` render ahead of the history on every turn, so the
+// declared surface the model sees is always live: wire rules, "Your
+// vocabulary:" with signatures, the domain policy, and this session's
+// defined flows. Boot only stores the policy, seeds the example
+// program, and observes the first user turn.
 tor boot { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string, bound: i64 }
 boot = app/tau_wire:inbound()
-| init p |> observe(role: "user", text: p)
+| init p |> policy-note(text: p)
     |> seed() |> app/tau_wire:inbound()
     | user u |> observe-human(text: u) |> app/tau_wire:auth-ensure()
         | ok |> loop(br, model, max_tokens, temperature, bound, fails: 0, silents: 0)
         | failed m |> app/tau_wire:die(msg: m)
     | init _ | app/tau_wire:die(msg: "second init line")
+    | wire _ | app/tau_wire:die(msg: "wire line on the agent protocol")
     | result _ | app/tau_wire:die(msg: "result with no outstanding call")
     | eof |> app/tau_wire:session-end()
     | bad m |> app/tau_wire:die(msg: m)
 | user _ | app/tau_wire:die(msg: "expected init line first")
+| wire _ | app/tau_wire:die(msg: "wire line on the agent protocol")
 | result _ | app/tau_wire:die(msg: "result with no outstanding call")
 | eof |> app/tau_wire:die(msg: "stdin closed before init")
 | bad m |> app/tau_wire:die(msg: m)
@@ -392,6 +432,12 @@ std/string:from-page(text: "")
 
 std/string:from-page(text: "")
 | ok b |> std/string:take(s: b): u |> std/store:insert(reply) { u }
+    | row _ |> _
+    | full f |> std/string:free(s: f)
+| err e |> app/tau_wire:die(msg: e)
+
+std/string:from-page(text: "")
+| ok c |> std/string:take(s: c): v |> std/store:insert(domain_policy) { v }
     | row _ |> _
     | full f |> std/string:free(s: f)
 | err e |> app/tau_wire:die(msg: e)
