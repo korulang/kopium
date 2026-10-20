@@ -89,3 +89,19 @@ plumbing, not architecture), and the out-of-process half (authored module
 does not have. The probe also surfaced that "the bridge" was never one
 object: each cell's bridge is its own; what is shared is the world root
 and the custody record's legibility to the parent.
+
+2026-10-20, later — **a real model now drives a child.** `live_cells.k` is
+`live_db.k`'s loop re-pointed: the parent owns the fleet, each turn borrows
+`node.child-1` and pumps the model's reply into `std/cell:run`; a scratch
+bridge warms the prompt's grammar and closes (grammar is scope-derived —
+any bridge on the same scope renders the same bytes). Verified live
+(laguna-s-2.1:free): the child minted `h:Connection:1` on its own bridge,
+wrote Rex and Whiskers to disk through `conn: r1`, drew the dispatcher's
+refusal on a fabricated `h:Statement:999`, and discharged cleanly — the
+parent then read the whole arc out of `cells/child-1/holds.log` and
+drained the fleet. Two findings the run added: `std/fleet(node)` roots a
+chain, never rides one (KORU161 — spawn/drain/inspect each want a tor
+whose body starts at the transform); and the empty-reply flake is now the
+arc's weak joint — turns that mint nothing leave later turns naming `r1`
+into refusals, a model-quality gap the loop should retry, not a custody
+defect.
