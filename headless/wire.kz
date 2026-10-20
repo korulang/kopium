@@ -189,7 +189,7 @@ var auth_len: usize = 0;
 | ok g |> remember-grammar(grammar: g)
 | not-found _ |> remember-grammar(grammar: "!! bridge grammar: scope not found !!")
 
-var grammar_buf: [4096]u8 = undefined;
+var grammar_buf: [16384]u8 = undefined;
 var grammar_len: usize = 0;
 
 ~tor remember-grammar { grammar: string }
@@ -200,11 +200,59 @@ var grammar_len: usize = 0;
     $mod.grammar_len = grammar.len;
 }
 
+// The authored guidance spliced after the derived grammar when a program
+// calls plain `agent-body` — the notes world's session facts. Other
+// vocabularies pass their own through `agent-body-g` (app/db_scope keeps
+// the sqlite one); the builder below is the shared part, the guidance is
+// the parameter. A scope whose guidance teaches verbs outside its
+// vocabulary is teaching refusals — keep the examples on-wall.
+const NOTES_GUIDANCE =
+    \\
+    \\Session facts:
+    \\- If the human is chatting, asking a question, or you are unsure what
+    \\  they want, use say().
+    \\- To look inside a file, call read() — the contents come back in the
+    \\  tool result. open() is the DESTRUCTIVE verb: it creates the file
+    \\  empty, so never open() a file you meant to read.
+    \\- Handles are issued by open() and STILL OPEN — this session outlives
+    \\  each turn.
+    \\- If the action is impossible — wrong handle, missing handle,
+    \\  out-of-vocabulary action, or you are stuck — call say(text: "...")
+    \\  and explain why: the transcript is how the next turn learns.
+    \\
+    \\Examples of well-formed replies:
+    \\say(text: "Not much — tell me a note to open.")
+    \\say(text: "I opened notes.txt.")
+    \\read(path: "notes.txt")
+    \\open(path: "notes.txt") | ok h |> append(handle: h, text: "hello")
+    \\open(path: "notes.txt") | ok h |> close(handle: h)
+    \\
+    \\Growth — teaching the session a new verb. A definition is the one reply
+    \\that is TWO lines: the first line starts with `tor ` and declares the
+    \\verb and its params, the second line is its body over verbs you already
+    \\hold. The run loop installs it instead of dispatching it, and the next
+    \\turn's vocabulary lists it beside the compiled verbs. Example:
+    \\tor greet { msg: string }
+    \\greet = say(text: msg)
+;
+
 ~pub tor agent-body { model: string, max_tokens: u32, temperature: string, goal: string, history: string<*@scoped> } -> string
 
 ~proc agent-body|zig {
+    return agentBody(model, max_tokens, temperature, goal, history, NOTES_GUIDANCE, $mod.grammar_buf[0..$mod.grammar_len]);
+}
+
+// Guided variant: the caller supplies the session-facts/examples tail for
+// its own vocabulary. Everything else — the wire rules, the derived
+// grammar, the request envelope — is the shared builder.
+~pub tor agent-body-g { model: string, max_tokens: u32, temperature: string, goal: string, history: string<*@scoped>, guidance: string<*@scoped> } -> string
+
+~proc agent-body-g|zig {
+    return agentBody(model, max_tokens, temperature, goal, history, guidance, $mod.grammar_buf[0..$mod.grammar_len]);
+}
+
+fn agentBody(model: []const u8, max_tokens: u32, temperature: []const u8, goal: []const u8, history: []const u8, guidance: []const u8, grammar: []const u8) []const u8 {
     const alloc = std.heap.page_allocator;
-    const grammar = $mod.grammar_buf[0..$mod.grammar_len];
 
     const rules =
         \\You are driving a Koru interpreter. Your reply is Koru: one invocation
@@ -216,36 +264,6 @@ var grammar_len: usize = 0;
         \\is no prose channel: to say something, call say(). What you may call
         \\is your vocabulary below, derived from the session's own declaration:
         \\
-    ;
-
-    const rules2 =
-        \\
-        \\Session facts:
-        \\- If the human is chatting, asking a question, or you are unsure what
-        \\  they want, use say().
-        \\- To look inside a file, call read() — the contents come back in the
-        \\  tool result. open() is the DESTRUCTIVE verb: it creates the file
-        \\  empty, so never open() a file you meant to read.
-        \\- Handles are issued by open() and STILL OPEN — this session outlives
-        \\  each turn.
-        \\- If the action is impossible — wrong handle, missing handle,
-        \\  out-of-vocabulary action, or you are stuck — call say(text: "...")
-        \\  and explain why: the transcript is how the next turn learns.
-        \\
-        \\Examples of well-formed replies:
-        \\say(text: "Not much — tell me a note to open.")
-        \\say(text: "I opened notes.txt.")
-        \\read(path: "notes.txt")
-        \\open(path: "notes.txt") | ok h |> append(handle: h, text: "hello")
-        \\open(path: "notes.txt") | ok h |> close(handle: h)
-        \\
-        \\Growth — teaching the session a new verb. A definition is the one reply
-        \\that is TWO lines: the first line starts with `tor ` and declares the
-        \\verb and its params, the second line is its body over verbs you already
-        \\hold. The run loop installs it instead of dispatching it, and the next
-        \\turn's vocabulary lists it beside the compiled verbs. Example:
-        \\tor greet { msg: string }
-        \\greet = say(text: msg)
     ;
 
     var out = std.ArrayListUnmanaged(u8){};
@@ -267,7 +285,7 @@ var grammar_len: usize = 0;
     out.appendSlice(alloc, ",\"stream_options\":{\"include_usage\":true},\"messages\":[{\"role\":\"system\",\"content\":\"") catch @panic("kopium: OOM");
     jsonEscape(alloc, &out, rules);
     jsonEscape(alloc, &out, grammar);
-    jsonEscape(alloc, &out, rules2);
+    jsonEscape(alloc, &out, guidance);
     out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
     out.appendSlice(alloc, history) catch @panic("kopium: OOM");
     out.appendSlice(alloc, ",{\"role\":\"user\",\"content\":\"") catch @panic("kopium: OOM");

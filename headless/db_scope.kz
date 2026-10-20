@@ -1,0 +1,109 @@
+// db_scope.kz — the headless world's "db" scope: the shared sqlite verbs
+// (app/db_verbs — wire names every world agrees on) plus this world's
+// voice and the guidance text a live program splices into its prompt.
+//
+// The headless say is a stderr line, like notes/libs — this world has no
+// marshal to speak to. The bench world's db scope (bench/db_scope.k)
+// composes the same db-verbs with its own sayIO channel; the verb set is
+// identical, the channel is each world's own.
+
+~import std/runtime
+~import app/db_verbs
+
+const std = @import("std");
+
+// ============================================================================
+// SAY — the voice, a tool call like any other
+// ============================================================================
+//
+// Every agent scope carries a voice: the grammar preamble promises
+// `say(text: "...")` is what reaches the user, and without this verb in
+// the register that sentence is a lie the wall would deny. `hush` exists
+// for the same reason it does in notes/libs — a TUI owns the terminal and
+// these procs don't; headed programs call it once at startup.
+
+var quiet: bool = false;
+
+~pub tor hush {}
+
+~proc hush|zig {
+    $mod.quiet = true;
+}
+
+~pub tor say { text: string }
+
+~proc say|zig {
+    if (!$mod.quiet) std.debug.print("      {s}\n", .{text});
+}
+
+// ============================================================================
+// GUIDANCE — the authored half of the system message, per scope
+// ============================================================================
+//
+// The derived grammar teaches the vocabulary; this text teaches the
+// SHAPE of work here — which verb is destructive, how a stream is
+// handed back, what a spent token means. It rides `agent-body`'s
+// guidance slot so a live program doesn't splice notes-shaped examples
+// into a sqlite prompt.
+
+~pub tor guidance {} -> string
+
+~proc guidance|zig {
+    return
+        \\
+        \\Session facts:
+        \\- If the human is chatting, asking a question, or you are unsure what
+        \\  they want, use say().
+        \\- open-db(path:) mints a connection token. A call's result binds a
+        \\  durable rN name — later turns hand the token back as `conn: rN`.
+        \\- rows(conn:, sql:) opens a row stream over a SELECT: borrow the live
+        \\  row with col-int/col-text/col-real, step with next-row. `| done`
+        \\  returns the connection; finish-stmt abandons a stream and returns
+        \\  it too. sql(conn:, sql:) is the rowless writer — CREATE, INSERT,
+        \\  UPDATE, DELETE.
+        \\- A token spends once. `rows(conn: c)` spends c — the `| done` or
+        \\  `| err` arm returns a fresh token; close-db wants THAT one, never
+        \\  the spent name.
+        \\- If the action is impossible — dead token, missing table, a verb
+        \\  outside your vocabulary — call say(text: "...") and explain: the
+        \\  transcript is how the next turn learns.
+        \\
+        \\Examples of well-formed replies:
+        \\say(text: "What should I put in the database?")
+        \\open-db(path: "data.db") | db c |>
+        \\rows(conn: c, sql: "SELECT name FROM sqlite_master") | row s |>
+        \\col-text(stmt: s, index: 0) | ok t |>
+        \\say(text: "first table: {{ t }}")
+        \\
+        \\Growth — teaching the session a new verb. A definition is the one reply
+        \\that is TWO lines: the first line starts with `tor ` and declares the
+        \\verb and its params, the second line is its body over verbs you already
+        \\hold. The run loop installs it instead of dispatching it, and the next
+        \\turn's vocabulary lists it beside the compiled verbs. Example:
+        \\tor greet { msg: string }
+        \\greet = say(text: msg)
+    ;
+}
+
+// The seed program — ONE assistant turn the model imitates, chosen for this
+// scope. A seed naming a verb outside the vocabulary teaches a refusal, so
+// this one walks the custody chain end to end: mint, stream, read, speak.
+~pub tor seed {} -> string
+
+~proc seed|zig {
+    return
+        \\open-db(path: "data.db") | db c |>
+        \\rows(conn: c, sql: "SELECT name FROM sqlite_master") | row s |>
+        \\col-text(stmt: s, index: 0) | ok t |>
+        \\say(text: "first table: {{ t }}")
+    ;
+}
+
+// ============================================================================
+// THE PERMISSION MODEL — this world's "db" = shared verbs + this voice
+// ============================================================================
+
+~std/runtime:register(scope: "db") {
+    scope(db-verbs)
+    say(1)
+}
