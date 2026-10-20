@@ -67,3 +67,25 @@ true regeneration still wants a compile step); what "parent looks at the
 bridge" means as a verb (fleet borrows answer inspection of cells, not yet
 of custody); whether a child's world/ inherits `holds.log` custody across
 process boundaries or only through the parent's session.
+
+2026-10-20 — **the in-process half answered: yes.** `headless/probe_cells.k`
+(a ~60-line program over `std/fleet` + `std/cell` + `app/db_scope`) spawned
+a `db`-scoped cell, ran two turns into it, and read its custody afterward.
+What the run measured, not designed:
+
+- The child's bridge holds custody across `cell:run` calls — `conn: r1`
+  minted on turn one resolved on turn two.
+- "Share the resource bridge" concretizes to a *shared world root with
+  per-child slices*: `cells/child-1/holds.log` recorded the child's whole
+  custody arc (session-open, mint, release) and the parent read it through
+  `std/fs:read-lines` — inspection is ordinary file access, not a verb.
+- `fleet:drain` discharged the resident through the custody path; the
+  borrow is all the parent ever held.
+
+What this does *not* answer: a model in front of `cell:run` (the wire
+machinery from `live_db.k` points at `cell:run` instead of `bridge:run` —
+plumbing, not architecture), and the out-of-process half (authored module
+→ `koruc` → spawned binary) still wants the runtime spawn verb koru_std
+does not have. The probe also surfaced that "the bridge" was never one
+object: each cell's bridge is its own; what is shared is the world root
+and the custody record's legibility to the parent.
