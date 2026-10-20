@@ -27,6 +27,7 @@ import app/airline_tools
 import app/airline_native
 import app/corpus_env
 import app/tau_wire
+import app/db_scope
 import koru/sse
 import koru/curl
 import headless/wire
@@ -393,11 +394,13 @@ clear-reply = std/store:query(reply)
 ! query buf |> std/string:clear(s: buf)
 
 // The seed: the language shown by example — ONE assistant turn carrying a
-// two-item program (a call armed to `u`, then a `say` splicing `u`'s
-// fields). The vocabulary itself is not here: it lives in the system
-// message, given, never fetched.
+// program that ends in a `say`. Per-scope (app/tau_wire:seed-text): a seed
+// naming a verb outside this vocabulary teaches a refusal, so `db` gets a
+// custody-chain seed while airline keeps its user-details lookup. The
+// vocabulary itself is not here: it lives in the system message, given,
+// never fetched.
 tor seed {}
-seed = observe(role: "assistant", text: "get-user-details(user_id: \"example_user_0\") | ok u |>\nsay(text: \"Welcome back, {{ u.user_id }} — membership {{ u.membership }}.\")")
+seed = app/tau_wire:seed-text(): st |> observe(role: "assistant", text: st)
 
 // Boot: the system message never enters the transcript — `ask` splices a
 // fresh `sysdoc` render ahead of the history on every turn, so the

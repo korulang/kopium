@@ -579,6 +579,21 @@ fn jsonKeys(s: []const u8, buf: []u8) []const u8 {
     return std.posix.getenv("KOPIUM_SCOPE") orelse "airline";
 }
 
+// The seed program — ONE assistant turn the model imitates, chosen for the
+// scope the bridge bound. A seed naming a verb outside the vocabulary
+// teaches a refusal, so the text is per-scope, not universal. `db` gets
+// the custody shape that is this surface's whole point: mint a conn token
+// on `| db`, spend it into a stream on `| row`, borrow the live row for a
+// column read, splice the value into a say.
+~pub tor seed-text {} -> string
+
+~proc seed-text|zig {
+    const scope = std.posix.getenv("KOPIUM_SCOPE") orelse "airline";
+    if (std.mem.eql(u8, scope, "db"))
+        return "open-db(path: \"data.db\") | db c |>\nrows(conn: c, sql: \"SELECT name FROM sqlite_master\") | row s |>\ncol-text(stmt: s, index: 0) | ok t |>\nsay(text: \"first table: {{ t }}\")";
+    return "get-user-details(user_id: \"example_user_0\") | ok u |>\nsay(text: \"Welcome back, {{ u.user_id }} — membership {{ u.membership }}.\")";
+}
+
 // Which channel the model's reply rides: "content" (the default — wire text
 // in the message body) or "toolcall" — the request offers a single `koru`
 // tool and the reply's program arrives inside its argument string.

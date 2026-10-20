@@ -22,6 +22,7 @@ import app/airline_tools
 import app/airline_native
 import app/corpus_env
 import app/tau_wire
+import app/db_scope
 import koru/yyjson
 
 // Run a program through the gate and emit the report text — the same
