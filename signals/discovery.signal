@@ -1,0 +1,6 @@
+name: discovery
+kind: inferred
+shape: categorical
+face: in
+membrane: true
+note: something the model believed absent or unbuilt turned out already present — declared 2026-10-20 when the remembered "summon a compiled child" rung turned out to be mostly substrate: std/cell + std/fleet already mint scoped sub-sessions with shared worlds and parent borrows (frag-parents-compile-descendants, create)
