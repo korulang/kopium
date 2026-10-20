@@ -1,0 +1,12 @@
+name: belief-change
+kind: inferred
+shape: categorical
+face: in
+membrane: true
+note: a durable belief about the system flipped — what was believed is no
+  longer true. Declared 2026-10-20 when the *T resource-token mint stopped
+  being a countable sequence: h:Type:N was a resolvable guess, seeded hex
+  makes spelled guesses fabrications like any other (koru
+  frag-resource-tokens-are-minted-not-named). Near-twin of the older
+  `belief` signal — the koru commit hook speaks `belief-change`; keep both
+  until the vocabularies are reconciled.
