@@ -1,0 +1,99 @@
+# PROPOSAL — context assembly: the system prompt is a guide
+
+Status: design converged 2026-11-09, unimplemented. Captures rulings
+migrated out of n-grams/rd.md — the research log stays the lab notebook;
+this repo owns the build.
+
+## The rulings
+
+### 1. The system prompt is guide data, not a superstring
+
+Today `AirlineLldaAgent.get_init_state` concatenates `gate.grammar()`
++ tau2 `domain_policy` into one ~19.4k-char blob. That blob is three
+provenance classes wearing one coat:
+
+- **Derived** — wire grammar prose, vocabulary, tool contract. Emitted
+  by the register/vocabulary derivation inside the gate binary.
+- **External** — tau2's domain policy (~7.8k). tau2-bench owns the text;
+  for the smart-tool future it is just more teaching data the tool
+  declares, not a special injected channel.
+- **Tuned** — examples and framing prose. Hand-maintained today; the
+  prime overprompting suspect.
+
+Ruling: the prompt becomes guide entries keyed by section (`system`,
+`system:vocabulary`-style keys TBD), rendered by the context assembler.
+Guide storage stays dumb — derivation emits the entries (inline
+blocks, `@"file"` embeds, or transform-generated table rows); nothing
+is hand-duplicated. `@"path"` is the verified file-source spelling
+(koru pins 620_008/620_009) — `guide:add(system) @"system.md"` compiles
+the same bytes as the inline block.
+
+### 2. Anti-overprompting is architectural, not editorial
+
+Always-on context = a declared, small set of keys. Depth moves to
+on-demand lookup: edge guides fire on surprise, priors render per
+state. You cannot ship 19k chars of always-on context by accident if
+the always-on tier is a key list. The portal shows provenance per
+block (inline / file@commit / generated).
+
+### 3. Surprise-gated guides
+
+Guide value is conditional on surprise. Two cheap prediction sources:
+the armed branch is the model's prediction (`| ok r |>` predicts ok;
+unarmed outcomes already surface as unhandled-branch), and the n-gram
+prior gives an empirical branch distribution per tor/state — actual
+vs modal = computable surprise score. Surprise is self-limiting
+(priors sharpen → guides fade = built-in graduation) and a dial, not
+a switch: mild → hint, wild → full lesson + trajectory replay.
+
+### 4. Trusted core, heuristic periphery (the Turchin rhyme)
+
+Gate/interpreter = verified core; guides/priors/context = heuristic
+periphery allowed to be wrong. Same architecture as supercompilation's
+driver+strategy split, inverted correctness regime: his periphery must
+be sound, ours is allowed to err because the gate rejects illegal acts
+and the evaluator scores outcomes.
+
+## What exists vs what is missing
+
+Exists: runlog.py JSONL schema (gen events carry full assembled
+context), portal/ SvelteKit viewer live on :5199, guide attach/lookup
+proven in koru (480_001 green), n-gram prior pickles, gate vocabulary/
+grammar derivation.
+
+Missing, in dependency order:
+1. **Say-protocol desync** — rebuilt airline-gate-binary has
+   non-blocking say (tau_wire.kz sayIO returns immediately); the
+   Python session still assumes blocking say → user-reply JSON lands
+   in wire turns → residue/STEPS verdicts. Corrupts every transcript.
+   gate_probe.py's 13 deterministic cases map the gaps first.
+2. `state()` contract — structured interpreter read (bindings, path,
+   branch outcomes) for context assembly.
+3. Context assembler — reads state + guide table + priors + surprise
+   score → renders the per-turn payload; replaces the static
+   system+transcript concat.
+4. Guide delivery — file spike (guide_table.txt) → AST `appended`
+   injection (koru-side, queued).
+5. Liquid `{{ }}` collision — wire teaches literal `{{ u.field }}`
+   splices; guide templates through Liquid will eat them. Escape story
+   or different sigil needed before teaching text rides templates.
+6. Module-resident `guide:add` — grammar ambiguity TODO-pinned in
+   koru (115_063); impl-flow source-block binding unresolved.
+
+## The dual-use thesis (still alive)
+
+The same success corpus and guide/trajectory infrastructure serves
+two consumers: (a) context assembly for incumbent-style LLM agents
+(above), and (b) n-gram draft warm-starting for diffusion models —
+the construct-proposal injection proven causal in the n-grams repo,
+with diffusiongemma-26B showing real agentic recovery behavior. The
+portal's per-turn context view is the observability surface for BOTH
+paths; cassette replay (replay states with altered guidance, measure
+delta) is the shared evaluation harness. Nothing here forecloses the
+diffusion line — it parks until the channel is truthful.
+
+## Migration note
+
+Bench research scripts already live in bench/ (untracked). n-grams
+keeps corpus building, n-gram training, and diffusion eval. This repo
+owns: the gate/harness, runlog, portal, smart tools, guide mining.
