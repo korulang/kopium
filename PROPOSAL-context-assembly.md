@@ -97,3 +97,30 @@ diffusion line — it parks until the channel is truthful.
 Bench research scripts already live in bench/ (untracked). n-grams
 keeps corpus building, n-gram training, and diffusion eval. This repo
 owns: the gate/harness, runlog, portal, smart tools, guide mining.
+
+## Say-protocol desync — measured 2026-11-09 (gate_probe vs both binaries)
+
+gate_probe 13 cases: oct2 binary 12/13, rebuilt binary 11/13.
+
+FINDINGS (measured, not inferred):
+- Bare `call()` -> HALT unhandled-branch:ok on NEW binary, OK on oct2.
+  std/bridge semantic change Oct2->Nov9 (unarmed outcomes now report
+  unhandled-branch). Fetch primitive survives as `call | ok r |>`
+  (arm ok, no continuation) — binds r{N}, turn ends quietly.
+- `say | ok x |>` binds the SAY TEXT, not a user reply — sayIO returns
+  emitted text immediately; say NEVER blocks (tau_wire.kz:302-318).
+- arm-chain probe FAILs on BOTH binaries = stale expectation: multi-step
+  turns verdict STEPS (per-step report), not OK. Probe bug, not gate bug.
+- Gate intake dispatches inbound lines by JSON `kind` (init/user/wire/
+  result) — tau_wire.kz:484-502. User replies are ordinary inbound
+  lines; callIO pends them mid-call (tau_wire.kz:346-365); take-pending
+  drains owed replies at turn end (tau_wire.kz:527+).
+- Residue mechanism still unexplained: user-reply JSON appeared INSIDE
+  wire turns as residue in the real run — likely buffered writes
+  landing mid-turn-accumulation; needs gate_intake.kz read.
+
+NEXT: (a) rule on unarmed-outcome HALT (recommend: keep — explicit >
+implicit, self-teaching); (b) fix gate_probe expectations (STEPS
+verdict, bare-call case); (c) rewrite TauGateSession awaiting model —
+call is the ONLY blocking state, say is fire-and-forget; (d) re-run
+task 14 into portal.
