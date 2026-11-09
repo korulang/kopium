@@ -43,3 +43,16 @@ the prompt. `tau_wire:blank` now routes the empty reply to its own
 rejection kind, so the receipt separates silence from grammar. Same
 session confirmed the flip: with the field omitted, muse task 0 scored
 1.0 through the wire — the model was never unable, it was never heard.
+
+## evolve — 2026-11-09
+
+The receipt grew a third axis: not only what the reply was and whether it
+existed, but what the reply was *answering*. `bench/runlog.py` logs the
+full assembled context — system plus transcript — on every generation,
+per turn, so consecutive contexts are diffable artifacts rather than
+prose in a scrollback. The portal renders the same record. A loss is
+still a failure class waiting for evidence; now the evidence includes
+the exact context that produced each emission, so "the model saw X and
+still did Y" is checkable against the artifact instead of inferred from
+the wire alone. Request-side capture had been the missing half of every
+receipt this concept was built on.

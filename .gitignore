@@ -45,3 +45,6 @@ exp-*.txt
 probe*.txt
 test-note.txt
 notes-edit.transcript.txt
+
+# run logs — machine-generated trajectory artifacts
+/logs/
