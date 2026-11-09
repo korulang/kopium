@@ -4,15 +4,30 @@ Unlike GateSession (wire-turn in → one status line out), this gate is a
 full conversational runtime:
 
   IN   wire turn:   `verb(...)\n...\n\n`          (blank-line terminated)
-       user reply:  `{"kind":"user","text":...}`  (say-reply / pending)
        tool result: `{"kind":"result","id":"kN","content":...,"error":bool}`
   OUT  `{"kind":"call","id":"kN","name":...,"arguments":{...}}`  tool request
        `{"kind":"say","text":...}`                             user-facing text
        `OK|HALT|REJECT|ERROR|STEPS|DEFINED ...`                 turn verdict
 
-A turn can span MANY tau2 exchanges: say() blocks for the user reply,
-callIO blocks for the tool result, and the program resumes after each.
-The session tracks which outbound is outstanding so results route right.
+Protocol truth (tau_wire.kz sayIO/callIO + airline-gate.k serve loop):
+
+  - `call` is the ONLY blocking state. callIO emits the call line then
+    reads inbound lines until the matching result arrives.
+  - `say` is emit-only: sayIO writes the line and returns the text
+    immediately. The gate has already moved on — there is nothing to
+    answer. Say-debt (outstanding_user) exists for tau-agent.k's
+    pull()/take-pending transcript drain; airline-gate.k never calls
+    them, so the debt is inert here.
+  - `{"kind":"user"}` lines are NEVER written to this gate. intake has
+    no kind dispatch — a user line landing between turns becomes the
+    first line of the next wire turn (measured: '{"kind":"user",...}'
+    glued into wire text as a residue item). User replies live at the
+    transcript level: tau2's user sim produces them, the agent observes
+    them, and the next generation sees them. They never enter the gate.
+
+The session tracks _await: "call" = blocked in callIO (feed_result is
+the only legal write), "say" = gate running (read-only — pump events,
+write nothing), None = status consumed, gate at intake (send_wire legal).
 """
 
 from __future__ import annotations
@@ -64,10 +79,14 @@ class TauGateSession:
 
     @property
     def awaiting(self) -> str | None:
-        """What the gate is currently blocked on: 'call' | 'say' | None.
-        Wire turns may ONLY be sent when this is None — sending source
-        while sayIO/callIO reads inbound lines panics the gate
-        ('inbound line is not JSON')."""
+        """What the gate is doing: 'call' = blocked in callIO (only
+        feed_result is a legal write), 'say' = mid-program (read-only —
+        the gate already moved past the say), None = at intake
+        (send_wire is legal). Wire turns may ONLY be sent when this is
+        None — sending source while callIO reads inbound lines panics
+        the gate ('inbound line is not JSON'), and any {"kind":"user"}
+        line written while the gate is NOT inside callIO becomes the
+        next turn's wire residue."""
         return self._await
 
     def _write(self, s: str) -> None:
@@ -121,9 +140,20 @@ class TauGateSession:
         }) + "\n")
         return self._next_event()
 
-    def feed_user(self, text: str):
-        """Answer an outstanding say() (or pending user line) -> next event."""
-        self._write(json.dumps({"kind": "user", "text": text}) + "\n")
+    def next_event(self):
+        """Read the next gate event WITHOUT writing anything.
+
+        Legal only while awaiting == 'say' (or 'call' is impossible —
+        a blocked callIO emits nothing until its result arrives). Say is
+        emit-only: after a say event the gate is already running toward
+        its next emission, so the harness drains events read-only. There
+        is deliberately no feed_user: this gate has no user-input verb —
+        a {"kind":"user"} line at intake becomes wire residue."""
+        if self._await != "say":
+            raise RuntimeError(
+                f"next_event while awaiting={self._await} — "
+                "only a running gate (post-say) emits without input"
+            )
         return self._next_event()
 
     def _next_event(self):

@@ -4,9 +4,10 @@
 Unlike LocalLladaAgent (mock: wire→ToolCall mapping, gate as validator),
 the airline gate IS the tool-call engine (tau_wire.kz protocol): tool
 tors emit {"kind":"call"} and block for {"kind":"result"}; say() emits
-{"kind":"say"} and blocks for {"kind":"user"}. One wire program can span
-many tau2 exchanges — the gate stays mid-execution while the orchestrator
-shuttles user replies and tool results.
+{"kind":"say"} and returns immediately — it is a write, not a read.
+One wire program can span many tau2 exchanges — the gate stays
+mid-execution while the orchestrator shuttles tool results, and say
+replies live at the transcript level (they never enter the gate).
 
 State machine per generate_next_message:
   program open + incoming msg  -> translate to gate JSON, pump to next
@@ -195,14 +196,19 @@ class AirlineLladaAgent(HalfDuplexAgent[AirlineAgentState]):
             return
         event, bound, val = parsed
         if event == "say":
-            # a say's bound value IS the user's reply — surface it as a
-            # user message, not gate JSON (incumbent observe-human parity)
-            self._observe(state, "user", f"user: {val}")
-        else:
-            self._observe(state, "user", f"result: {val} bound: {bound}")
+            # sayIO returns the emitted text — the bound value is the
+            # agent's own words, not a user reply. The reply arrives as
+            # a UserMessage and is observed by _ingest. Labelling the
+            # say text `user:` echoes the agent's words back as if the
+            # user said them.
+            return
+        self._observe(state, "user", f"result: {val} bound: {bound}")
 
     def _fmt_step(self, line: str) -> str:
-        """`step 2/3 result: {json} bound: r4` -> `result: <value> bound: r4`."""
+        """`step 2/3 result: {json} bound: r4` -> `result: <value> bound: r4`.
+        Non-result step lines (unhandled-branch, residue bound,
+        dispatch-error) keep their teaching text verbatim — the gate's
+        own report says how to fix the wire; the model must see it."""
         m = re.match(r"step\s+\S+\s+result:\s+(\{.*\})\s+bound:\s+(\S+)", line, re.S)
         if m:
             try:
@@ -210,6 +216,9 @@ class AirlineLladaAgent(HalfDuplexAgent[AirlineAgentState]):
                 return f"result: {val} bound: {m.group(2)}"
             except Exception:
                 pass
+        m2 = re.match(r"step\s+\S+\s+(.*)", line, re.S)
+        if m2:
+            return m2.group(1)
         return f"result: {line}"
 
     # ------------------------------------------------------------- the pump
@@ -235,12 +244,10 @@ class AirlineLladaAgent(HalfDuplexAgent[AirlineAgentState]):
             if kind == "say":
                 text = str(ev[1].get("text", ""))
                 if not text.strip():
-                    # say() BLOCKS for a user reply on this gate — skipping
-                    # the emit without answering deadlocks the program.
-                    # An empty say carries nothing to reply to: feed "" so
-                    # the binding resolves and the program moves on.
-                    self.trace.append("  [say  ] (empty — auto-replied)")
-                    ev = self.gate.feed_user("")
+                    # say is emit-only — an empty say carries nothing to
+                    # the user; skip the emit and keep pumping read-only.
+                    self.trace.append("  [say  ] (empty)")
+                    ev = self.gate.next_event()
                     continue
                 self.trace.append(f"  [say  ] {text[:200]}")
                 self._ev("gate_say", text=text)
@@ -330,14 +337,15 @@ class AirlineLladaAgent(HalfDuplexAgent[AirlineAgentState]):
     def _flows(wire: str) -> list[str]:
         """Split generated wire into flows, each collapsed to ONE line.
 
-        The Oct-2 airline-gate-binary deadlocks when a turn spans
-        multiple lines (verified: single-line chains/arms verdict OK;
-        the same program across two lines hangs forever after the last
-        item). Items are line-separated; a flow continues while the
-        previous line ends with `|>` (arm bind awaiting its continuation
-        invocation) or the next line starts with `|` (arm on own line).
-        Joining a flow's lines with a space yields valid wire — proven
-        against the binary (`call | ok u |> say(...)` -> OK)."""
+        An arm chain (`call | ok u |>` then `say(...)`) is one program:
+        joining its lines with a space keeps it a single gate item
+        (OK verdict) instead of two sibling items (STEPS report). The
+        Oct-2 binary deadlocked multi-line turns outright; the rebuilt
+        gate reports them as STEPS — the join still buys the cleaner
+        single-item verdict and matches the seed's taught shape.
+        Items are line-separated; a flow continues while the previous
+        line ends with `|>` (arm bind awaiting its continuation
+        invocation) or the next line starts with `|` (arm on own line)."""
         flows: list[str] = []
         cur: list[str] = []
         for ln in wire.splitlines():
@@ -358,10 +366,11 @@ class AirlineLladaAgent(HalfDuplexAgent[AirlineAgentState]):
         return [{"role": "system", "content": self.system_text}] + state.transcript
 
     def _feed_and_pump(self, message: Message, state: AirlineAgentState):
-        """Route the incoming tau2 message to whatever the gate awaits.
-        gate.awaiting is the truth: 'say' wants user text, 'call' wants a
-        result. Anything else is a protocol mismatch — fail loud, never
-        desync the gate."""
+        """Route the incoming tau2 message against the gate's state.
+        gate.awaiting is the truth: 'call' wants a result (the only
+        legal write); 'say' means the gate is running — events drain
+        read-only and user text stays at the transcript level. Anything
+        else is a protocol mismatch — fail loud, never desync."""
         await_kind = self.gate.awaiting
         if isinstance(message, MultiToolMessage):
             if await_kind != "call":
@@ -386,7 +395,10 @@ class AirlineLladaAgent(HalfDuplexAgent[AirlineAgentState]):
                 # callIO would pend the text but emit no event — the pump
                 # would block on readline forever. Anomalous in half-duplex.
                 return ("mismatch", "user text while call outstanding")
-            ev = self.gate.feed_user(message.content or "")
+            # awaiting == "say": the gate is running — the say-reply is
+            # transcript-level (already observed by _ingest), never
+            # written to the gate. Drain the next event read-only.
+            ev = self.gate.next_event()
         else:
             return ("mismatch", f"unhandled {type(message).__name__} while awaiting {await_kind}")
         return self._pump(ev, state)
@@ -408,8 +420,9 @@ class AirlineLladaAgent(HalfDuplexAgent[AirlineAgentState]):
         self.call_count += 1
         self._ingest(message, state)
 
-        # Resume a blocked program: the gate is awaiting a say-reply or
-        # tool result — this message is protocol input, not a new turn.
+        # Resume mid-turn: the gate emitted a say and is running (or is
+        # blocked on a tool result) — this message is protocol input,
+        # not a new turn.
         if self.gate.awaiting is not None:
             out = self._resume_open_program(message, state)
             if out[0] == "emit":

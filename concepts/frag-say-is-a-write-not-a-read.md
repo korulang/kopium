@@ -32,3 +32,15 @@ implicit in say's blocking read — nobody owned the count. Any protocol
 change that moves *when* a read happens must account for *who* reads, or
 the stream silently reassigns the next message to the wrong consumer. A
 ledger makes the coupling explicit and the desync impossible to miss.
+
+2026-11-10: the corollary scoped wrong. "The harness replies per
+outbound" is true of tau-agent.k's loop — the binary that CALLS
+pull()/take-pending — but airline-gate.k's serve loop is intake →
+bridge:run → status and never drains. On the evaluator binary the
+say-debt is inert, and a {"kind":"user"} line written between turns is
+not a late reply: intake has no kind dispatch, so it becomes the first
+line of the NEXT wire turn — measured glued in as a residue item
+(gate_probe trap pin). User replies on this surface are transcript-level
+only: they enter the model's context, never the gate's stdin.
+feed_user is deleted from TauGateSession; next_event() drains a running
+gate read-only.

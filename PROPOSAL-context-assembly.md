@@ -62,11 +62,9 @@ proven in koru (480_001 green), n-gram prior pickles, gate vocabulary/
 grammar derivation.
 
 Missing, in dependency order:
-1. **Say-protocol desync** — rebuilt airline-gate-binary has
-   non-blocking say (tau_wire.kz sayIO returns immediately); the
-   Python session still assumes blocking say → user-reply JSON lands
-   in wire turns → residue/STEPS verdicts. Corrupts every transcript.
-   gate_probe.py's 13 deterministic cases map the gaps first.
+1. ~~**Say-protocol desync**~~ — RESOLVED 2026-11-10. See findings
+   below; gate_probe is 18/18 on the rebuilt binary and task 14 is
+   re-running clean.
 2. `state()` contract — structured interpreter read (bindings, path,
    branch outcomes) for context assembly.
 3. Context assembler — reads state + guide table + priors + surprise
@@ -98,29 +96,47 @@ Bench research scripts already live in bench/ (untracked). n-grams
 keeps corpus building, n-gram training, and diffusion eval. This repo
 owns: the gate/harness, runlog, portal, smart tools, guide mining.
 
-## Say-protocol desync — measured 2026-11-09 (gate_probe vs both binaries)
+## Say-protocol desync — RESOLVED 2026-11-10
 
-gate_probe 13 cases: oct2 binary 12/13, rebuilt binary 11/13.
+Phase 1 measured (gate_probe vs both binaries, 2026-11-09):
+oct2 12/13, rebuilt 11/13 — bare-call HALT is a std/bridge semantic
+change; arm-chain FAIL was a stale STEPS expectation.
 
-FINDINGS (measured, not inferred):
-- Bare `call()` -> HALT unhandled-branch:ok on NEW binary, OK on oct2.
-  std/bridge semantic change Oct2->Nov9 (unarmed outcomes now report
-  unhandled-branch). Fetch primitive survives as `call | ok r |>`
-  (arm ok, no continuation) — binds r{N}, turn ends quietly.
-- `say | ok x |>` binds the SAY TEXT, not a user reply — sayIO returns
-  emitted text immediately; say NEVER blocks (tau_wire.kz:302-318).
-- arm-chain probe FAILs on BOTH binaries = stale expectation: multi-step
-  turns verdict STEPS (per-step report), not OK. Probe bug, not gate bug.
-- Gate intake dispatches inbound lines by JSON `kind` (init/user/wire/
-  result) — tau_wire.kz:484-502. User replies are ordinary inbound
-  lines; callIO pends them mid-call (tau_wire.kz:346-365); take-pending
-  drains owed replies at turn end (tau_wire.kz:527+).
-- Residue mechanism still unexplained: user-reply JSON appeared INSIDE
-  wire turns as residue in the real run — likely buffered writes
-  landing mid-turn-accumulation; needs gate_intake.kz read.
+Phase 2 root-caused and fixed (2026-11-10):
 
-NEXT: (a) rule on unarmed-outcome HALT (recommend: keep — explicit >
-implicit, self-teaching); (b) fix gate_probe expectations (STEPS
-verdict, bare-call case); (c) rewrite TauGateSession awaiting model —
-call is the ONLY blocking state, say is fire-and-forget; (d) re-run
-task 14 into portal.
+- **Residue mechanism confirmed deterministically.** gate_intake.kz
+  has NO kind dispatch: `intake` reads first line + continuation
+  until blank and treats ALL of it as wire text. A `{"kind":"user"}`
+  line written while the gate sits at intake becomes the first line
+  of the next turn — glued in as a residue item (visible verbatim in
+  run 181050's STEPS reports: `step 1/3 residue bound: r3 —
+  '{"kind": "user", "text": "No problem…' is not wire`). Pinned by
+  gate_probe's trap case.
+- **The gate never wants user lines.** airline-gate.k's serve loop is
+  intake → bridge:run → status, full stop. pull()/take-pending exist
+  in tau_wire.kz for tau-agent.k's all-Koru loop, which the gate
+  never calls. Say-debt (outstanding_user) is inert here. User
+  replies are transcript-level: tau2 user sim → UserMessage →
+  _ingest → next generation's context. They never enter the gate.
+- **TauGateSession rewritten**: `_await` is now "call" (blocked in
+  callIO — feed_result is the only legal write) | "say" (gate running
+  — read-only via next_event()) | None (at intake — send_wire legal).
+  feed_user deleted.
+- **Ruling: unarmed-outcome HALT stays.** Explicit arms beat implicit
+  auto-binding — honest, self-teaching (the gate's report literally
+  says `to keep going, arm it | ok name |>`), fail-loud consistent.
+  Fetch primitive = `call | ok r |>`.
+- **Agent observation fixes**: say-bound OK details no longer echo
+  the agent's own say text as `user:` (sayIO returns emitted text —
+  the old code labelled it a user reply, amplifying the "I can't
+  access…" loop); STEPS non-result lines (unhandled-branch, residue,
+  dispatch-error) now reach the model verbatim instead of being
+  mangled into `result:` noise.
+- **Item count = line count** (pinned): arm chain on one line = 1
+  item → OK; same chain across two lines = 2 items → STEPS. Unarmed
+  outcome: single-item → HALT; multi-item → per-step
+  `unhandled-branch:` line, siblings continue.
+- **gate_probe.py rewritten**: 18 cases, exact event-sequence
+  assertions, multi-turn session pins (residue only manifests
+  turn-over-turn), say-arm-binds-emitted-text pin, trap pin.
+  **18/18 green on airline-gate-binary.**
