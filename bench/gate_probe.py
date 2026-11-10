@@ -377,6 +377,61 @@ state_check(
 )
 
 
+# ------------------------------------------------- call_step coverage
+def callstep_coverage():
+    """Fable's invariant (landed-schema re-check 3): every item yields at
+    least one call_step record — distinct (turn, step) pairs must cover
+    the turn's `of`, including items with zero dispatches. This turn mixes
+    a prose refusal (item 1), a chain (item 2), and an unbound-name arg
+    eval failure (item 3) — the two shapes that produced NO records in the
+    first landed schema."""
+    g = TauGateSession(BINARY)
+    t0 = time.time()
+    wire = ('this is not wire\n'
+            'get-user-details(user_id: "x") | ok u |>'
+            'say(text: "hi {{ u.user_id }}")\n'
+            'say(text: "{{ missing.field }}")\n')
+    try:
+        events = pump(g, wire, call_result='{"user_id":"x"}')
+        # CALLSTEPS lands AFTER the verdict — the session reads it lazily
+        # on the next turn's first event read. A throwaway vocabulary()
+        # turn flushes turn 1's block into the buffer; its own records
+        # arrive after ITS verdict and stay undrained.
+        events += pump(g, 'vocabulary()\n')
+        recs = g.drain_callsteps()
+        covered = sorted({(r.get("turn"), r.get("step")) for r in recs})
+        ofs = sorted({r.get("of") for r in recs})
+        outcomes = sorted({r.get("item_outcome") for r in recs})
+        # every record of the turn reports the same `of`; coverage = all
+        # (turn, step) pairs for step in 1..of
+        ok = (len(ofs) == 1 and ofs[0] == 3
+              and covered == [(1, 1), (1, 2), (1, 3)])
+        RESULTS.append(("call_step: every item yields a record (refusal+chain+unbound)",
+                        ok, f"{time.time()-t0:.1f}s",
+                        [("covered", covered), ("of", ofs),
+                         ("item_outcomes", outcomes),
+                         ("events", [e[0] for e in events]),
+                         ("records", len(recs))]))
+        mark = "PASS" if ok else "FAIL"
+        print(f"[{mark}] call_step coverage  ({time.time()-t0:.1f}s)")
+        if VERBOSE or not ok:
+            for r in recs:
+                print(f"      rec: turn={r.get('turn')} step={r.get('step')} "
+                      f"of={r.get('of')} item_outcome={r.get('item_outcome')} "
+                      f"verb={r.get('verb')!r} failed={r.get('failed')}")
+            for k, s in events:
+                print(f"      {k}: {s}")
+    except Exception as e:
+        RESULTS.append(("call_step: every item yields a record (refusal+chain+unbound)",
+                        False, "ERR", f"{type(e).__name__}: {e}"))
+        print(f"[ERR] call_step coverage  {type(e).__name__}: {e}")
+    finally:
+        g.close()
+
+
+callstep_coverage()
+
+
 # ---------------------------------------------------------------- report
 print(f"\n=== gate_probe vs {BINARY.name} (timeout={TIMEOUT}s) ===")
 npass = sum(1 for _, ok, *_ in RESULTS if ok)
