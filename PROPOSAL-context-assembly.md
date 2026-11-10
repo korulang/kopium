@@ -293,6 +293,61 @@ durable cross-session graduation, module-resident `guide:add`
   projection (one source, both lines). Wait for regenerated corpus:
   `note` is 1,891/5,359 constructs and colon-era spellings persist.
 
+### Emission design (concrete, 2026-11-10 — implementation in flight)
+
+Field-by-field source map, verified against current tree:
+
+| `call_step` field | source |
+|---|---|
+| `seq` | `Bridge.call_seq`, ++ per emitted record |
+| `turn` | `Bridge.turn_count`, ++ per `run` call |
+| `step`,`of` | item index/total — `runSteps` loop / 1,1 single-item |
+| `outcome` | item verdict kind, mapped from the `Runtime.run_event.Output` variant (`result`,`unhandled-branch`,`exhausted`,`parse-error`,`validation-error`,`shape-error`,`event-denied`,`dispatch-error`,`scope-not-found`,`abandoned`,`residue`,`defined`,`partial`) — same string the prose line leads with |
+| `state_hash` | FNV-1a over sorted `name=<json>` durable bindings + held handle ids + defined names + `bound_count` + scope, computed once per `run` call |
+| `verb` | `TraceEntry.event` (qualified tor name) |
+| `args` | JSON `[{name,raw,value,ref}]` — raw = pre-eval `inv.args[i].value`, value = post-eval, ref = unquoted non-literal classifier (`true/false/null`/numeric/quoted → literal; bare ident, field path, or expression → reference) |
+| `armed` | JSON `[{w,b,g}]` from `flow.body.continuations` at the dispatch node — arm word, binding, `when` guard |
+| `arm_word`,`arm_name` | matched continuation's `.branch` / `.binding` (existing `TraceEntry.arm` is the binding) |
+| `branch`,`payload` | `dispatch_result.branch` / existing `TraceEntry.json` |
+| `bound` | existing `TraceEntry.bound` (rN) |
+| `handles` | `renderHeldHandles(pool)` JSON list snapshot post-dispatch |
+| `used` | `event_cost` charged for that dispatch |
+| `fired_guides` | `[]` until guides exist |
+| `failed`,`error` | set on the dispatch that threw (see pending-step below) |
+
+Mechanism:
+
+- **`TraceEntry` IS the record.** Extended in `interpreter.trace.kz` with
+  the new fields; `renderTrace` (prose) and the new JSONL renderer read the
+  same entries — log and model view cannot disagree by construction.
+- **Capture site**: `executeFlow` dispatch block (`interpreter.run.kz`
+  ~826-861). Args/armed JSON built pre-dispatch; a `ctx.pending_step`
+  stash covers the throwing dispatch so `dispatch-error` tails still emit
+  a record (`failed:true`). Defined-flow calls record like any dispatch;
+  their inner body calls record as their own entries.
+- **Escape**: threadlocal trace sink (same pattern as
+  `setRunMountedScopes`/`setDispatchPool`) flushed by `run|zig` before
+  each trace-carrying return; `dispatchThroughScope` sets/reads/clears
+  per item and returns `{out, steps}` — arena slices stay valid until the
+  next interpreter run, and serialization happens inside the per-item
+  loop before any subsequent dispatch.
+- **Bridge accumulation**: `call_log` JSONL on `Bridge` (session arena),
+  drained by new tor `take-calls -> string`. No `run` tor signature
+  change — ~45 call sites untouched; consumers opt in by draining.
+- **Gate**: `handle` splits into report + `settle`; `settle` drains
+  `take-calls` and emits `CALLSTEPS-BEGIN/END` framed block (STEPS
+  precedent) only when non-empty. `tau_gate_session` parses it;
+  `airline_llada_agent` emits one `call_step` runlog event per JSONL
+  line. `tau-agent.k` drains to `eprint` marker (its runlog path is the
+  legacy receipt producer — follow-up).
+- **`run_start`**: `trial` + gate binary hash added harness-side.
+
+Known v1 gaps (declared, not hidden): arg-eval failures (`UnboundName`,
+`FieldNotOnBoundValue`) throw before `pending_step` is armed — those
+dispatches produce no record (item outcome still records
+`dispatch-error`); `exhausted`/`parse-error`/`validation-error`/
+`residue`/`defined` items dispatch nothing and emit no records.
+
 ### Open questions carried forward
 
 - Policy slicing: whole+always-on v1 recommended; slicing deferred to
