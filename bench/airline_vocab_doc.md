@@ -18,7 +18,7 @@ nothing else in the program runs). To act on a failure, arm it:
 `| error e |> say(text: "...")` and read `e` for the reason.
 
 book-reservation — Book a reservation.
-· user_id: string — The ID of the user to book the reservation such as 'sara_doe_496'`.
+· user_id: string — The ID of the user to book the reservation such as 'sara_doe_496'.
 · origin: string — The IATA code for the origin city such as 'SFO'.
 · destination: string — The IATA code for the destination city such as 'JFK'.
 · flight_type: string — one of round_trip | one_way — The type of flight such as 'one_way' or 'round_trip'.
@@ -62,10 +62,7 @@ send-certificate — Send a certificate to a user. Be careful!
 · user_id: string — The ID of the user to book the reservation, such as 'sara_doe_496'.
 · amount: integer — The amount of the certificate to send.
 
-transfer-to-human-agents — Transfer the user to a human agent, with a summary of the user's issue.
-· Only transfer if
-· the user explicitly asks for a human agent
-· given the policy and the available tools, you cannot solve the user's issue.
+transfer-to-human-agents — Transfer the user to a human agent, with a summary of the user's issue. Only transfer if the user explicitly asks for a human agent, or if given the policy and the available tools you cannot solve the user's issue.
 · summary: string — A summary of the user's issue.
 
 update-reservation-baggages — Update the baggage information of a reservation.
