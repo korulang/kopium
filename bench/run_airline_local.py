@@ -34,6 +34,7 @@ def main() -> None:
     retry_temperature = 0.0
     blank_values = False
     noise_draft = False
+    trial = 0
     for i, a in enumerate(sys.argv):
         if a == "--arm" and i + 1 < len(sys.argv): arm = sys.argv[i + 1]
         elif a == "--steps" and i + 1 < len(sys.argv): steps = int(sys.argv[i + 1])
@@ -47,6 +48,7 @@ def main() -> None:
         elif a == "--retry-temperature" and i + 1 < len(sys.argv): retry_temperature = float(sys.argv[i + 1])
         elif a == "--blank-values": blank_values = True
         elif a == "--noise-draft": noise_draft = True
+        elif a == "--trial" and i + 1 < len(sys.argv): trial = int(sys.argv[i + 1])
 
     if not GATE.exists():
         sys.exit(f"gate binary missing: {GATE}")
@@ -76,6 +78,7 @@ def main() -> None:
         temperature=temperature, retry_temperature=retry_temperature,
         user_sim=llm, gate=GATE.name,
         gate_sha=hashlib.sha256(GATE.read_bytes()).hexdigest()[:12],
+        trial=trial, seed=42 + trial,
     )
     agent = AirlineLladaAgent(
         tools=env.get_tools(),
@@ -104,7 +107,7 @@ def main() -> None:
         task=task,
         max_steps=20,
         max_errors=5,
-        seed=42,
+        seed=42 + trial,
     )
 
     reward = None

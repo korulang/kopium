@@ -67,6 +67,11 @@ class TauGateSession:
         self._await: str | None = None  # "call" | "say" | None
         self._call_id: str | None = None
         self._callsteps: list[dict] = []  # drained per-dispatch records
+        self._wire_origin = "model"       # origin of the in-flight wire
+        self._pending_origin = "model"    # origin snapshotted at the verdict —
+        # CALLSTEPS parses lazily on the NEXT turn's reads, by which time
+        # _wire_origin already names the new wire; the verdict-time
+        # snapshot is what the drained records actually belong to.
 
     def _pump_lines(self) -> None:
         assert self.proc.stdout is not None
@@ -126,9 +131,13 @@ class TauGateSession:
                 f.write("<<< " + out[:400] + "\n")
         return out
 
-    def send_wire(self, source: str):
+    def send_wire(self, source: str, origin: str = "model"):
         """One wire turn -> first event: ('call',dict)|('say',dict)|
-        ('status',status,detail)|('eof',)."""
+        ('status',status,detail)|('eof',). `origin` marks who issued the
+        wire — 'model' for agent-emitted programs, 'harness' for the
+        session's own introspection calls (grammar()/vocabulary()); it is
+        stamped onto the turn's call_step records when CALLSTEPS parses."""
+        self._wire_origin = origin
         payload = source.replace("\r\n", "\n").rstrip("\n") + "\n\n"
         self._write(payload)
         return self._next_event()
@@ -186,6 +195,7 @@ class TauGateSession:
                 # gate that already moved on.
                 self._await = None
                 self._call_id = None
+                self._pending_origin = self._wire_origin
                 return ("status", "STEPS", "\n".join(lines))
             if line == "CALLSTEPS-BEGIN":
                 # Structured per-dispatch records, emitted AFTER the turn
@@ -200,7 +210,9 @@ class TauGateSession:
                     if l2 == "CALLSTEPS-END":
                         break
                     try:
-                        self._callsteps.append(json.loads(l2))
+                        rec = json.loads(l2)
+                        rec["origin"] = self._pending_origin
+                        self._callsteps.append(rec)
                     except json.JSONDecodeError:
                         continue
                 continue
@@ -241,6 +253,7 @@ class TauGateSession:
             _, _, detail = line.partition(" ")
             self._await = None
             self._call_id = None
+            self._pending_origin = self._wire_origin
             return ("status", status, detail.strip())
 
     @staticmethod
@@ -281,7 +294,7 @@ class TauGateSession:
         return self._host("grammar")
 
     def _host(self, name: str) -> str:
-        ev = self.send_wire(f"{name}()")
+        ev = self.send_wire(f"{name}()", origin="harness")
         while ev[0] == "call":
             ev = self.feed_result(ev[1]["id"], "{}", error=True)
         if ev[0] != "status" or ev[1] != "OK":
