@@ -29,8 +29,13 @@ proc event-name|zig {
     return source[0..end];
 }
 
+// Same split as airline-gate: report the verdict, then settle drains the
+// turn's call_step records as a framed CALLSTEPS block.
 tor handle { br: *std/bridge:Bridge<session>, source: string }
-handle = std/bridge:run(br, source)
+handle = report-turn(br, source) |> settle(br)
+
+tor report-turn { br: *std/bridge:Bridge<session>, source: string }
+report-turn = std/bridge:run(br, source)
 | result r |> std/interpreter:value.stringify(r.value): j |> event-name(source): n |> std/io:print.ln("OK {{ n:s }} bound={{ r.bound:s }} {{ j:s }}")
 | unhandled-branch ub |> event-name(source): n |> std/io:print.ln("HALT {{ n:s }} {{ ub.branch:s }} {{ ub.payload:s }} held: {{ ub.handles:s }}")
 | partial p |> app/gate_intake:emit-framed(tag: "STEPS", text: p.report)
@@ -43,6 +48,11 @@ handle = std/bridge:run(br, source)
 | exhausted _ |> std/io:print.ln("ERROR budget exhausted")
 | scope-not-found s2 |> std/io:print.ln("ERROR no scope {{ s2:s }}")
 | defined d |> std/io:print.ln("DEFINED {{ d:s }}")
+
+// Drain the turn's call_step records — framed like STEPS, silent when the
+// turn dispatched nothing.
+tor settle { br: *std/bridge:Bridge<session> }
+settle = std/bridge:take-calls(br): j |> app/gate_intake:emit-framed-nonempty(tag: "CALLSTEPS", text: j)
 
 tor serve { br: *std/bridge:Bridge<session> }
 serve = std/io:readln()

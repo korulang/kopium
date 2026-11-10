@@ -227,6 +227,8 @@ class AirlineLladaAgent(HalfDuplexAgent[AirlineAgentState]):
         ('reject', obs). Status verdicts observed; call/say become messages.
         Empty says are skipped — an AssistantMessage with no content and
         no tool_calls fails tau2 validation."""
+        for rec in self.gate.drain_callsteps():
+            self._ev("call_step", **rec)
         while True:
             kind = ev[0]
             if kind == "call":

@@ -63,3 +63,21 @@ var intake_buf: [8192]u8 = undefined;
     stdout.writeAll(tag) catch return;
     stdout.writeAll("-END\n") catch return;
 }
+
+// Same framing, silent on empty — the CALLSTEPS block exists only on
+// turns that dispatched, so an empty drain must not print a frame the
+// session parser would have to special-case.
+~pub tor emit-framed-nonempty { tag: string, text: string }
+
+~proc emit-framed-nonempty|zig {
+    if (text.len == 0) return;
+    const stdout = std.fs.File.stdout();
+    stdout.writeAll(tag) catch return;
+    stdout.writeAll("-BEGIN\n") catch return;
+    stdout.writeAll(text) catch return;
+    if (text[text.len - 1] != '\n') {
+        stdout.writeAll("\n") catch return;
+    }
+    stdout.writeAll(tag) catch return;
+    stdout.writeAll("-END\n") catch return;
+}

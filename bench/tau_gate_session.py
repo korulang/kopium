@@ -66,6 +66,7 @@ class TauGateSession:
         self._reader.start()
         self._await: str | None = None  # "call" | "say" | None
         self._call_id: str | None = None
+        self._callsteps: list[dict] = []  # drained per-dispatch records
 
     def _pump_lines(self) -> None:
         assert self.proc.stdout is not None
@@ -140,6 +141,13 @@ class TauGateSession:
         }) + "\n")
         return self._next_event()
 
+    def drain_callsteps(self) -> list[dict]:
+        """Return and clear the call_step records collected since the last
+        drain — the agent logs each as a runlog `call_step` event."""
+        out = self._callsteps
+        self._callsteps = []
+        return out
+
     def next_event(self):
         """Read the next gate event WITHOUT writing anything.
 
@@ -179,6 +187,23 @@ class TauGateSession:
                 self._await = None
                 self._call_id = None
                 return ("status", "STEPS", "\n".join(lines))
+            if line == "CALLSTEPS-BEGIN":
+                # Structured per-dispatch records, emitted AFTER the turn
+                # verdict — collect them inline and keep reading; the gate
+                # is already at intake. The agent drains the buffer into
+                # the runlog; records carry their own turn/step/outcome so
+                # attribution survives the one-turn delay.
+                while True:
+                    l2 = self._readline()
+                    if l2 is None:
+                        return ("eof",)
+                    if l2 == "CALLSTEPS-END":
+                        break
+                    try:
+                        self._callsteps.append(json.loads(l2))
+                    except json.JSONDecodeError:
+                        continue
+                continue
             if line.startswith("{"):
                 try:
                     obj = json.loads(line)

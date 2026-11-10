@@ -65,6 +65,7 @@ def main() -> None:
     print(f"User sim  : {llm}")
     print()
 
+    import hashlib
     rlog = RunLogger(slug("airline", task_id, arm, f"s{steps}", f"t{temperature}"))
     rlog.event(
         "run_start", task=task_id, domain="airline",
@@ -74,6 +75,7 @@ def main() -> None:
         noise_draft=noise_draft, max_tokens=max_tokens,
         temperature=temperature, retry_temperature=retry_temperature,
         user_sim=llm, gate=GATE.name,
+        gate_sha=hashlib.sha256(GATE.read_bytes()).hexdigest()[:12],
     )
     agent = AirlineLladaAgent(
         tools=env.get_tools(),
