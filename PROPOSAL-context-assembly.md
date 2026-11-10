@@ -142,6 +142,126 @@ assembly are substrate-independent. Watch-item: if an agentic-scale
 NCM appears, this harness tests construct-prior → coarse-code
 conditioning on the same trajectories.
 
+## Design session — context assembly v2 (Fable pass, 2026-11-10)
+
+A stronger-model design pass reviewed this proposal against the corpus
+and receipts. Its critique was verified claim-by-claim before adoption;
+the position below supersedes §3 (surprise-gated guides) and reshapes
+item 3 (context assembler).
+
+### Verified facts that killed prior-based surprise
+
+- `n-grams/constructs.jsonl` (5,359 rows) has **no outcome field** —
+  keys are `args/arms/doc/src/turn/type/verb`. 5,060 rows unarmed;
+  of 299 armed, 268 arm only `ok`. A success-only corpus cannot produce
+  "actual vs modal branch" — the surprise score was uncomputable as
+  specified. (The `doc` key collapses run dirs — `taskN/trialM/receipts`
+  — so 94 distinct docs does NOT refute the 402-trajectory count; 534
+  receipt dirs under `bench/results/measure` make it plausible.)
+- `koru_std/guide.kz:51-74` harvest **destroys content**: `\n\r\t`→space
+  collapse plus silent break at `clean: [4096]u8`. The indented
+  multi-line arm shape the grammar teaches cannot survive file-spike
+  delivery. Fix direction: wire examples as template OUTPUT (Liquid
+  output is not re-scanned, so rendered `{{ u.field }}` survives) + a
+  verbatim `raw` region in `src/liquid.zig` (spelling is Lars's) +
+  skip TSV, go AST `appended` injection.
+- Receipt audit (14 runs, 7,854 call files): **23,553/23,553 `result:`
+  lines carry `"branch"`** — the `(tor,branch)→next tor` join is fully
+  parseable; reward joins via `sim.json:reward_info` (run.json is
+  provenance only). But only **110 `unhandled-branch` reports exist,
+  in 3/14 runs** — exploration-trigger rows are nearly absent from old
+  receipts (they predate `state()` and improved reports). 147,769
+  era-mixed prose observation lines are skippable noise.
+- Task leakage is real: corpus spans all 50 airline task ids;
+  `tau2-bench/data/tau2/domains/airline/split_tasks.json` ships
+  `train`=30 / `test`=20 / `base`=50. **Held-out set = the 20 `test`
+  ids** — guide authoring and prior tables must never see them.
+
+### The replacement design (adopted)
+
+- **Triggers**: fire on *resolution*, not surprise — refusal always;
+  unarmed outcome on first occurrence; armed+mismatched always;
+  armed+matched silent (except a pre-act guide for the likely next
+  mutating verb); **stall** (same construct, no state change —
+  computable from `path:`) escalates with different text, never repeat.
+- **Once per key per session**, tracked in a **gate-side fired-set
+  ledger** (not transcript-scanning — truncation breaks that), storing
+  the turn each key fired on.
+- **Prior substrate**: outcome-labelled transition table counted from
+  gate logs/receipts — `(tor, branch) → next tor` labelled by reward
+  including failures. This IS the guide key space: priors become
+  generated guide rows compiled into the gate, exposed to templates as
+  variables, stamped with a corpus hash. Retrieval, not surprise
+  scoring. Rows below a count floor render nothing. Key rows by run
+  directory + task + trial or the doc-key collapse repeats.
+- **Payload**: hard-capped bytes, compile-time refusal over cap —
+  (1) one sentence on outcome meaning, (2) state-derived facts
+  (bound/duration/missing — `runtime.affordances`/`obtainvia` already
+  derive), (3) next-move line with counts, (4) one wire line from live
+  binding names. Rides the gate's existing step report, gate-authored.
+  **No canned examples, no trajectory replay in context** (few-shot
+  hurt every n-grams arm; corpus phrasing leaking into arg values was
+  the measured draft failure).
+- **Policy guidance cannot be outcome-taught**: a forbidden cancel
+  returns `ok` — outcome triggers only fire after the act. Policy stays
+  pre-act guidance.
+- **Always-on ruling**: derived (wire rules, declaration lines)
+  always-on — "prompt and enforcement are the same bytes"; tuned
+  (examples, framing, tool contract) disclosed on refusal edges and on
+  approach; external (tau2 policy ~7.6k) **whole and always-on for v1**
+  — slicing is the highest-value later experiment and the worst first
+  one (confounds everything). *Status: recommended, awaiting Lars
+  ruling.*
+- **Two learners, not one**: corpus learns across runs; each session's
+  model starts blank. Graduation is per-session (fired-set), never
+  per-corpus.
+
+### Eval honesty (adopted as requirements)
+
+- Task-split the transition table; the 20 `test` ids are frozen — no
+  guide author reads them.
+- Hand-tuning is the bigger leak: keep a frozen task set no guide
+  author reads + run a second domain with zero domain guides to measure
+  the mechanism, not the authoring.
+- Noise band ±4–6 (single trial, 29 tasks) exceeds any disclosure
+  delta — judge each guide by replay at its own firing sites (does
+  next-act distribution change over N samples?), delete if not; live
+  boards for headlines only.
+- **Placebo arm**: trimmed always-on set, no guides — otherwise "less
+  context helps" and "guides help" are one number.
+- Manifest per generation: fired keys, bytes per provenance class,
+  guide + prior table hashes.
+
+### Build order
+
+1. Outcome-labelled transition table from receipts, task-split
+   (parse old corpus — verified feasible; regenerate a modest campaign
+   on the current binary for unhandled-branch/stall rows + structured
+   `gate_status` events).
+2. Gate-side guide render on the step report — five triggers, ~5 edges
+   from logged failures.
+3. Replay falsifier + placebo arm.
+4. Trim always-on: tool contract and examples first, policy last.
+
+### Cuts (v1)
+
+n-gram surprise score, three-depth dial, trajectory replay in context,
+durable cross-session graduation, module-resident `guide:add`
+(115_063 stays pinned).
+
+### Open questions carried forward
+
+- Policy slicing: whole+always-on v1 recommended; slicing deferred to
+  placebo-controlled experiment. **Awaiting Lars ruling.**
+- Observation channel is Python-authored (`result:`/`user:`/prefixes in
+  flat role:user) — a live frame-law surface; guide payloads must be
+  gate-authored content through that plumbing, and the channel itself
+  is a separate cleanup.
+- **Diffusion carry-back (parked)**: when the n-gram line unparks,
+  should priors retrain on the outcome-labelled edge table rather than
+  the outcome-free construct corpus? Tag Fable for this + held-out
+  confirmation when context assembly lands.
+
 ## Migration note
 
 Bench research scripts already live in bench/ (untracked). n-grams
