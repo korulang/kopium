@@ -411,3 +411,42 @@ Phase 2 root-caused and fixed (2026-11-10):
   assertions, multi-turn session pins (residue only manifests
   turn-over-turn), say-arm-binds-emitted-text pin, trap pin.
   **18/18 green on airline-gate-binary.**
+
+### Fable landed-schema re-check (third pass, 2026-11-11)
+
+Schema ACCEPTED with one rename + three fixes + one invariant. Verified
+against the live trial log himself.
+
+- **Rename**: `outcome` → `item_outcome` (item verdict, not dispatch
+  fate — a per-dispatch `outcome` gets miscounted in chains). DONE in
+  bridge.calls.kz; downstream passes dicts through, no Python change.
+- **state_hash stays as replay address only** — it CAN'T detect stalls:
+  every dispatch mints rN so identical calls hash differently (4
+  identical failing calls → 4 hashes, verified). Stall detection moves
+  to analysis-side call-identity comparison (verb, resolved args,
+  branch, payload) vs session history; gate-side ledger can hold it
+  at runtime later.
+- **FIX: item coverage invariant** — every item yields ≥1 record,
+  including zero-dispatch items (residue, parse-error, defined,
+  validation-error, event-denied). Live proof of the hole: turns
+  reported `of: 2` but step 2 (a say failing on unbound `u` —
+  UnboundName arg-eval throw) produced no record.
+- **FIX: UnboundName/arg-eval failures must record** — refusals are
+  the "always fire" trigger class; an unrecorded refusal is a missing
+  guide site. Fix = arm pending_step BEFORE arg eval (defer args-JSON
+  build to appendPendingStep via stored arg slices; recordFailedStep
+  renders raw+ref with value="" since eval didn't complete).
+- **FIX: origin marker** — harness-issued calls (agent init grammar()
+  etc.) indistinguishable from model wire. Caller-side tagging:
+  AirlineLladaAgent stamps origin="harness"|"model" at drain time.
+- **FIX: run_start** — add `trial` + `seed` (gate_sha landed).
+- **NEW gate_probe case** (Fable-specified): assert distinct
+  (turn, step) pairs in records == `of` coverage for a turn mixing
+  refusal + chain + unbound name; fix what it turns red.
+- Dispatch fate needs NO new field — derivable from
+  failed/armed/arm_word (his table verified).
+- Diffusion carry-back STANDS with conditions: history symbol is
+  dispatch-level (verb, branch, fate) never item_outcome; filter
+  harness records; train-30 only. Still waits on volume.
+- Policy: Fable says enough exists to rule whole+always-on v1 —
+  Lars's ruling, still open.
