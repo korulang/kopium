@@ -165,13 +165,17 @@ item 3 (context assembler).
   output is not re-scanned, so rendered `{{ u.field }}` survives) + a
   verbatim `raw` region in `src/liquid.zig` (spelling is Lars's) +
   skip TSV, go AST `appended` injection.
-- Receipt audit (14 runs, 7,854 call files): **23,553/23,553 `result:`
-  lines carry `"branch"`** — the `(tor,branch)→next tor` join is fully
-  parseable; reward joins via `sim.json:reward_info` (run.json is
-  provenance only). But only **110 `unhandled-branch` reports exist,
-  in 3/14 runs** — exploration-trigger rows are nearly absent from old
-  receipts (they predate `state()` and improved reports). 147,769
-  era-mixed prose observation lines are skippable noise.
+- Receipt audit (14 runs, 7,854 call files): 23,553 `result:` lines —
+  the `"branch"` KEY is present in all of them, but Fable's recount of
+  final receipts shows **9,596/9,596 branch VALUES are `""`** (31
+  error-like payloads). This reporting era emitted ordinary outcomes
+  only — named branches never reached the prose. CORRECTED 2026-11-10:
+  the `(tor,branch)→next` join is NOT parseable from old receipts;
+  verb→verb + reward is (reward via `sim.json:reward_info`). Branch
+  labels require regeneration on the current binary. Only **110
+  `unhandled-branch` reports exist, in 3/14 runs** — exploration rows
+  are nearly absent (they predate `state()` and improved reports).
+  147,769 era-mixed prose observation lines are skippable noise.
 - Task leakage is real: corpus spans all 50 airline task ids;
   `tau2-bench/data/tau2/domains/airline/split_tasks.json` ships
   `train`=30 / `test`=20 / `base`=50. **Held-out set = the 20 `test`
@@ -234,12 +238,18 @@ item 3 (context assembler).
 
 ### Build order
 
-1. Outcome-labelled transition table from receipts, task-split
-   (parse old corpus — verified feasible; regenerate a modest campaign
-   on the current binary for unhandled-branch/stall rows + structured
-   `gate_status` events).
-2. Gate-side guide render on the step report — five triggers, ~5 edges
-   from logged failures.
+1. Outcome-labelled transition table — **amended after Fable re-check**:
+   old receipts yield only verb→verb + reward (branch values all empty);
+   the `(tor,branch)→next` table requires **regeneration on train-30
+   task ids only** with the current binary (the 20 `test` ids stay
+   frozen; existing construct pickles were trained across all 50 and
+   need a train-30 retrain before any prediction line is evaluated on
+   test). Old corpus still gives an opening-move/approach prior and
+   failure denominators — but it is a happy-path corpus (31 error-like
+   payloads), so "next move with counts" renders nothing until regen.
+   Edge-vs-reward is confounded by task difficulty — compare within task.
+2. Gate-side guide render on the step report — five triggers; edges
+   authored from **current-binary** runs, not retired surfaces.
 3. Replay falsifier + placebo arm.
 4. Trim always-on: tool contract and examples first, policy last.
 
@@ -248,6 +258,40 @@ item 3 (context assembler).
 n-gram surprise score, three-depth dial, trajectory replay in context,
 durable cross-session graduation, module-resident `guide:add`
 (115_063 stays pinned).
+
+### Fable re-check amendments (second pass, 2026-11-10)
+
+- **`call_step` → per-dispatch records**: a one-line chain is one item,
+  so `a() | ok u |> b()` must yield one record per dispatch (or nested
+  `dispatches[]`) — per-step loses inner dispatches. Add `armed` (the
+  arm words the model wrote — without them bare vs armed-mismatch is
+  indistinguishable and prediction accuracy unscoreable). Outcome enum
+  must be DERIVED from bridge kinds, not hand-listed — add
+  `shape-error`, `event-denied`, `dispatch-error`, `scope-not-found`
+  (`bridge.runsteps.kz:99-129`). `handles` normalizes to a name list
+  (count on `result`, string on `unhandled-branch`). Also: fired guide
+  keys (facts, not derivations), per-arg reference-vs-literal flag,
+  state hash per turn (stall detection + replay addressing), `trial`
+  + gate binary hash in `run_start`.
+- **Placement**: emit at the bridge, not the gate's status printer —
+  `tau-agent` (no external gate, produced the old receipts) must log
+  the same records. Render the model-facing prose FROM the record so
+  log and model view cannot disagree.
+- **v1 survives on verb→verb + reward for the MECHANISM** (triggers
+  need no priors — computed from live gate state); the consequence map
+  waits for regen. Old corpus is happy-path: opening-move/approach
+  prior + failure denominators only.
+- **Stall correction (Fable's own error)**: `path:` is per-item
+  dispatches; stall ran across turns — needs session-level history,
+  which the fired-set ledger holds.
+- **Policy**: unchanged whole+always-on. Allowed v1 refinement
+  (additive): one-line pre-act pointer on approach to mutating verbs,
+  measured against the placebo arm.
+- **Diffusion carry-back**: neither corpus as posed — retrain on the
+  `call_step` stream with branch as a history symbol, backing off to
+  outcome-free counts where sparse; the edge table becomes its order-1
+  projection (one source, both lines). Wait for regenerated corpus:
+  `note` is 1,891/5,359 constructs and colon-era spellings persist.
 
 ### Open questions carried forward
 
