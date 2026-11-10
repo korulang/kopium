@@ -66,7 +66,14 @@ Missing, in dependency order:
    below; gate_probe is 18/18 on the rebuilt binary and task 14 is
    re-running clean.
 2. `state()` contract — structured interpreter read (bindings, path,
-   branch outcomes) for context assembly.
+   branch outcomes) for context assembly. Measured gap (2026-11-10):
+   `vocabulary()` already surfaces durable `rN` names WITH field names
+   (`r1 {user_id, membership}`) but never values; arm-bound names die
+   with the reply by design; `held:` handles appear only on HALT.
+   state() must add: bound values (or a scoped reveal), last
+   edge/branch outcome per tor, held handles, defined flows. Likely a
+   wire verb beside vocabulary()/grammar() — introspection grant
+   already exists.
 3. Context assembler — reads state + guide table + priors + surprise
    score → renders the per-turn payload; replaces the static
    system+transcript concat.
