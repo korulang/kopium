@@ -106,6 +106,39 @@ paths; cassette replay (replay states with altered guidance, measure
 delta) is the shared evaluation harness. Nothing here forecloses the
 diffusion line — it parks until the channel is truthful.
 
+## Watched development — NCM (2026-11-10)
+
+Next-Concept Modeling (arXiv 2610.14162, Stanford Hazy Research,
+Kumbong/Khare/Arora/Ré): a multiscale residual-VQ tokenizer represents
+text as a coarse-to-fine hierarchy of discrete codes; a frozen-tokenizer
+transformer generates one level per forward pass, all positions within
+a level in parallel (~8–32 NFEs). Matches/beats diffusion LMs at
+10–31× wall-clock, 4–5× fewer training tokens — on benchmarks only
+(LM1B, OpenWebText, TinyStories, XSum, WMT14, Sudoku; ≤725M params, no
+agentic weights released).
+
+Why it matters to this project, honestly:
+
+- Validates the coarse-to-fine thesis we are already betting on —
+  structure committed before detail is a real axis, not a crackpot one.
+- Independently confirms the granularity lesson we paid for: BPE
+  fragments could not express grounded constructs, so proposals moved
+  to construct level. NCM's useful unit also sits above the token.
+- The Sudoku result is the closest analogue to our use case:
+  coarse-to-fine helps constraint satisfaction — legal wire programs
+  are exactly that.
+- Its conditioning-code corruption trick is a *trained* version of our
+  draft-robustness problem: imperfect priors are the regime, not the
+  edge case.
+- Speculative thread worth keeping: our 402-trajectory / 5,359-construct
+  corpus is the kind of narrow domain data where a custom multiscale-VQ
+  could learn construct-level codes generic tokenizers cannot.
+
+Not a backend swap today — no agentic NCM exists, and state()/context
+assembly are substrate-independent. Watch-item: if an agentic-scale
+NCM appears, this harness tests construct-prior → coarse-code
+conditioning on the same trajectories.
+
 ## Migration note
 
 Bench research scripts already live in bench/ (untracked). n-grams
