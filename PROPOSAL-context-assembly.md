@@ -65,15 +65,18 @@ Missing, in dependency order:
 1. ~~**Say-protocol desync**~~ — RESOLVED 2026-11-10. See findings
    below; gate_probe is 18/18 on the rebuilt binary and task 14 is
    re-running clean.
-2. `state()` contract — structured interpreter read (bindings, path,
-   branch outcomes) for context assembly. Measured gap (2026-11-10):
-   `vocabulary()` already surfaces durable `rN` names WITH field names
-   (`r1 {user_id, membership}`) but never values; arm-bound names die
-   with the reply by design; `held:` handles appear only on HALT.
-   state() must add: bound values (or a scoped reveal), last
-   edge/branch outcome per tor, held handles, defined flows. Likely a
-   wire verb beside vocabulary()/grammar() — introspection grant
-   already exists.
+2. ~~**`state()` contract**~~ — IMPLEMENTED 2026-11-10 (koru_std:
+   `state()` host verb in bridge.wiregate/hostverbs, render in
+   bridge.state.kz, HostView extended with turn_env/run_env/
+   handle_pool/trace). Renders `durable:` (session_env values as
+   JSON — vocabulary shows names+fields only), `turn:` (arm names,
+   multi-item turns only), `item:` (run-env names neither layer
+   claims — chain-internal arms on single-item turns), `held:`,
+   `defined:`, `path:` (this item's dispatches so far). Measured
+   surprise pinned in frag-bindings-scope-in-three-layers: single-
+   item turns pass turn_env=null, so `call | ok u |>` on one line
+   binds u into the run env only. gate_probe 23/23 (5 new state
+   cases); koru pins 440_031/033/043 updated + green.
 3. Context assembler — reads state + guide table + priors + surprise
    score → renders the per-turn payload; replaces the static
    system+transcript concat.

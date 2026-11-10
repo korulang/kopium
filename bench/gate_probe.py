@@ -32,6 +32,7 @@ Usage: python3 gate_probe.py [binary] [--verbose]
 
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -252,6 +253,128 @@ def residue_trap():
 
 
 residue_trap()
+
+
+# ------------------------------------------------------------- state()
+def state_value(detail):
+    """The state() render inside a status detail — the result JSON's
+    'value' string, JSON-decoded back to real newlines/quotes. STEPS
+    details carry one result JSON per step; pick the one whose value
+    is the render."""
+    dec = json.JSONDecoder()
+    for m in re.finditer(r"result: (\{)", detail):
+        try:
+            obj, _ = dec.raw_decode(detail[m.start(1):])
+        except Exception:
+            continue
+        v = obj.get("value", "")
+        if isinstance(v, str) and v.startswith("state()"):
+            return v
+    i = detail.find("{")
+    if i >= 0:
+        try:
+            obj, _ = dec.raw_decode(detail[i:])
+            v = obj.get("value", "")
+            if isinstance(v, str) and v.startswith("state()"):
+                return v
+        except Exception:
+            pass
+    return ""
+
+
+def state_check(name, turns, expect_verdicts, render_needles=(),
+                render_rejects=(), detail_needles=()):
+    """state() probe: scripted turns in ONE fresh session; every status
+    detail is scanned for the state() render (decoded) and raw detail.
+    render_needles/rejects assert on the DECODED render (real newlines);
+    detail_needles assert on the raw status text (JSON-escaped)."""
+    g = TauGateSession(BINARY)
+    t0 = time.time()
+    try:
+        verdicts, renders, details = [], [], []
+        for wire, result in turns:
+            ev = g.send_wire(wire)
+            while True:
+                kind = ev[0]
+                if kind == "call":
+                    ev = g.feed_result(ev[1].get("id"), result, error=False)
+                elif kind == "say":
+                    ev = g.next_event()
+                elif kind == "status":
+                    verdicts.append(ev[1])
+                    details.append(ev[2])
+                    v = state_value(ev[2])
+                    if v:
+                        renders.append(v)
+                    break
+                else:
+                    break
+        blob = "\n".join(renders)
+        detail_blob = "\n".join(details)
+        ok = (verdicts == expect_verdicts
+              and all(n in blob for n in render_needles)
+              and all(n not in blob for n in render_rejects)
+              and all(n in detail_blob for n in detail_needles))
+        RESULTS.append((name, ok, f"{time.time()-t0:.1f}s",
+                        [("verdicts", verdicts), ("renders", renders)]))
+        mark = "PASS" if ok else "FAIL"
+        print(f"[{mark}] {name}  ({time.time()-t0:.1f}s)")
+        if VERBOSE or not ok:
+            for v in verdicts:
+                print(f"      verdict: {v}")
+            for r in renders:
+                print(f"      render:\n{r}")
+            for d in details:
+                print(f"      detail: {d[:300]}")
+    except Exception as e:
+        RESULTS.append((name, False, "ERR", f"{type(e).__name__}: {e}"))
+        print(f"[ERR] {name}  {type(e).__name__}: {e}")
+    finally:
+        g.close()
+
+
+state_check(
+    "state() fresh session: every section empty",
+    [("state()\n", '{"ok":true}')],
+    ["OK"],
+    render_needles=["durable: (none)", "turn: (none)", "item: (none)",
+                    "held: []", "defined: (none)"],
+)
+
+state_check(
+    "state() advertised in vocabulary()",
+    [("vocabulary()\n", '{"ok":true}')],
+    ["OK"],
+    detail_needles=["state()"],
+)
+
+state_check(
+    "state() arm binding under turn: (multi-item turn)",
+    [('get-user-details(user_id: "x") | ok u |>\nstate()\n',
+      '{"user_id":"x","membership":"gold"}')],
+    ["STEPS"],
+    render_needles=["durable:\n  r1 = {", '"user_id":"x"',
+                    "turn:\n  u = {", "item: (none)"],
+    render_rejects=["item:\n  u"],
+)
+
+state_check(
+    "state() chain arm under item: + path (single-item turn)",
+    [('get-user-details(user_id: "x") | ok u |> state()\n',
+      '{"user_id":"x","membership":"gold"}')],
+    ["OK"],
+    render_needles=["turn: (none)", "item:\n  u = {",
+                    "path:\n  get-user-details -> ", " as u",
+                    "bound: r1"],
+    render_rejects=["turn:\n  u"],
+)
+
+state_check(
+    "state() rejects fields",
+    [("state(x: 1)\n", '{"ok":true}')],
+    ["ERROR"],
+    detail_needles=["takes no fields"],
+)
 
 
 # ---------------------------------------------------------------- report
