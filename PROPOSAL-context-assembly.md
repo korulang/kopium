@@ -77,6 +77,15 @@ Missing, in dependency order:
    or different sigil needed before teaching text rides templates.
 6. Module-resident `guide:add` — grammar ambiguity TODO-pinned in
    koru (115_063); impl-flow source-block binding unresolved.
+7. **`scopeChainExample` picks nonsense chains** (koru-side, found in
+   the prompt audit): `runtime.example.kz` mechanically selects head =
+   first payload-branch/`__type_ref` verb and target = fewest-arg
+   "sink". On airline it renders `say(text:"1") | ok v |>
+   calculate(expression: v)` — mechanically valid, semantically
+   absurd (voice channel chained into a calculator). The heuristic
+   has no notion that a verb's bound value is meant to be consumed.
+   Fix belongs in koru_std: prefer heads whose arm binding is
+   consumable, or exclude emit-only verbs from head candidacy.
 
 ## The dual-use thesis (still alive)
 
