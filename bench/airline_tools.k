@@ -32,7 +32,7 @@ import app/tau_wire
 
 [
 - doc
-Delivers text to the user — the only verb they can hear. Owes them a reply.
+Delivers text to the user — the only verb they can hear. Emit-only: the reply arrives as the user's own next message, never as this call's value.
 ]
 pub tor say { text: string } -> string
 
