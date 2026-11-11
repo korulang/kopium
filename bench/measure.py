@@ -314,6 +314,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ids", required=True)
     ap.add_argument("--trials", type=int, default=1)
+    ap.add_argument("--trial-start", type=int, default=0,
+                    help="first trial index; seed stays 42 + trial")
     ap.add_argument("--arms", default="stock,kopium")
     ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("--suffix", default="latest")
@@ -338,7 +340,8 @@ def main() -> None:
             sys.exit(f"refusing to run the kopium arm: no smoke PASS for this binary "
                      f"({gate.name} missing). Run `python3 bench/smoke.py` first.")
 
-    jobs = [(arm, keys[arm], tid, k) for arm in arms for tid in ids for k in range(a.trials)]
+    jobs = [(arm, keys[arm], tid, k) for arm in arms for tid in ids
+            for k in range(a.trial_start, a.trial_start + a.trials)]
     todo = [j for j in jobs if not (run_dir(*j) / "sim.json").exists()]
     print(f"{len(jobs)} runs, {len(jobs) - len(todo)} cached, {len(todo)} to run", flush=True)
     if todo and not a.summarize_only:

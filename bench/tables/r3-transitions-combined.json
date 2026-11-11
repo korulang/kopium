@@ -1,0 +1,516 @@
+{
+ "edges": {
+  "abandon|abandoned": {
+   "count": 1,
+   "declared_outcomes": [],
+   "from_branch": "abandoned",
+   "from_tor": "abandon",
+   "next": {
+    "say": 1
+   },
+   "reward": {
+    "pos": 1
+   },
+   "tasks": {
+    "49": 1
+   }
+  },
+  "book-reservation|error": {
+   "count": 5,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "error",
+   "from_tor": "book-reservation",
+   "next": {
+    "book-reservation": 1,
+    "say": 4
+   },
+   "reward": {
+    "pos": 1,
+    "zero": 4
+   },
+   "tasks": {
+    "14": 3,
+    "23": 2
+   }
+  },
+  "book-reservation|ok": {
+   "count": 20,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "book-reservation",
+   "next": {
+    "book-reservation": 2,
+    "say": 18
+   },
+   "reward": {
+    "pos": 11,
+    "zero": 9
+   },
+   "tasks": {
+    "14": 4,
+    "20": 5,
+    "23": 11
+   }
+  },
+  "calculate|ok": {
+   "count": 4,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "calculate",
+   "next": {
+    "calculate": 2,
+    "say": 2
+   },
+   "reward": {
+    "pos": 2,
+    "zero": 2
+   },
+   "tasks": {
+    "14": 2,
+    "23": 2
+   }
+  },
+  "cancel-reservation|ok": {
+   "count": 43,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "cancel-reservation",
+   "next": {
+    "book-reservation": 5,
+    "cancel-reservation": 4,
+    "say": 33,
+    "update-reservation-flights": 1
+   },
+   "reward": {
+    "pos": 9,
+    "zero": 34
+   },
+   "tasks": {
+    "14": 5,
+    "23": 5,
+    "39": 10,
+    "41": 1,
+    "42": 13,
+    "7": 8,
+    "9": 1
+   }
+  },
+  "get-flight-status|ok": {
+   "count": 57,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "get-flight-status",
+   "next": {
+    "get-flight-status": 19,
+    "note": 3,
+    "say": 35
+   },
+   "reward": {
+    "pos": 54,
+    "zero": 3
+   },
+   "tasks": {
+    "0": 2,
+    "1": 3,
+    "27": 5,
+    "38": 24,
+    "39": 3,
+    "4": 8,
+    "41": 5,
+    "43": 1,
+    "47": 1,
+    "5": 5
+   }
+  },
+  "get-reservation-details|ok": {
+   "count": 423,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "get-reservation-details",
+   "next": {
+    "calculate": 1,
+    "get-flight-status": 2,
+    "get-reservation-details": 52,
+    "get-user-details": 3,
+    "note": 30,
+    "say": 334,
+    "search-direct-flight": 1
+   },
+   "reward": {
+    "pos": 289,
+    "zero": 134
+   },
+   "tasks": {
+    "1": 27,
+    "17": 16,
+    "21": 25,
+    "27": 35,
+    "39": 36,
+    "4": 26,
+    "41": 35,
+    "42": 35,
+    "43": 26,
+    "7": 30
+   }
+  },
+  "get-user-details|error": {
+   "count": 2,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "error",
+   "from_tor": "get-user-details",
+   "next": {
+    "say": 2
+   },
+   "reward": {
+    "pos": 2
+   },
+   "tasks": {
+    "46": 2
+   }
+  },
+  "get-user-details|ok": {
+   "count": 151,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "get-user-details",
+   "next": {
+    "get-reservation-details": 33,
+    "note": 2,
+    "say": 115,
+    "search-direct-flight": 1
+   },
+   "reward": {
+    "pos": 115,
+    "zero": 36
+   },
+   "tasks": {
+    "1": 6,
+    "10": 5,
+    "11": 5,
+    "12": 5,
+    "14": 5,
+    "15": 5,
+    "17": 5,
+    "20": 5,
+    "23": 11,
+    "3": 6
+   }
+  },
+  "list-all-airports|ok": {
+   "count": 2,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "list-all-airports",
+   "next": {
+    "say": 2
+   },
+   "reward": {
+    "pos": 1,
+    "zero": 1
+   },
+   "tasks": {
+    "20": 2
+   }
+  },
+  "note|": {
+   "count": 49,
+   "declared_outcomes": [],
+   "from_branch": "",
+   "from_tor": "note",
+   "next": {
+    "get-flight-status": 1,
+    "get-reservation-details": 28,
+    "note": 6,
+    "say": 9,
+    "search-direct-flight": 2,
+    "search-onestop-flight": 1,
+    "transfer-to-human-agents": 1,
+    "update-reservation-baggages": 1
+   },
+   "reward": {
+    "pos": 39,
+    "zero": 10
+   },
+   "tasks": {
+    "21": 10,
+    "27": 11,
+    "4": 8,
+    "42": 15,
+    "9": 5
+   }
+  },
+  "say|": {
+   "count": 1302,
+   "declared_outcomes": [],
+   "from_branch": "",
+   "from_tor": "say",
+   "next": {
+    "<end>": 150,
+    "abandon": 1,
+    "book-reservation": 17,
+    "calculate": 1,
+    "cancel-reservation": 34,
+    "get-flight-status": 33,
+    "get-reservation-details": 309,
+    "get-user-details": 148,
+    "list-all-airports": 2,
+    "note": 2,
+    "say": 389,
+    "search-direct-flight": 82,
+    "search-onestop-flight": 31,
+    "transfer-to-human-agents": 48,
+    "update-reservation-baggages": 16,
+    "update-reservation-flights": 31,
+    "update-reservation-passengers": 8
+   },
+   "reward": {
+    "pos": 915,
+    "zero": 387
+   },
+   "tasks": {
+    "1": 49,
+    "10": 50,
+    "14": 64,
+    "21": 59,
+    "23": 77,
+    "27": 50,
+    "39": 73,
+    "41": 52,
+    "42": 58,
+    "43": 57
+   }
+  },
+  "search-direct-flight|ok": {
+   "count": 121,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "search-direct-flight",
+   "next": {
+    "note": 3,
+    "say": 79,
+    "search-direct-flight": 34,
+    "search-onestop-flight": 5
+   },
+   "reward": {
+    "pos": 76,
+    "zero": 45
+   },
+   "tasks": {
+    "10": 21,
+    "11": 10,
+    "12": 10,
+    "14": 12,
+    "15": 8,
+    "20": 7,
+    "23": 9,
+    "33": 10,
+    "34": 10,
+    "7": 12
+   }
+  },
+  "search-onestop-flight|ok": {
+   "count": 42,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "search-onestop-flight",
+   "next": {
+    "note": 1,
+    "say": 35,
+    "search-direct-flight": 1,
+    "search-onestop-flight": 5
+   },
+   "reward": {
+    "pos": 25,
+    "zero": 17
+   },
+   "tasks": {
+    "10": 5,
+    "14": 6,
+    "15": 8,
+    "17": 3,
+    "20": 7,
+    "21": 5,
+    "23": 8
+   }
+  },
+  "transfer-to-human-agents|error": {
+   "count": 2,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "error",
+   "from_tor": "transfer-to-human-agents",
+   "next": {
+    "say": 2
+   },
+   "reward": {
+    "pos": 2
+   },
+   "tasks": {
+    "1": 1,
+    "36": 1
+   }
+  },
+  "transfer-to-human-agents|ok": {
+   "count": 50,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "transfer-to-human-agents",
+   "next": {
+    "say": 49,
+    "transfer-to-human-agents": 1
+   },
+   "reward": {
+    "pos": 45,
+    "zero": 5
+   },
+   "tasks": {
+    "1": 4,
+    "27": 5,
+    "28": 4,
+    "3": 5,
+    "39": 3,
+    "4": 5,
+    "41": 2,
+    "46": 5,
+    "47": 3,
+    "49": 5
+   }
+  },
+  "update-reservation-baggages|ok": {
+   "count": 21,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "update-reservation-baggages",
+   "next": {
+    "note": 1,
+    "say": 20
+   },
+   "reward": {
+    "pos": 11,
+    "zero": 10
+   },
+   "tasks": {
+    "12": 5,
+    "17": 4,
+    "21": 4,
+    "33": 5,
+    "34": 3
+   }
+  },
+  "update-reservation-flights|error": {
+   "count": 3,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "error",
+   "from_tor": "update-reservation-flights",
+   "next": {
+    "update-reservation-baggages": 3
+   },
+   "reward": {
+    "zero": 3
+   },
+   "tasks": {
+    "34": 3
+   }
+  },
+  "update-reservation-flights|ok": {
+   "count": 29,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "update-reservation-flights",
+   "next": {
+    "cancel-reservation": 5,
+    "note": 1,
+    "say": 22,
+    "update-reservation-baggages": 1
+   },
+   "reward": {
+    "pos": 16,
+    "zero": 13
+   },
+   "tasks": {
+    "11": 5,
+    "12": 1,
+    "15": 4,
+    "17": 3,
+    "21": 5,
+    "33": 5,
+    "7": 6
+   }
+  },
+  "update-reservation-passengers|ok": {
+   "count": 8,
+   "declared_outcomes": [
+    "ok",
+    "error"
+   ],
+   "from_branch": "ok",
+   "from_tor": "update-reservation-passengers",
+   "next": {
+    "say": 8
+   },
+   "reward": {
+    "pos": 8
+   },
+   "tasks": {
+    "17": 3,
+    "40": 5
+   }
+  }
+ },
+ "meta": {
+  "branch_field": "payload.branch else branch else \"\"",
+  "corpus": "corpus/combined-r2r3-callstep.jsonl",
+  "declared_edges": 28,
+  "declared_source": "airline_tools.k",
+  "n_dispatch_records": 2335,
+  "n_runs": 150,
+  "next_sentinel": "<end> = last dispatch of the run"
+ }
+}

@@ -132,7 +132,8 @@ def provenance(d: Path, cfg: dict, config_key: str) -> dict:
 
 
 def cmd_collect(measure_dir: Path, flight: str, out_corpus: Path,
-                want_tasks: set[str] | None, config_key: str) -> dict:
+                want_tasks: set[str] | None, config_key: str,
+                trial_range: tuple[int, int] | None = None) -> dict:
     cfg_path = measure_dir / "config.json"
     cfg = (json.loads(cfg_path.read_text()) if cfg_path.exists() else {})
     out_corpus.parent.mkdir(parents=True, exist_ok=True)
@@ -142,6 +143,10 @@ def cmd_collect(measure_dir: Path, flight: str, out_corpus: Path,
         for d in run_dirs(measure_dir):
             task = d.parent.name.removeprefix("task")
             if want_tasks is not None and task not in want_tasks:
+                continue
+            trial = int(d.name.removeprefix("trial"))
+            if (trial_range is not None
+                    and not trial_range[0] <= trial <= trial_range[1]):
                 continue
             recs, problems = read_callsteps(d)
             reward, rsrc = run_reward(d)
@@ -166,6 +171,87 @@ def cmd_collect(measure_dir: Path, flight: str, out_corpus: Path,
                 n_written += 1
     summary["corpus_rows_written"] = n_written
     return summary
+
+
+def cmd_coverage(corpus_path: Path, declared_path: Path) -> dict:
+    """Declared-edge coverage: which (tor, branch) pairs in airline_tools.k
+    were ever dispatched in the corpus. Dark edges are classified by
+    exposure: 'tor-never-dispatched' vs 'branch-never-observed' (with the
+    tor's observed branch histogram). No edge is declared 'unspeakable'
+    here — speakability is a tool-side property this miner cannot prove;
+    every dark edge is reported as never-observed with its exposure."""
+    declared = declared_edges(declared_path)
+    declared_set = {(t, b) for t, bs in declared.items() for b in bs}
+    obs: Counter = Counter()                    # (tor, branch) -> dispatches
+    tor_tot: Counter = Counter()                # tor -> dispatches
+    tor_br: dict[str, Counter] = defaultdict(Counter)
+    nxt_of: dict[tuple, Counter] = defaultdict(Counter)
+    edge_tasks: dict[tuple, set] = defaultdict(set)
+    edge_rewards: dict[tuple, Counter] = defaultdict(Counter)
+    n_dispatch = 0
+    n_runs = 0
+    for run_key, run in iter_runs(corpus_path):
+        n_runs += 1
+        ds = [r for r in run["recs"]
+              if r.get("origin") == "model" and r.get("verb")]
+        rw = run["prov"].get("reward")
+        rwc = ("pos" if (rw or 0) > 0 else
+               "zero" if rw == 0 else "unknown")
+        task = run["prov"].get("task", "?")
+        for i, r in enumerate(ds):
+            n_dispatch += 1
+            tor, br = r["verb"], _branch_of(r)
+            obs[(tor, br)] += 1
+            tor_tot[tor] += 1
+            tor_br[tor][br] += 1
+            nxt = ds[i + 1]["verb"] if i + 1 < len(ds) else "<end>"
+            nxt_of[(tor, br)][nxt] += 1
+            edge_tasks[(tor, br)].add(task)
+            edge_rewards[(tor, br)][rwc] += 1
+
+    observed_declared = sorted(k for k in declared_set if obs.get(k))
+    dark = sorted(declared_set - set(observed_declared))
+    undeclared = sorted(k for k in obs if k not in declared_set)
+
+    edges = {}
+    for tor, br in sorted(declared_set | set(obs)):
+        is_decl = (tor, br) in declared_set
+        entry = {
+            "declared": is_decl,
+            "count": obs.get((tor, br), 0),
+            "tor_dispatches": tor_tot.get(tor, 0),
+            "tor_branches": dict(tor_br.get(tor, {})),
+            "next": dict(nxt_of[(tor, br)].most_common())
+                    if obs.get((tor, br)) else {},
+            "tasks": sorted(edge_tasks.get((tor, br), ())),
+            "reward": dict(edge_rewards.get((tor, br), {})),
+        }
+        if is_decl and not obs.get((tor, br)):
+            if tor_tot.get(tor, 0) == 0:
+                entry["dark_reason"] = "tor-never-dispatched"
+            else:
+                entry["dark_reason"] = "branch-never-observed"
+        edges[f"{tor}|{br}"] = entry
+
+    return {
+        "corpus": str(corpus_path.relative_to(BENCH)),
+        "declared_source": str(declared_path.relative_to(BENCH)),
+        "n_runs": n_runs,
+        "n_dispatch_records": n_dispatch,
+        "declared_edges": len(declared_set),
+        "observed_declared_edges": len(observed_declared),
+        "coverage_declared": (len(observed_declared) / len(declared_set)
+                              if declared_set else None),
+        "observed_(tor,branch)_pairs_total": len(obs),
+        "undeclared_pairs": [f"{t}|{b}" for t, b in undeclared],
+        "dark_edges": [
+            {"edge": f"{t}|{b}",
+             "reason": edges[f"{t}|{b}"]["dark_reason"],
+             "tor_dispatches": tor_tot.get(t, 0),
+             "tor_branches": dict(tor_br.get(t, {}))}
+            for t, b in dark],
+        "edges": edges,
+    }
 
 
 def _branch_of(rec: dict) -> str:
@@ -542,7 +628,7 @@ def cmd_noise(dir_a: Path, dir_b: Path) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["collect", "transitions",
-                                    "scoreboard", "noise"])
+                                    "scoreboard", "noise", "coverage"])
     ap.add_argument("--measure-dir", type=Path,
                     default=MEASURE / f"kopium-{R2_KEY}")
     ap.add_argument("--corpus", type=Path, default=CORPUS)
@@ -550,6 +636,10 @@ def main() -> None:
     ap.add_argument("--flight", default="sweep")
     ap.add_argument("--tasks", default=None,
                     help="csv subset of task ids")
+    ap.add_argument("--trial-min", type=int, default=None,
+                    help="collect only: first trial index to include")
+    ap.add_argument("--trial-max", type=int, default=None,
+                    help="collect only: last trial index to include")
     ap.add_argument("--dir-a", type=Path)
     ap.add_argument("--dir-b", type=Path)
     ap.add_argument("--config-key", default=None)
@@ -563,10 +653,14 @@ def main() -> None:
 
     if a.cmd == "collect":
         want = set(a.tasks.split(",")) if a.tasks else None
+        tr = None
+        if a.trial_min is not None or a.trial_max is not None:
+            tr = (a.trial_min if a.trial_min is not None else 0,
+                  a.trial_max if a.trial_max is not None else 10**9)
         key = a.config_key or (
             a.measure_dir.name.split("-", 1)[1]
             if a.measure_dir.name.startswith("kopium-") else "r2")
-        s = cmd_collect(a.measure_dir, a.flight, a.corpus, want, key)
+        s = cmd_collect(a.measure_dir, a.flight, a.corpus, want, key, tr)
         if a.summary_out:
             a.summary_out.write_text(json.dumps(s, indent=1))
         print(json.dumps({k: v for k, v in s.items()
@@ -580,6 +674,10 @@ def main() -> None:
             a.corpus, a.table, declared), indent=1))
     elif a.cmd == "scoreboard":
         print(json.dumps(cmd_scoreboard(a.corpus, a.measure_dir),
+                         indent=1))
+    elif a.cmd == "coverage":
+        print(json.dumps(cmd_coverage(a.corpus,
+                                      BENCH / "airline_tools.k"),
                          indent=1))
     elif a.cmd == "noise":
         print(json.dumps(cmd_noise(a.dir_a, a.dir_b), indent=1))
