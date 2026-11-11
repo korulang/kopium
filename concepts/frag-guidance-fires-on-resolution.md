@@ -13,10 +13,19 @@ tags: [kopium, guides, context-assembly, priors, corpus]
 
 Outcome-triggered guidance fires when a branch *resolves* — refusal,
 unarmed outcome, armed-mismatch, stall — once per key per session via a
-gate-side fired-set ledger. It does not fire on surprise, because
-surprise was never computable here: the construct corpus carries no
-outcome field (5,060 of 5,359 rows unarmed; armed rows predict `ok`
-only), so "actual vs modal branch" had no modal to compare against.
+gate-side fired-set ledger. Refinement (Lars ruling, 2026-11-11): these
+triggers ARE surprise-firing in event form — armed-mismatch is the
+model's own written prediction (`| ok r |>` predicts ok) violated by
+the gate's verdict, computable with zero corpus; unarmed outcome is a
+topology surprise; stall is a dynamics surprise. What was never
+computable *on the corpus that existed* is the graded magnitude —
+"actual vs modal branch" needs outcome labels the construct corpus
+lacks (5,060 of 5,359 rows unarmed; armed rows predict `ok` only). That
+dial returns when the outcome-labelled `(tor,branch)→next` transition
+table regenerates — an order-1 Markov chain over the program's
+control-flow graph, shared with the diffusion line's order-1
+projection. Resolution triggers are surprise with cheaper prediction
+sources, not its replacement.
 
 The deeper ruling: **a corpus without outcome labels teaches wire
 shape, never consequence.** Any prior substrate meant to guide or
