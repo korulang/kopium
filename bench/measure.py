@@ -51,7 +51,7 @@ from model_guard import guard_llm
 import check_spend
 
 DOMAIN = "airline"
-LLM = "unset/no-openrouter-default"
+LLM = "unset/no-default-model"
 # Agent model for BOTH arms — KOPIUM_LLM overrides it for model A/B runs.
 # The user simulator stays pinned to LLM so an agent-model delta is not
 # confounded by a different simulated user. guard_llm is the wall: Anthropic
@@ -73,9 +73,9 @@ PRICES = {
     "openrouter/google/gemini-2.5-flash": (0.30e-6, 2.50e-6),
     "openrouter/meta/muse-spark-1.3-contributor": (0.10e-6, 0.20e-6),
 }
-if AGENT_LLM not in PRICES:
+if AGENT_LLM not in PRICES and not AGENT_LLM.startswith("unset/"):
     raise SystemExit(f"measure: no price row for agent model {AGENT_LLM} — add it to PRICES")
-PRICE_PROMPT, PRICE_COMPLETION = PRICES[AGENT_LLM]
+PRICE_PROMPT, PRICE_COMPLETION = PRICES.get(AGENT_LLM, (0.0, 0.0))
 
 KOPIUM_BIN = HERE / "tau-agent-binary"
 KOPIUM_DOC = HERE / "airline_vocab_doc.md"
@@ -347,7 +347,7 @@ def main() -> None:
     print(f"{len(jobs)} runs, {len(jobs) - len(todo)} cached, {len(todo)} to run", flush=True)
     if todo and not a.summarize_only:
         check_spend.require(f"measure.py sweep ({len(todo)} runs, arms={arms})",
-                            model=AGENT_LLM)
+                            model=f"{AGENT_LLM} {LLM}")
         with ProcessPoolExecutor(max_workers=a.jobs) as ex:
             futs = {ex.submit(run_one, *j): j for j in todo}
             for fut in as_completed(futs):

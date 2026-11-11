@@ -33,6 +33,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 import measure  # noqa: E402
+import check_spend  # noqa: E402
 
 # Chosen from tool usage in cached stock trajectories + golden actions:
 #  2: list_all_airports, search_onestop_flight (large results)
@@ -131,6 +132,7 @@ def main() -> None:
         sys.exit(0 if check([p.resolve() for p in a.check]) else 1)
 
     key, _ = measure.config_key("kopium")
+    check_spend.require("smoke gate", model=f"{measure.AGENT_LLM} {measure.LLM}")
     dirs = []
     for tid in SMOKE_TASKS:
         d = measure.run_dir("kopium", key, tid, 0)

@@ -43,13 +43,14 @@ from tau2.utils.llm_utils import get_token_usage
 from kopium_agent import KopiumAgent
 
 from model_guard import guard_llm
+import check_spend
 
 HERE = Path(__file__).parent
 # Model for all three roles (koru agent, stock agent, user sim) — same-model
 # fairness. BENCH_MODEL overrides for arm comparisons. guard_llm is the wall:
 # Anthropic slugs exit at startup (burned ~$20/run twice — 2026-08-15 haiku,
 # 2026-10-11 sonnet) unless BENCH_ALLOW_ANTHROPIC=1 is set per invocation.
-LLM = guard_llm(os.environ.get("BENCH_MODEL", "unset/no-openrouter-default"))
+LLM = guard_llm(os.environ.get("BENCH_MODEL", "unset/no-default-model"))
 
 # LiteLLM's price table lacks the v4.1-flash slug, so completion_cost()
 # returns 0 and every message logs "model isn't mapped". Register the
@@ -313,6 +314,7 @@ def main() -> None:
         tasks = get_tasks(domain)
         tasks = tasks[start : start + count]
     print(f"domain={domain} tasks={len(tasks)} suffix={suffix} model={LLM} koru_reasoning={REASONING} stock_reasoning={STOCK_REASONING} stock_temp={STOCK_TEMPERATURE or 'provider-default'} no_stock={no_stock}", flush=True)
+    check_spend.require(f"run_compare {suffix} ({len(tasks)} tasks)", model=LLM)
     rows = []
     with open(out_path, "w", newline="") as f:
         w = csv.writer(f)

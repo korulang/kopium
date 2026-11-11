@@ -34,7 +34,7 @@ AGENT_BIN = HERE / "tau-agent-binary"
 
 def main() -> None:
     task_id = sys.argv[1] if len(sys.argv) > 1 else "0"
-    llm = "unset/no-openrouter-default"
+    llm = "unset/no-default-model"
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
     llm = guard_llm(llm)

@@ -20,7 +20,9 @@ from tau2.data_model.message import (
     AssistantMessage, SystemMessage, ToolCall, ToolMessage, UserMessage,
 )
 
-MODEL = "unset/no-openrouter-default"
+from model_guard import guard_llm
+
+MODEL = guard_llm("unset/no-default-model")
 LLM_ARGS = {"timeout": 180, "reasoning_effort": "none"}
 
 # The real reservation payloads from task 19 runs.

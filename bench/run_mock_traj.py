@@ -99,7 +99,7 @@ def json_dumps(args) -> str:
 
 
 def main() -> None:
-    llm = "unset/no-openrouter-default"
+    llm = "unset/no-default-model"
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
     llm = guard_llm(llm)

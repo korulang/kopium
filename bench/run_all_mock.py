@@ -2,7 +2,7 @@
 """
 Run the full mock-domain set against the Koru gate, one line per task.
 
-  python3 bench/run_all_mock.py [--llm unset/no-openrouter-default]
+  python3 bench/run_all_mock.py [--llm unset/no-default-model]
 
 Prints a table: task, reward, agent calls, and the decisive tool call.
 """
@@ -24,7 +24,7 @@ GATE = HERE / "mock-gate-binary"
 
 
 def main() -> None:
-    llm = "unset/no-openrouter-default"
+    llm = "unset/no-default-model"
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
     llm = guard_llm(llm)
