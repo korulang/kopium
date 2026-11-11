@@ -57,7 +57,7 @@ LLM = guard_llm(os.environ.get("BENCH_MODEL", "unset/no-openrouter-default"))
 # plumbing (message.cost, get_cost, SimulationRun.agent_cost) produces real
 # numbers. $0.30/M prompt, $1.20/M completion (api/v1/models, verified
 # 2026-10-12).
-litellm.model_cost["unset/no-openrouter-default"] = {
+litellm.model_cost["openrouter/deepseek/deepseek-v4.1-flash"] = {
     "input_cost_per_token": 0.3e-6,
     "output_cost_per_token": 1.2e-6,
     "max_tokens": 1048576,

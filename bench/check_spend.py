@@ -22,7 +22,13 @@ HERE = Path(__file__).resolve().parent
 APPROVAL = HERE / "SPEND-OK"
 
 
-def require(what: str) -> None:
+def require(what: str, model: str = "") -> None:
+    if "openrouter" in model.lower():
+        print(f"SPEND GATE REFUSE — {what}: OpenRouter is banned for bench "
+              "runs until Lars rules the correctness signals extremely "
+              "strong (2026-11-12). No approval file overrides this.",
+              file=sys.stderr)
+        sys.exit(1)
     if not APPROVAL.exists():
         print(f"SPEND GATE REFUSE — {what}: no bench/SPEND-OK approval file. "
               "Live model runs need Lars's explicit per-commission approval; "

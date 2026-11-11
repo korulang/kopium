@@ -69,7 +69,7 @@ SEED_BASE = 42
 PRICES = {
     # $0.018/M in, $0.64/M out — api/v1/models, verified 2026-10-11 (the old
     # $0.14/$0.28 row was stale: input ~8x high, output ~2.3x low).
-    "unset/no-openrouter-default": (0.018e-6, 0.64e-6),
+    "openrouter/deepseek/deepseek-v4-flash-0731": (0.018e-6, 0.64e-6),
     "openrouter/google/gemini-2.5-flash": (0.30e-6, 2.50e-6),
     "openrouter/meta/muse-spark-1.3-contributor": (0.10e-6, 0.20e-6),
 }
@@ -346,7 +346,8 @@ def main() -> None:
     todo = [j for j in jobs if not (run_dir(*j) / "sim.json").exists()]
     print(f"{len(jobs)} runs, {len(jobs) - len(todo)} cached, {len(todo)} to run", flush=True)
     if todo and not a.summarize_only:
-        check_spend.require(f"measure.py sweep ({len(todo)} runs, arms={arms})")
+        check_spend.require(f"measure.py sweep ({len(todo)} runs, arms={arms})",
+                            model=AGENT_LLM)
         with ProcessPoolExecutor(max_workers=a.jobs) as ex:
             futs = {ex.submit(run_one, *j): j for j in todo}
             for fut in as_completed(futs):
