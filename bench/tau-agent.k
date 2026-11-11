@@ -222,17 +222,19 @@ tor run-capped { br: *std/bridge:Bridge<session>, source: string<*> }
 run-capped = app/tau_wire:item-cap(source, max: 128)
 | ok _ |> std/bridge:run(br, source)
     | result r => result { r.value, r.used, r.handles, r.bound, r.trace }
+    | error e |> std/bridge:error-decode(e)
+        | dispatch-error de => dispatch-error { de.event_name, de.message, de.trace }
+        | event-denied ev => event-denied ev
+        | parse-error p => parse-error { p.message, p.line, p.column }
+        | validation-error v => validation-error v
+        | shape-error sh => shape-error { sh.branch, sh.field, sh.message }
+        | exhausted ex => exhausted { ex.used, ex.last_event, ex.handles }
+        | scope-not-found s2 => scope-not-found s2
+        | unknown-error u => dispatch-error { event_name: "", u.message, trace: "" }
     | defined d => defined d
     | partial p => partial { p.ran, p.total, p.used, p.handles, p.report, p.wire_failures }
     | unhandled-branch ub => unhandled-branch { ub.branch, ub.payload, ub.handles }
-    | dispatch-error e => dispatch-error { e.event_name, e.message, e.trace }
-    | event-denied ev => event-denied ev
     | residue r => residue { r.report, r.observer, r.bound, r.text }
-    | parse-error p => parse-error { p.message, p.line, p.column }
-    | validation-error v => validation-error v
-    | shape-error sh => shape-error { sh.branch, sh.field, sh.message }
-    | exhausted e => exhausted { e.used, e.last_event, e.handles }
-    | scope-not-found s2 => scope-not-found s2
 | over _ => exhausted { used: 0, last_event: "turn item cap exceeded", handles: 0 }
 
 tor act { br: *std/bridge:Bridge<session>, source: string<*> }

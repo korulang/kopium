@@ -995,6 +995,45 @@ var observer_answered: bool = true;
 // the current receipt_seq, written as resp_NNN.txt next to call_NNN.json.
 // Without it the last turn of a session is invisible — the request shows
 // the user message that prompted it, never what the model emitted.
+// call_step drain sink: the bridge's take-calls JSONL, one file per
+// drain batch under KOPIUM_RECEIPT_DIR — seq-suffixed so ordering is the
+// filename sort and no append mode is needed. `origin` is stamped into
+// every record line: "model" for agent-emitted wires, "harness" for the
+// agent's own introspection (grammar()). Empty text writes nothing.
+var callsteps_seq: u64 = 0;
+
+~pub tor write-callsteps { text: string<*>, origin: string<*> }
+| written
+| skipped
+| failed string
+
+~proc write-callsteps|zig {
+    const dir = std.posix.getenv("KOPIUM_RECEIPT_DIR") orelse return .{ .skipped = .{} };
+    if (text.len == 0) return .{ .skipped = .{} };
+    callsteps_seq += 1;
+    var pb: [1024]u8 = undefined;
+    const path = std.fmt.bufPrint(&pb, "{s}/callsteps_{d:0>3}.jsonl", .{ dir, callsteps_seq }) catch
+        return .{ .failed = "callsteps path too long" };
+    const f = std.fs.cwd().createFile(path, .{}) catch
+        return .{ .failed = "callsteps create failed" };
+    defer f.close();
+    const prefix = "{\"type\":\"call_step\",";
+    const inject = std.fmt.allocPrint(std.heap.page_allocator, "{s}\"origin\":\"{s}\",", .{ prefix, origin }) catch
+        return .{ .failed = "callsteps OOM" };
+    var it = std.mem.splitScalar(u8, text, '\n');
+    while (it.next()) |line| {
+        if (line.len == 0) continue;
+        if (std.mem.startsWith(u8, line, prefix)) {
+            f.writeAll(inject) catch return .{ .failed = "callsteps write failed" };
+            f.writeAll(line[prefix.len..]) catch return .{ .failed = "callsteps write failed" };
+        } else {
+            f.writeAll(line) catch return .{ .failed = "callsteps write failed" };
+        }
+        f.writeAll("\n") catch return .{ .failed = "callsteps write failed" };
+    }
+    return .{ .written = .{} };
+}
+
 ~pub tor write-response { text: string<*> }
 | written
 | skipped
