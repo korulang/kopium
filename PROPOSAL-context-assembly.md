@@ -450,3 +450,148 @@ against the live trial log himself.
   harness records; train-30 only. Still waits on volume.
 - Policy: Fable says enough exists to rule whole+always-on v1 —
   Lars's ruling, still open.
+
+## Escalation ladder — surprise-routed model tiers (design session, 2026-11-11)
+
+Lars + Devin design dialogue. Extends the guide layer from "computed
+context" to "computed context + routed inference": surprise becomes
+the router between model tiers, and the strong model's output at a
+surprise site feeds back into the periphery as a candidate lesson.
+
+### The tier stack
+
+- **T0 — algorithmic**: gate, transition priors, guide lookups, stall
+  detection. Free, always on, zero inference.
+- **T1 — cheap diffusion**: mini/26B-class + construct drafts +
+  assembled context. Routine wire, the ~95%.
+- **T2 — strong inference**: fires only on surprise. Packet is SMALL
+  by construction — `state()` snapshot, diverging edge, live bindings,
+  prior-vs-actual, guide payload — never the whole trajectory.
+  Context assembly pays twice: it feeds T1 and packages the escalation.
+- **T3 — human**: policy calls, genuinely novel situations, taste —
+  the residue even T2 can't justify.
+
+### Why this is RSI and not just routing
+
+The unit of improvement is the system (model + periphery + corpus),
+not the NN — weights stay frozen; what improves is explicit structure.
+Concrete surfaces already in flight: call_step → transition table →
+outcome-labelled priors → guide rows → better next run; cassette
+replay as the self-modification verifier; vocabulary/register blocks
+as capability declarations; zlow schema evolution (stretch) as
+self-modifying pipelines; the membrane as the epistemic layer.
+
+The T2 write-back is the load-bearing new piece: a strong model's
+answer at a surprise site produces (a) the next action AND (b) a
+candidate lesson → cassette replay → promote to guide row /
+transition-table entry / vocabulary patch. The expensive model teaches
+the cheap system; the lesson persists in algorithmic space.
+"Distill into C" becomes "distill into the periphery" — HOC's insight
+on a substrate that exists. Measurable claim: surprise rate and
+escalation rate on held-out tasks decline as coverage grows.
+
+### Honest caveats (declared, not hidden)
+
+- Escalated output faces the same gate/`koruc` verification — T2 is
+  still periphery; the trusted core stays trusted.
+- Promotion needs the same eval honesty as guide authoring: held-out
+  test ids, placebo arm, replay at firing sites — else we distill the
+  strong model's errors into the periphery.
+- Epsilon (surprise threshold) IS the spend dial — T2 prices are only
+  viable because routine turns never pay them.
+- Latency is acceptable: agentic tasks are correctness-bound and the
+  divergence path already returns control by design.
+
+### Relation to human-in-the-loop
+
+Not competitors — tiers of the same ladder. T2 absorbs the computable
+residue at machine prices; T3 keeps policy/judgment/taste. Every
+escalation is never wasted: a human answer becomes a guide lesson +
+corpus row + outcome labels — help-now AND training data. Per-session
+graduation stays per-session (model starts blank); corpus-level
+coverage growth is the cross-session version of "needs less
+intervention."
+
+### Generalization claim + falsifier
+
+Mechanism is domain-general (armed-vs-actual, stall, unarmed outcomes
+need zero corpus — any Koru program gets the loop free); knowledge is
+domain-local by design (facts stay local, patterns go global via
+wildcard guides `* -> error` and shared anomaly classes). Open domains
+degrade gracefully: sparse priors → common early surprise → every
+escalation is corpus data → coverage grows → surprise rate declines.
+Permanent heavy tail = genuinely novel situations, which is where new
+vocabulary comes from — not a flaw.
+
+Falsifier: surprise/escalation rate on held-out NOVEL tasks must
+decline as outcome-labelled coverage grows — measured on a second
+domain vocabulary with zero domain guides, alongside the airline
+replay tests. If escalation rate doesn't decay with coverage, the
+"general tasks" version of the claim is dead and the system is a
+repeatable-workflow tool only.
+
+### Build-order placement
+
+Slots between current items 2 (gate-side guide render) and 3 (replay
+falsifier + placebo): the escalation packet format is an extension of
+the guide payload; the write-back path reuses the cassette harness;
+the tier router consumes the same trigger classes. No new machinery —
+a new consumer of existing surfaces.
+
+## Commission-2 deltas — the real trees (2026-11-11, Devin + Fable output-2)
+
+Two organize-only passes over the corpus (Fable 5.2; outputs at
+`n-grams/fable-pack/output/` and `output-2/`). Commission 2 read the
+actual zlow `src/` tree and 6digit-world engine/CLI/models — three
+load-bearing citations spot-verified against live trees by Devin
+(`pipeline.ts:462` flow.ran re-entry bar, `wm.mjs` dead route
+declaration, `cassette.ts:70-79` key shape — all confirmed).
+
+Build-order deltas (R0–R11 stand; these amend):
+
+- **R5 re-scoped — easier.** zlow `src/cassette/cassette.ts` is a
+  working N-sample record/replay keyed on full call inputs
+  (`{model,system,temp,prompt,schema}` → guide-present vs guide-absent
+  are naturally separate recordings) + `variance.ts` invariant checks.
+  R5 is now "the Koru-wire instance of a proven pattern," not "the
+  ecosystem's first replay instrument." Still missing: trajectory-level
+  replay (zlow variance is per-step by design).
+- **R8 re-scoped — easier conceptually.** The T0–T3 escalation shape
+  already exists in `zlow/src/fixtures/dispatchLoop.ts` (algorithmic
+  guard → fast fill → capable escalation → park-for-human) with named
+  tests. Work = porting semantics onto the Koru gate, not inventing
+  routing. Two constraints to carry into spec: `emit$on` fires on
+  truthy presence only (surprise classes need per-class booleans or a
+  handler step); `flow.ran` bars re-entry (the agent loop stays
+  host-driven — zlow hosts per-turn pipeline, not the cycle).
+- **N1 — WMFX scoreboard instrument (new, unblocks `03` §6 dark
+  rows).** `models/kopium_scoreboard/`: producer reduces committed
+  `call_step` corpus → `data/series.csv` (one row per generation:
+  surprise-by-class, silent-fail, edge coverage, reward);
+  `model.wmfx` = 019-style drift envelope; oracle/run/split.json per
+  the 013 template; replay-first, live-tick second (dirty_tree
+  pattern). Depends on R3's regenerated corpus. Honest split:
+  counts are producer columns/tests; trends are `.wmfx` models.
+- **N2 — zlow per-turn spike (optional de-risk for R8).**
+  `surpriseGate` handler step + `escalate` capable step proving
+  trigger→assembled-context→cassette-replay with zero Koru code.
+- **N3 — dead route-line warning.** `.signal` `route:`/`wmfx=` lines
+  are DEAD DECLARATION (`wm.mjs:1448-1453`); live routing is NATS
+  JetStream via `tick.json` `filter_subjects`. Any KOPIUM signal
+  wiring must use tick.json subjects, never the .signal route line.
+- **Sibling-authority guardrail.** Koru gate = legality (authoritative
+  oracle); zlow = per-turn pipeline + cassette replay + trace;
+  WMFX = watcher. Wire at edges (zlow trace → WMFX producer; zlow
+  cassette → replay falsifier; judge-gate Sample → WMFX port).
+  Any proposal to let zlow validate wire or WMFX decide escalation is
+  the thesis-merge anti-pattern — flag it, don't build it.
+- **zlow verdict upgraded:** more than a mocked skeleton — cassette
+  N-sample replay, variance checker, durable park/resume, trace
+  stores, judge-gate/vector, dispatch fixture all real code; "all
+  tests passing" unverified (cassette dir absent from corpus, no runs).
+  Thesis (cost reduction on real workload) still unmeasured.
+- **WMFX verdict narrowed:** engine real (7,267-line Zig, golden suite
+  wired); Phase-2 live-tick half EXISTS (`models/dirty_tree` tick +
+  build-tick); what's unbuilt is consumers/wiring + any KOPIUM
+  instrument — zero grep hits for kopium/call_step/n-gram/tau2 in the
+  whole tree.

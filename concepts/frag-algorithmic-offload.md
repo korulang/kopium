@@ -74,6 +74,18 @@ judgment (schema-design failures dominating outcomes). The framing
 itself is a stance, not a measurement — the measurements live in
 PROPOSAL-context-assembly.md's replay harness and n-grams/rd.md.
 
+Sibling authorities (2026-11-11, commission-2 ground-truth pass): the
+three projects are siblings with distinct authorities, wired at edges —
+never merged into one oracle. Koru gate = legality (authoritative);
+zlow = per-turn pipeline + cassette replay + trace (its dispatchLoop
+fixture already proves the T0–T3 escalation shape); WMFX = watcher
+(its dirty_tree live-tick pattern is the template for watching
+call_step-derived series). A proposal that lets zlow validate wire or
+WMFX decide escalation is the thesis-merge anti-pattern. Trap recorded:
+`.signal` route lines are dead declarations — live routing is NATS via
+tick.json filter_subjects.
+
 Pointers (mechanics live there, not here): `PROPOSAL-context-assembly.md`
 (the build), `n-grams/rd.md` (the lab notebook), `~/src/zlow/DESIGN.md`
-(the orchestration altitude).
+(the orchestration altitude), `n-grams/fable-pack/output-2/` (the
+code-level ground truth).
