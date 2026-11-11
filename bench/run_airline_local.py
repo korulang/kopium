@@ -27,7 +27,7 @@ GATE = HERE / "airline-gate-binary"
 
 def main() -> None:
     task_id = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else "14"
-    arm, steps, draft, construct, draft_frac, llm = "base", 16, None, None, 0.5, "openrouter/deepseek/deepseek-v4.1-flash"
+    arm, steps, draft, construct, draft_frac, llm = "base", 16, None, None, 0.5, "unset/no-openrouter-default"
     max_tokens = 512
     draft_blocks = 0
     temperature = 0.0

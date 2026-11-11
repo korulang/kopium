@@ -49,7 +49,7 @@ HERE = Path(__file__).parent
 # fairness. BENCH_MODEL overrides for arm comparisons. guard_llm is the wall:
 # Anthropic slugs exit at startup (burned ~$20/run twice — 2026-08-15 haiku,
 # 2026-10-11 sonnet) unless BENCH_ALLOW_ANTHROPIC=1 is set per invocation.
-LLM = guard_llm(os.environ.get("BENCH_MODEL", "openrouter/deepseek/deepseek-v4.1-flash"))
+LLM = guard_llm(os.environ.get("BENCH_MODEL", "unset/no-openrouter-default"))
 
 # LiteLLM's price table lacks the v4.1-flash slug, so completion_cost()
 # returns 0 and every message logs "model isn't mapped". Register the
@@ -57,7 +57,7 @@ LLM = guard_llm(os.environ.get("BENCH_MODEL", "openrouter/deepseek/deepseek-v4.1
 # plumbing (message.cost, get_cost, SimulationRun.agent_cost) produces real
 # numbers. $0.30/M prompt, $1.20/M completion (api/v1/models, verified
 # 2026-10-12).
-litellm.model_cost["openrouter/deepseek/deepseek-v4.1-flash"] = {
+litellm.model_cost["unset/no-openrouter-default"] = {
     "input_cost_per_token": 0.3e-6,
     "output_cost_per_token": 1.2e-6,
     "max_tokens": 1048576,
