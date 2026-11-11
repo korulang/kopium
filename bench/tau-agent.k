@@ -170,6 +170,15 @@ against these conditions, reading them against the records you fetch.
         | ok |> _
         | err e |> app/tau_wire:die(msg: e)
 
+// Drain the bridge's call_step JSONL to the side channel after each run —
+// one file per drain under KOPIUM_RECEIPT_DIR, origin-stamped ("harness"
+// for the agent's own grammar() read, "model" for agent-emitted wires).
+tor drain-calls { br: *std/bridge:Bridge<session>, origin: string }
+drain-calls = std/bridge:take-calls(br) |> app/tau_wire:write-callsteps(origin)
+| written |> _
+| skipped |> _
+| failed m |> app/tau_wire:die(msg: m)
+
 // Build this turn's request from the transcript, receipt it, then fire.
 // The system's surface — grammar rules, the live vocabulary, the domain
 // policy — is the system message, rendered fresh on every ask and
@@ -179,7 +188,7 @@ against these conditions, reading them against the records you fetch.
 tor ask { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string }
 ask = std/store:query(transcript)
 ! query h |> std/bridge:grammar(br)
-    | ok g |> std/store:query(domain_policy)
+    | ok g |> drain-calls(br, origin: "harness") |> std/store:query(domain_policy)
         ! query dp |> std/fmt:fmt.blk {
 {{ g:s }}{{ dp:S }}
             }: sysg |> headless/wire:msg(role: "system", content: sysg): sysmsg
@@ -317,15 +326,15 @@ drive = app/tau_wire:channel()
         }: raw
             |> std/io:eprint.ln("  wire> {{ raw:s }}")
             |> app/tau_wire:write-response(text: raw)
-            | written |> act(br, source: raw)
-            | skipped |> act(br, source: raw)
-            | failed m |> act(br, source: raw)
+            | written |> act(br, source: raw) |> drain-calls(br, origin: "model")
+            | skipped |> act(br, source: raw) |> drain-calls(br, origin: "model")
+            | failed m |> act(br, source: raw) |> drain-calls(br, origin: "model")
 | toolcall |> app/tau_wire:tooltake()
     | programs raw |> std/io:eprint.ln("  wire> {{ raw:s }}")
         |> app/tau_wire:write-response(text: raw)
-        | written |> act(br, source: raw)
-        | skipped |> act(br, source: raw)
-        | failed m |> act(br, source: raw)
+        | written |> act(br, source: raw) |> drain-calls(br, origin: "model")
+        | skipped |> act(br, source: raw) |> drain-calls(br, origin: "model")
+        | failed m |> act(br, source: raw) |> drain-calls(br, origin: "model")
     | none |> no-program()
 
 // Zero bytes reached the wire — not a refused program, a silent turn.
