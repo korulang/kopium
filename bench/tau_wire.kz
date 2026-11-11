@@ -594,6 +594,16 @@ fn jsonKeys(s: []const u8, buf: []u8) []const u8 {
     return "get-user-details(user_id: \"example_user_0\") | ok u |>\nsay(text: \"Welcome back, {{ u.user_id }} — membership {{ u.membership }}.\")";
 }
 
+// The chat-completions endpoint — KOPIUM_API_URL overrides it so a
+// scripted-wire parity run can point the whole ask->drive->act path at a
+// local stub; unset is the real provider, unchanged.
+~pub tor api-url {} -> string
+
+~proc api-url|zig {
+    return std.posix.getenv("KOPIUM_API_URL") orelse
+        "https://openrouter.ai/api/v1/chat/completions";
+}
+
 // Which channel the model's reply rides: "content" (the default — wire text
 // in the message body) or "toolcall" — the request offers a single `koru`
 // tool and the reply's program arrives inside its argument string.

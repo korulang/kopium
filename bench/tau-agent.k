@@ -142,7 +142,7 @@ handle-delta = koru/yyjson:parse(text: payload)
 
 // The streaming POST — same shape as live.k's send.
 tor send { req: string }
-send = app/tau_wire:auth(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: "https://openrouter.ai/api/v1/chat/completions", body: req, headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
+send = app/tau_wire:api-url(): u |> app/tau_wire:auth(): auth |> koru/sse:new(): s |> koru/curl:multi.new() |> koru/curl:multi.add.post(url: u, body: req, headers: &.{ .{ .name = "Content-Type", .value = "application/json" }, .{ .name = "Authorization", .value = auth } }) |> koru/curl:multi.start()
 | started p |> koru/curl:await(p)
     ! chunk ch |> app/tau_wire:buffer-resp(ch.data) |> koru/sse:feed(s, bytes: ch.data)
         ! data d |> handle-delta(payload: d)
