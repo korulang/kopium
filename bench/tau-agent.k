@@ -424,11 +424,7 @@ seed = app/tau_wire:seed-text(): st |> observe(role: "assistant", text: st)
 // positive poisoned session state, task-0 FATAL) — these teach recovery,
 // not success.
 tor demo-seed {}
-demo-seed = observe-human(text: "Hi, can you tell me the status of my flight?")
-    |> observe(role: "assistant", text: "Of course! I'd be happy to check that for you — one moment please.")
-    |> observe(role: "user", text: "no koru program in the reply — emit one koru tool call whose program is wire text; `vocabulary()` lists every verb")
-    |> observe(role: "assistant", text: "say(text: \"I can help with that — to pull up your flight I'll need your user ID or reservation ID. Could you share either one?\")")
-    |> observe-human(text: "My user ID is DEMO_USER_0001, please look me up.")
+demo-seed = observe-human(text: "My user ID is DEMO_USER_0001, please look me up.")
     |> observe(role: "assistant", text: "get-user-details(user_id: \"DEMO_USER_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
     |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"error\",\"value\":\"Error: User DEMO_USER_0001 not found\"}")
     |> observe(role: "assistant", text: "get-user-details(user_id: \"demo_user_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
