@@ -328,7 +328,33 @@ const CallResult = struct { content: []const u8, err: bool };
 // then block for the matching result and return its content + error flag as
 // the proc's value. The bridge auto-binds it r{N}; a JSON-object datum gains
 // fields, so r{N}.user_id resolves on later turns.
+// Doctrine enforcement — session-state preconditions the model must
+// satisfy before a guarded call may dispatch. The env's API does not check
+// domain policy (policy.md says so explicitly); this is the agent layer
+// holding the line: a guarded call with unverified facts returns an error
+// branch with teaching instead of executing. Airline scope only; the
+// read-set is this process's session memory.
+var reservation_reads = std.StringHashMapUnmanaged(void){};
+
 fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
+    const scope0 = std.posix.getenv("KOPIUM_SCOPE") orelse "airline";
+    if (std.mem.eql(u8, scope0, "airline")) {
+        if (std.mem.eql(u8, tau_name, "cancel_reservation")) {
+            const rid0 = jsonStr(args_json, "reservation_id") orelse "";
+            var seen0 = false;
+            var it0 = reservation_reads.iterator();
+            while (it0.next()) |e0| {
+                if (std.mem.eql(u8, e0.key_ptr.*, rid0)) {
+                    seen0 = true;
+                    break;
+                }
+            }
+            if (!seen0) return .{
+                .content = "cancel-reservation refused: the reservation's facts are unverified — call get-reservation-details(reservation_id) first, confirm a cancellation rule applies (booked within 24h, airline-cancelled flight, business cabin, or insurance-covered reason; no flown segment), get explicit user confirmation, then retry",
+                .err = true,
+            };
+        }
+    }
     n_call += 1;
     const alloc = std.heap.page_allocator;
     call_seq += 1;
@@ -378,11 +404,18 @@ fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
         const rid = jsonStr(line, "id") orelse @panic("kopium: result line without id");
         if (!std.mem.eql(u8, rid, id))
             @panic("kopium: result id does not match the outstanding call");
-        return .{
-            .content = jsonStr(line, "content") orelse
-                @panic("kopium: result line without content"),
-            .err = jsonBool(line, "error"),
-        };
+        const rcontent = jsonStr(line, "content") orelse
+            @panic("kopium: result line without content");
+        const rerr = jsonBool(line, "error");
+        if (!rerr and std.mem.eql(u8, scope0, "airline") and
+            std.mem.eql(u8, tau_name, "get_reservation_details"))
+        {
+            if (jsonStr(args_json, "reservation_id")) |rid2| {
+                const key = alloc.dupe(u8, rid2) catch @panic("kopium: OOM");
+                reservation_reads.put(alloc, key, {}) catch @panic("kopium: OOM");
+            }
+        }
+        return .{ .content = rcontent, .err = rerr };
     }
 }
 

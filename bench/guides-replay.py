@@ -121,11 +121,28 @@ def check(name: str, cond: bool, why: str):
         print(("PASS " if cond else "FAIL ") + name + " — " + why)
 
 
-def run_case(table: dict[str, str], key: str, rec: dict, expect_key: str | None = None):
+def cancel_prelude(rec: dict):
+    """Guarded tools need their session precondition met first — a prior
+    successful read of the same reservation, as a compliant run produces.
+    Returns [(wire, content)] or None."""
+    rid = next((a["raw"] for a in rec.get("args") or []
+                if a.get("name") == "reservation_id"), None)
+    if rid is None:
+        return None
+    return [(
+        f'get-reservation-details(reservation_id: {rid}) | ok r |>',
+        f'{{"reservation_id": {rid}, "status": "ok"}}',
+    )]
+
+
+def run_case(table: dict[str, str], key: str, rec: dict, expect_key: str | None = None,
+             prelude=None):
     """Fresh session, one reconstructed dispatch; assert fire + visibility."""
     expect = expect_key or key
     g = TauGateSession(BINARY)
     try:
+        for pw, pc in prelude or []:
+            pump(g, pw, pc, False)
         kind, detail = pump(g, wire_for(rec), result_for(rec), rec["branch"] == "error")
         # Guide lines and CALLSTEPS are emitted AFTER the verdict and are
         # parsed on the next turn's first read — flush first, then drain.
@@ -227,7 +244,8 @@ def main() -> int:
         except LookupError:
             DARK.append(f"{key} — never observed in train-30 corpus (row authored, unexercised)")
             continue
-        run_case(table, key, rec)
+        pre = cancel_prelude(rec) if verb == "cancel-reservation" else None
+        run_case(table, key, rec, prelude=pre)
 
     # Every tor-level row: first observed dispatch of that verb.
     for key in sorted(table):
@@ -239,7 +257,8 @@ def main() -> int:
         except LookupError:
             DARK.append(f"{key} — never dispatched in train-30 corpus (row authored, unexercised)")
             continue
-        run_case(table, f"{key} (tor-level)", rec, expect_key=key)
+        pre = cancel_prelude(rec) if verb == "cancel-reservation" else None
+        run_case(table, f"{key} (tor-level)", rec, expect_key=key, prelude=pre)
 
     # The generic error row, on an observed error with no specific row.
     if "*->error" in table:

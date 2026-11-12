@@ -171,6 +171,16 @@ fn emitShape(name: []const u8, prop: *yyj.Value, defs: ?*yyj.Value) bool {
 
 const Field = struct { name: []const u8, kind: Kind, prop: *yyj.Value };
 
+// Doctrine append — policy preconditions that must reach the model BEFORE
+// the call is chosen, not after it fires. Post-dispatch guides teach the
+// next call; this text gates this one. Sourced from the domain's policy
+// document; keyed by tool name; domain-general — never task-specific.
+fn doctrineFor(name: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, name, "cancel-reservation"))
+        return "Cancellation preconditions — the API does NOT check them: cancel only if the booking is within 24h, the airline cancelled the flight, it is business cabin, or travel insurance covers the reason; if any segment already flew, transfer-to-human-agents instead. Obtain the cancellation reason and explicit user confirmation before calling.";
+    return null;
+}
+
 // One tool -> tor decl + proc + register line + doc block. Every byte of
 // the emitted contract is derived from the schema in `v`; the only added
 // constants are the name map, the cost rule, and the type mapping above.
@@ -220,6 +230,23 @@ fn emitTool(v: *yyj.Value) void {
             else => ch,
         };
         dlen += 1;
+    }
+    // Doctrine append rides the same doc annotation — same sanitization
+    // (one line, no bracket bytes) so it survives every emit site.
+    if (doctrineFor(kname)) |note| {
+        if (dlen > 0 and dlen < dbuf.len - 1) {
+            dbuf[dlen] = ' ';
+            dlen += 1;
+        }
+        for (note) |ch| {
+            if (dlen >= dbuf.len - 1) break;
+            dbuf[dlen] = switch (ch) {
+                '\n', '\r', '\t' => ' ',
+                '[', ']' => ' ',
+                else => ch,
+            };
+            dlen += 1;
+        }
     }
     // Every tool tor declares two outcomes: `ok` for a dispatched result,
     // `error` for tau2's raised failure (the marshal forwards the env's
@@ -471,8 +498,8 @@ const DOC_PREAMBLE =
             | done |> assemble(): outs
                 |> koru/yyjson:close(doc)
                 |> std/io:free(content)
-                |> std/fs:write(path: "airline_tools.k", content: outs.kz)
-                | written |> std/fs:write(path: "airline_vocab_doc.md", content: outs.doc)
+                |> std/fs:write-file(path: "airline_tools.k", content: outs.kz)
+                | written |> std/fs:write-file(path: "airline_vocab_doc.md", content: outs.doc)
                     | written |> std/io:eprint.ln("gen_airline: {{ outs.n:d }} tors + say -> airline_tools.k + airline_vocab_doc.md")
                     | failed m |> std/io:eprint.ln("gen_airline: doc write failed {{ m:s }}")
                 | failed m |> std/io:eprint.ln("gen_airline: tools write failed {{ m:s }}")

@@ -32,7 +32,7 @@ import app/tau_wire
 
 [
 - doc
-Delivers text to the user — the only verb they can hear. Emit-only: the reply arrives as the user's own next message, never as this call's value.
+Delivers text to the user — the only verb they can hear. Owes them a reply.
 ]
 pub tor say { text: string } -> string
 
@@ -102,7 +102,7 @@ proc calculate|zig {
 
 [
 - doc
-Cancel the whole reservation.
+Cancel the whole reservation. Cancellation preconditions — the API does NOT check them: cancel only if the booking is within 24h, the airline cancelled the flight, it is business cabin, or travel insurance covers the reason; if any segment already flew, transfer-to-human-agents instead. Obtain the cancellation reason and explicit user confirmation before calling.
 ]
 pub tor cancel-reservation { reservation_id: string }
 | ok string
@@ -281,7 +281,7 @@ proc send-certificate|zig {
 
 [
 - doc
-Transfer the user to a human agent, with a summary of the user's issue. Only transfer if the user explicitly asks for a human agent, or if given the policy and the available tools you cannot solve the user's issue.
+Transfer the user to a human agent, with a summary of the user's issue.  Only transfer if  -  the user explicitly asks for a human agent  -  given the policy and the available tools, you cannot solve the user's issue.
 ]
 pub tor transfer-to-human-agents { summary: string }
 | ok string
@@ -402,7 +402,7 @@ nothing else in the program runs). To act on a failure, arm it:
 `| error e |> say(text: "...")` and read `e` for the reason.
 
 book-reservation — Book a reservation.
-· user_id: string — The ID of the user to book the reservation such as 'sara_doe_496'.
+· user_id: string — The ID of the user to book the reservation such as 'sara_doe_496'`.
 · origin: string — The IATA code for the origin city such as 'SFO'.
 · destination: string — The IATA code for the destination city such as 'JFK'.
 · flight_type: string — one of round_trip | one_way — The type of flight such as 'one_way' or 'round_trip'.
@@ -446,7 +446,10 @@ send-certificate — Send a certificate to a user. Be careful!
 · user_id: string — The ID of the user to book the reservation, such as 'sara_doe_496'.
 · amount: integer — The amount of the certificate to send.
 
-transfer-to-human-agents — Transfer the user to a human agent, with a summary of the user's issue. Only transfer if the user explicitly asks for a human agent, or if given the policy and the available tools you cannot solve the user's issue.
+transfer-to-human-agents — Transfer the user to a human agent, with a summary of the user's issue.
+· Only transfer if
+· the user explicitly asks for a human agent
+· given the policy and the available tools, you cannot solve the user's issue.
 · summary: string — A summary of the user's issue.
 
 update-reservation-baggages — Update the baggage information of a reservation.

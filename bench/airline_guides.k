@@ -58,7 +58,7 @@ std/guide:add(send-certificate) { Takes user_id and amount (integer dollars). Th
 
 std/guide:add(get-user-details -> ok) { Profile in hand. Next, read the reservation: get-reservation-details(reservation_id: "<id from the user reservations>") and arm its ok result. Take payment ids from the keys of payment_methods and passenger details from saved_passengers. }
 
-std/guide:add(get-reservation-details -> ok) { Read flights[].flight_number and .date, cabin, total_baggages/nonfree_baggages, and payment_history[].payment_id. To change flights: search-direct-flight(origin, destination, date), then update-reservation-flights(reservation_id, cabin, flights, payment_id). To cancel: cancel-reservation(reservation_id). }
+std/guide:add(get-reservation-details -> ok) { Read flights[].flight_number and .date, cabin, total_baggages/nonfree_baggages, and payment_history[].payment_id. To change flights: search-direct-flight(origin, destination, date), then update-reservation-flights(reservation_id, cabin, flights, payment_id). To cancel: the API does NOT check the rules — cancel-reservation only if created_at is within 24h, cabin is business, the airline cancelled a flight, or insurance covers the reason, and no segment has flown; otherwise transfer-to-human-agents. }
 
 std/guide:add(search-direct-flight -> ok) { Pick one result by prices.<cabin> and keep its flight_number and date. No direct flight fits? search-onestop-flight(origin, destination, date). To book: book-reservation(user_id, origin, destination, flight_type, cabin, flights: "[{flight_number, date}]", passengers, payment_methods, total_baggages, nonfree_baggages, insurance). }
 
