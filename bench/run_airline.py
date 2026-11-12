@@ -38,6 +38,14 @@ def main() -> None:
     if "--llm" in sys.argv:
         llm = sys.argv[sys.argv.index("--llm") + 1]
     llm = guard_llm(llm)
+    # --agent-llm names the model the Koru agent binary sends in its request
+    # (KOPIUM_MODEL); --llm stays the tau2 user-sim's litellm slug. They
+    # differ for local endpoints: ollama wants the bare name agent-side and
+    # the `ollama/` prefix sim-side.
+    agent_llm = llm
+    if "--agent-llm" in sys.argv:
+        agent_llm = sys.argv[sys.argv.index("--agent-llm") + 1]
+    agent_llm = guard_llm(agent_llm)
 
     if not AGENT_BIN.exists():
         sys.exit(f"kopium agent missing: build it in {HERE} with koruc tau-agent.k && mv a.out tau-agent-binary")
@@ -60,7 +68,7 @@ def main() -> None:
         tools=env.get_tools(),
         domain_policy=env.get_policy(),
         domain="airline", gate_binary=AGENT_BIN,
-        llm=llm,
+        llm=agent_llm,
     )
 
     # ------------------------------- run receipt -----------------------------
