@@ -434,6 +434,21 @@ demo-seed = observe-human(text: "Hi, can you tell me the status of my flight?")
     |> observe(role: "assistant", text: "get-user-details(user_id: \"demo_user_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
     |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"ok\",\"value\":\"{\\\"user_id\\\": \\\"demo_user_0001\\\", \\\"name\\\": {\\\"first_name\\\": \\\"Demo\\\"}}\"}")
 
+// Arm-B2: wire-only exemplar — the lookup error->retry exchange WITHOUT
+// the prose-collapse exemplar. Arm-B's prose turn is the suspected
+// collapse trigger (it models the failure mode in the agent's own voice).
+tor demo-wire-seed {}
+demo-wire-seed = observe-human(text: "My user ID is DEMO_USER_0001, please look me up.")
+    |> observe(role: "assistant", text: "get-user-details(user_id: \"DEMO_USER_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
+    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"error\",\"value\":\"Error: User DEMO_USER_0001 not found\"}")
+    |> observe(role: "assistant", text: "get-user-details(user_id: \"demo_user_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
+    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"ok\",\"value\":\"{\\\"user_id\\\": \\\"demo_user_0001\\\", \\\"name\\\": {\\\"first_name\\\": \\\"Demo\\\"}}\"}")
+
+tor demo-wire-gate {}
+demo-wire-gate = std/env:is-set(name: "KOPIUM_DEMO_WIRE")
+    | yes |> demo-wire-seed()
+    | no |> _
+
 tor demo-gate {}
 demo-gate = std/env:is-set(name: "KOPIUM_DEMO")
     | yes |> demo-seed()
@@ -448,7 +463,7 @@ demo-gate = std/env:is-set(name: "KOPIUM_DEMO")
 tor boot { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string, bound: i64 }
 boot = app/tau_wire:inbound()
 | init p |> policy-note(text: p)
-    |> seed() |> demo-gate() |> app/tau_wire:inbound()
+    |> seed() |> demo-gate() |> demo-wire-gate() |> app/tau_wire:inbound()
     | user u |> observe-human(text: u) |> app/tau_wire:auth-ensure()
         | ok |> loop(br, model, max_tokens, temperature, bound, fails: 0, silents: 0)
         | failed m |> app/tau_wire:die(msg: m)
