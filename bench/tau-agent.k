@@ -285,6 +285,7 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
     |> app/tau_wire:residue-verdict(r.observer, prose: r.text)
     | observer |> app/tau_wire:count-out(kind: "note")
     | strike |> app/tau_wire:count-rejection(kind: "residue")
+        |> observe(role: "assistant", text: "say(text: \"One moment — let me check that for you.\")")
 | parse-error p |> std/fmt:fmt.blk {
         parse-error: {{ p.message:s }}
     }: m

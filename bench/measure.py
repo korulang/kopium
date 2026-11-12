@@ -111,6 +111,7 @@ def config_key(arm: str) -> tuple[str, dict]:
         "llm": AGENT_LLM,
         "channel": os.environ.get("KOPIUM_CHANNEL", "content"),
         "scope": os.environ.get("KOPIUM_SCOPE", "airline"),
+        "demo": os.environ.get("KOPIUM_DEMO", ""),
         "agent_llm_args": AGENT_LLM_ARGS if arm == "stock" else None,
         "user_llm": LLM,
         "max_steps": MAX_STEPS,
