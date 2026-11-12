@@ -65,7 +65,11 @@ def check_shim_stays_a_marshal() -> None:
     for m in re.finditer(r"_send\(\{(.*?)\}\)", code, re.DOTALL):
         for lit in re.findall(r'"([^"]*)"', m.group(1)):
             if lit not in ("", "kind", "init", "user", "result", "id",
-                           "content", "text", "policy"):
+                           "content", "text", "policy",
+                           # tau2's ToolMessage.error is the transport's own
+                           # failure flag — a protocol field the marshal
+                           # passes through, never authored content.
+                           "error"):
                 fail(f"shim _send carries a literal {lit!r} — payloads are "
                      "transport enums and passthrough fields only")
     print("  [ok] shim is a marshal: no model call, no names, no regex, no fallback")

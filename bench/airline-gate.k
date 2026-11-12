@@ -7,6 +7,10 @@ import std/io
 import app/airline_tools
 import app/gate_intake
 import app/tau_wire
+// The doctrine table (R4): compiles this file's `std/guide:add` rows to
+// `guide_table.txt` beside the binary, which `std/bridge` reads at each
+// dispatch. Imported for the TABLE, not for verbs.
+import app/airline_guides
 import koru/yyjson
 
 pub tor event-name { source: string } -> string
@@ -35,7 +39,7 @@ report-turn = std/bridge:run(br, source)
     | exhausted _ |> std/io:print.ln("ERROR budget exhausted")
     | scope-not-found s2 |> std/io:print.ln("ERROR no scope {{ s2:s }}")
     | unknown-error u |> std/io:print.ln("ERROR {{ u.kind:s }} {{ u.message:s }}")
-| unhandled-branch ub |> event-name(source): n |> std/io:print.ln("HALT {{ n:s }} {{ ub.branch:s }} {{ ub.payload:s }} held: {{ ub.handles:s }}")
+| unhandled-branch ub |> event-name(source): n |> std/io:print.ln("HALT {{ n:s }} {{ ub.branch:s }} {{ ub.payload:s }} held: {{ ub.handles:s }}\n{{ ub.guides:s }}")
 | partial p |> app/gate_intake:emit-framed(tag: "STEPS", text: p.report)
 | residue r |> std/io:print.ln("REJECT {{ r.report:s }}")
 | defined d |> std/io:print.ln("DEFINED {{ d:s }}")

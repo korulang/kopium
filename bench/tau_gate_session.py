@@ -67,6 +67,11 @@ class TauGateSession:
         self._await: str | None = None  # "call" | "say" | None
         self._call_id: str | None = None
         self._callsteps: list[dict] = []  # drained per-dispatch records
+        # Every stdout line a turn emitted that is neither an event nor a
+        # known status verdict (a trace continuation, a guide line, a HALT's
+        # appended detail). Kept so a harness can assert on the gate's full
+        # model-visible output, not only the first status line.
+        self._unframed: list[str] = []
         self._wire_origin = "model"       # origin of the in-flight wire
         self._pending_origin = "model"    # origin snapshotted at the verdict —
         # CALLSTEPS parses lazily on the NEXT turn's reads, by which time
@@ -149,6 +154,13 @@ class TauGateSession:
             "content": content, "error": error,
         }) + "\n")
         return self._next_event()
+
+    def drain_unframed(self) -> list[str]:
+        """Return and clear the non-event stdout lines seen since the last
+        drain — OK/HALT trace continuations, guide lines, appended detail."""
+        out = self._unframed
+        self._unframed = []
+        return out
 
     def drain_callsteps(self) -> list[dict]:
         """Return and clear the call_step records collected since the last
@@ -249,6 +261,7 @@ class TauGateSession:
             # a blocked sayIO/callIO reader -> gate panic.
             status = line.split(" ", 1)[0]
             if status not in ("OK", "HALT", "REJECT", "ERROR", "DEFINED"):
+                self._unframed.append(line)
                 continue
             _, _, detail = line.partition(" ")
             self._await = None

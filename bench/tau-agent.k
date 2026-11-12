@@ -217,7 +217,7 @@ observe-human = std/fmt:fmt.blk {
 tor run-capped { br: *std/bridge:Bridge<session>, source: string<*> }
 | result { value: @import("root").koru_std.koru_interpreter.Value, used: u64, handles: u32, bound: string, trace: string }
 | defined string
-| unhandled-branch { branch: string, payload: string, handles: string }
+| unhandled-branch { branch: string, payload: string, handles: string, guides: string }
 | exhausted { used: u64, last_event: string, handles: u32 }
 | parse-error { message: string, line: u32, column: u32 }
 | residue { report: string, observer: bool, bound: string, text: string }
@@ -242,7 +242,7 @@ run-capped = app/tau_wire:item-cap(source, max: 128)
         | unknown-error u => dispatch-error { event_name: "", u.message, trace: "" }
     | defined d => defined d
     | partial p => partial { p.ran, p.total, p.used, p.handles, p.report, p.wire_failures }
-    | unhandled-branch ub => unhandled-branch { ub.branch, ub.payload, ub.handles }
+    | unhandled-branch ub => unhandled-branch { ub.branch, ub.payload, ub.handles, ub.guides }
     | residue r => residue { r.report, r.observer, r.bound, r.text }
 | over _ => exhausted { used: 0, last_event: "turn item cap exceeded", handles: 0 }
 
@@ -264,7 +264,7 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
     | dirty |> app/tau_wire:count-rejection(kind: "partial")
 | unhandled-branch ub |> std/fmt:fmt.blk {
         unhandled-branch: {{ ub.branch:s }} — {{ ub.payload:s }} (held {{ ub.handles:s }}). An arm word must be a branch name — `ok` binds an ordinary result, a named branch binds under its own name; no other arm word matches.
-    }: m
+{{ ub.guides:s }}    }: m
     |> observe(role: "user", text: m)
     |> app/tau_wire:arm-word(ub.branch)
     | ordinary |> app/tau_wire:count-rejection(kind: "unhandled")
