@@ -19,6 +19,7 @@
 
 import std/io
 import std/fmt
+import std/env
 import std/store
 import std/string
 import std/bridge
@@ -413,6 +414,19 @@ clear-reply = std/store:query(reply)
 tor seed {}
 seed = app/tau_wire:seed-text(): st |> observe(role: "assistant", text: st)
 
+// Demo-history injection (prototype, arm B): when KOPIUM_DEMO is set, seed
+// the transcript with a canonical judgment exchange before the first real
+// turn — the agent "remembers" having read facts before acting. A
+// demonstration beats instruction for models that ignore prose policy.
+tor demo-seed {}
+demo-seed = observe-human(text: "Hi, I need to cancel my reservation DEMO001 — I booked it last week and this isn't an insurance-covered reason.")
+    |> observe(role: "assistant", text: "get-reservation-details(reservation_id: \"DEMO001\") | ok r |>\ntransfer-to-human-agents(summary: \"customer requests cancel of {{ r.reservation_id }}; booked {{ r.created_at }} (>24h), cabin {{ r.cabin }}, insurance {{ r.insurance }} — no cancellation rule applies\") | ok t |>\nsay(text: \"I can't cancel this one under policy — let me connect you with a human agent who can review it.\")\n| error e |> say(text: \"I couldn't verify the reservation: {{ e }}\")")
+
+tor demo-gate {}
+demo-gate = std/env:is-set(name: "KOPIUM_DEMO")
+    | yes |> demo-seed()
+    | no |> _
+
 // Boot: the system message never enters the transcript — `ask` splices a
 // fresh `sysdoc` render ahead of the history on every turn, so the
 // declared surface the model sees is always live: wire rules, "Your
@@ -422,7 +436,7 @@ seed = app/tau_wire:seed-text(): st |> observe(role: "assistant", text: st)
 tor boot { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string, bound: i64 }
 boot = app/tau_wire:inbound()
 | init p |> policy-note(text: p)
-    |> seed() |> app/tau_wire:inbound()
+    |> seed() |> demo-gate() |> app/tau_wire:inbound()
     | user u |> observe-human(text: u) |> app/tau_wire:auth-ensure()
         | ok |> loop(br, model, max_tokens, temperature, bound, fails: 0, silents: 0)
         | failed m |> app/tau_wire:die(msg: m)
