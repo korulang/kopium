@@ -336,6 +336,26 @@ const CallResult = struct { content: []const u8, err: bool };
 // read-set is this process's session memory.
 var reservation_reads = std.StringHashMapUnmanaged(void){};
 
+// WMFX v1 — zero-information transition watch. A repeated call with
+// identical args returning an identical result means the world did not
+// move: predicted state-delta is zero, so the action was a no-op. Legitimate
+// retries change state (error -> corrected args -> different result) and
+// never match. Fires once per signature per session; the teaching rides
+// the result content back to the model and lands in receipts.
+const WatchEntry = struct { hash: u64, fired: bool };
+var watch_log: [32]WatchEntry = undefined;
+var watch_n: usize = 0;
+
+fn watchHash(name: []const u8, args: []const u8, result: []const u8) u64 {
+    var h: u64 = 1469598103934665603;
+    for (name) |c| { h ^= c; h *%= 1099511628211; }
+    h ^= 0xff; h *%= 1099511628211;
+    for (args) |c| { h ^= c; h *%= 1099511628211; }
+    h ^= 0xff; h *%= 1099511628211;
+    for (result) |c| { h ^= c; h *%= 1099511628211; }
+    return h;
+}
+
 fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
     const scope0 = std.posix.getenv("KOPIUM_SCOPE") orelse "airline";
     if (std.mem.eql(u8, scope0, "airline")) {
@@ -404,9 +424,32 @@ fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
         const rid = jsonStr(line, "id") orelse @panic("kopium: result line without id");
         if (!std.mem.eql(u8, rid, id))
             @panic("kopium: result id does not match the outstanding call");
-        const rcontent = jsonStr(line, "content") orelse
+        var rcontent = jsonStr(line, "content") orelse
             @panic("kopium: result line without content");
         const rerr = jsonBool(line, "error");
+        // Zero-information watch: identical (name,args,result) seen before
+        // means the world did not move — teach once per signature.
+        const sig = watchHash(tau_name, args_json, rcontent);
+        var wslot: ?*WatchEntry = null;
+        for (watch_log[0..watch_n]) |*we| {
+            if (we.hash == sig) {
+                wslot = we;
+                break;
+            }
+        }
+        if (wslot) |we| {
+            if (!we.fired) {
+                we.fired = true;
+                rcontent = std.fmt.allocPrint(
+                    alloc,
+                    "{s}\n\n[watch] identical call returned an identical result — the world did not change; if this is a retry loop, change approach or say so.",
+                    .{rcontent},
+                ) catch @panic("kopium: OOM");
+            }
+        } else if (watch_n < watch_log.len) {
+            watch_log[watch_n] = .{ .hash = sig, .fired = false };
+            watch_n += 1;
+        }
         if (!rerr and std.mem.eql(u8, scope0, "airline") and
             std.mem.eql(u8, tau_name, "get_reservation_details"))
         {
