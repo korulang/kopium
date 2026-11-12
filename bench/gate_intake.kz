@@ -30,20 +30,73 @@ var intake_buf: [8192]u8 = undefined;
     i += 1;
     const stdin = std.fs.File.stdin();
     var line_start = i;
+    // String-aware framing (same state machine as bridge.turnscan): a
+    // blank line inside a "..." string is content, not the turn
+    // terminator. `first` is one whole line, so its backtick state
+    // does not carry; in_string does — strings span lines.
+    var quote: u8 = 0;
+    var in_backtick = false;
+    var escaped = false;
+    var k: usize = 0;
+    while (k < first.len) {
+        const c = first[k];
+        if (escaped) {
+            escaped = false;
+        } else {
+            if (quote != 0) {
+                if (c == '\\') {
+                    escaped = true;
+                }
+                if (c == quote) {
+                    quote = 0;
+                }
+            } else {
+                if (c == '`') {
+                    in_backtick = !in_backtick;
+                }
+                if (!in_backtick and c == '"') {
+                    quote = c;
+                }
+            }
+        }
+        k += 1;
+    }
+    in_backtick = false;
     while (i < $mod.intake_buf.len) {
         var b: [1]u8 = undefined;
         const n = stdin.read(b[0..]) catch return .{ .failed = "Failed to read stdin" };
         if (n == 0) break;
-        if (b[0] == '\n') {
+        const c = b[0];
+        if (escaped) {
+            escaped = false;
+        } else {
+            if (quote != 0) {
+                if (c == '\\') {
+                    escaped = true;
+                }
+                if (c == quote) {
+                    quote = 0;
+                }
+            } else {
+                if (c == '`') {
+                    in_backtick = !in_backtick;
+                }
+                if (!in_backtick and c == '"') {
+                    quote = c;
+                }
+            }
+        }
+        if (c == '\n') {
             var end = i;
             if (end > line_start and $mod.intake_buf[end - 1] == '\r') end -= 1;
-            if (end == line_start) break;
+            if (end == line_start and quote == 0) break;
             $mod.intake_buf[i] = '\n';
             i += 1;
             line_start = i;
+            in_backtick = false;
             continue;
         }
-        $mod.intake_buf[i] = b[0];
+        $mod.intake_buf[i] = c;
         i += 1;
     }
     if (i == $mod.intake_buf.len) return .{ .failed = "line too long" };
