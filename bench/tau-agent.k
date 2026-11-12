@@ -414,13 +414,22 @@ clear-reply = std/store:query(reply)
 tor seed {}
 seed = app/tau_wire:seed-text(): st |> observe(role: "assistant", text: st)
 
-// Demo-history injection (prototype, arm B): when KOPIUM_DEMO is set, seed
-// the transcript with a canonical judgment exchange before the first real
-// turn — the agent "remembers" having read facts before acting. A
-// demonstration beats instruction for models that ignore prose policy.
+// Demo-history injection (prototype, arm B-negative): when KOPIUM_DEMO is
+// set, seed the transcript with failure->error->self-correction exchanges
+// before the first real turn. Error strings are verbatim system output;
+// the recovery demonstrates the mapping. Positive demos are OUT (arm-B
+// positive poisoned session state, task-0 FATAL) — these teach recovery,
+// not success.
 tor demo-seed {}
-demo-seed = observe-human(text: "Hi, I need to cancel my reservation DEMO001 — I booked it last week and this isn't an insurance-covered reason.")
-    |> observe(role: "assistant", text: "get-reservation-details(reservation_id: \"DEMO001\") | ok r |>\ntransfer-to-human-agents(summary: \"customer requests cancel of {{ r.reservation_id }}; booked {{ r.created_at }} (>24h), cabin {{ r.cabin }}, insurance {{ r.insurance }} — no cancellation rule applies\") | ok t |>\nsay(text: \"I can't cancel this one under policy — let me connect you with a human agent who can review it.\")\n| error e |> say(text: \"I couldn't verify the reservation: {{ e }}\")")
+demo-seed = observe-human(text: "Hi, can you tell me the status of my flight?")
+    |> observe(role: "assistant", text: "Of course! I'd be happy to check that for you — one moment please.")
+    |> observe(role: "user", text: "no koru program in the reply — emit one koru tool call whose program is wire text; `vocabulary()` lists every verb")
+    |> observe(role: "assistant", text: "say(text: \"I can help with that — to pull up your flight I'll need your user ID or reservation ID. Could you share either one?\")")
+    |> observe-human(text: "My user ID is SOPHIA_SILVA_7557, please look me up.")
+    |> observe(role: "assistant", text: "get-user-details(user_id: \"SOPHIA_SILVA_7557\") | ok u |>\nsay(text: \"Found you, {{ u.name.first_name }}!\")")
+    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"error\",\"value\":\"Error: User SOPHIA_SILVA_7557 not found\"}")
+    |> observe(role: "assistant", text: "get-user-details(user_id: \"sophia_silva_7557\") | ok u |>\nsay(text: \"Found you, {{ u.name.first_name }}!\")")
+    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"ok\",\"value\":\"{\\\"user_id\\\": \\\"sophia_silva_7557\\\", \\\"name\\\": {\\\"first_name\\\": \\\"Sophia\\\"}}\"}")
 
 tor demo-gate {}
 demo-gate = std/env:is-set(name: "KOPIUM_DEMO")
