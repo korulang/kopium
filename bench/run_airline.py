@@ -82,17 +82,22 @@ def main() -> None:
     receipt_dir = run_dir / "receipts"
     receipt_dir.mkdir(exist_ok=True)
     os.environ["KOPIUM_RECEIPT_DIR"] = str(receipt_dir)
+    kopium_root = HERE.parent
     git_head = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True
+        ["git", "rev-parse", "--short", "HEAD"],
+        capture_output=True, text=True, cwd=kopium_root,
     ).stdout.strip()
     git_dirty = subprocess.run(
-        ["git", "status", "--porcelain"], capture_output=True, text=True
-    ).stdout.strip()
+        ["git", "status", "--porcelain"],
+        capture_output=True, text=True, cwd=kopium_root,
+    ).stdout.splitlines()
     receipt = {
         "task": task.id,
         "model": llm,
+        "agent_llm": agent_llm,
+        "KOPIUM_DEMO": os.environ.get("KOPIUM_DEMO", ""),
         "git_head": git_head,
-        "git_dirty_files": [l[3:] for l in git_dirty.splitlines()],
+        "git_dirty_files": [l[3:] for l in git_dirty],
         "receipt_dir": str(receipt_dir),
     }
     (run_dir / "receipt.json").write_text(json.dumps(receipt, indent=1))

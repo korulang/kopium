@@ -344,12 +344,14 @@ drive = app/tau_wire:channel()
 // its own kind so session.json separates silence from malformed wire.
 tor empty-reply {}
 empty-reply = observe(role: "user", text: "your reply carried no wire — emit wire text: `say(text: ...)` reaches the user, `verb(field: ...)` calls; `vocabulary()` lists every verb")
+    |> observe(role: "assistant", text: "say(text: \"One moment — let me check that for you.\")")
     |> app/tau_wire:count-rejection(kind: "empty")
 
 // The toolcall reply carried no koru program — a rejected turn, observed
 // back like any other.
 tor no-program {}
 no-program = observe(role: "user", text: "no koru program in the reply — emit one koru tool call whose program is wire text; `vocabulary()` lists every verb")
+    |> observe(role: "assistant", text: "say(text: \"One moment — let me check that for you.\")")
     |> app/tau_wire:count-rejection(kind: "residue")
 
 // User replies captured by say() procs mid-run become real user messages
@@ -425,11 +427,11 @@ demo-seed = observe-human(text: "Hi, can you tell me the status of my flight?")
     |> observe(role: "assistant", text: "Of course! I'd be happy to check that for you — one moment please.")
     |> observe(role: "user", text: "no koru program in the reply — emit one koru tool call whose program is wire text; `vocabulary()` lists every verb")
     |> observe(role: "assistant", text: "say(text: \"I can help with that — to pull up your flight I'll need your user ID or reservation ID. Could you share either one?\")")
-    |> observe-human(text: "My user ID is SOPHIA_SILVA_7557, please look me up.")
-    |> observe(role: "assistant", text: "get-user-details(user_id: \"SOPHIA_SILVA_7557\") | ok u |>\nsay(text: \"Found you, {{ u.name.first_name }}!\")")
-    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"error\",\"value\":\"Error: User SOPHIA_SILVA_7557 not found\"}")
-    |> observe(role: "assistant", text: "get-user-details(user_id: \"sophia_silva_7557\") | ok u |>\nsay(text: \"Found you, {{ u.name.first_name }}!\")")
-    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"ok\",\"value\":\"{\\\"user_id\\\": \\\"sophia_silva_7557\\\", \\\"name\\\": {\\\"first_name\\\": \\\"Sophia\\\"}}\"}")
+    |> observe-human(text: "My user ID is DEMO_USER_0001, please look me up.")
+    |> observe(role: "assistant", text: "get-user-details(user_id: \"DEMO_USER_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
+    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"error\",\"value\":\"Error: User DEMO_USER_0001 not found\"}")
+    |> observe(role: "assistant", text: "get-user-details(user_id: \"demo_user_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
+    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"ok\",\"value\":\"{\\\"user_id\\\": \\\"demo_user_0001\\\", \\\"name\\\": {\\\"first_name\\\": \\\"Demo\\\"}}\"}")
 
 tor demo-gate {}
 demo-gate = std/env:is-set(name: "KOPIUM_DEMO")
