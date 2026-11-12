@@ -359,6 +359,24 @@ fn watchHash(name: []const u8, args: []const u8, result: []const u8) u64 {
 fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
     const scope0 = std.posix.getenv("KOPIUM_SCOPE") orelse "airline";
     if (std.mem.eql(u8, scope0, "airline")) {
+        // Placeholder-arg guard: id-shaped string args that are meta-words
+        // ("your_reservation_id", "unknown", "test_") are never real data —
+        // refuse before dispatch and teach id resolution. Task-10 specimen:
+        // literal placeholder -> not-found -> narration collapse -> FATAL.
+        const placeholder_fields = [_][]const u8{ "reservation_id", "user_id", "flight_number", "payment_id", "id" };
+        const placeholder_prefixes = [_][]const u8{ "your_", "the_", "placeholder", "xxx", "unknown", "todo", "dummy", "fake_", "example_", "sample_", "test_" };
+        inline for (placeholder_fields) |f| {
+            if (jsonStr(args_json, f)) |v| {
+                for (placeholder_prefixes) |p| {
+                    if (std.ascii.startsWithIgnoreCase(v, p)) {
+                        return .{
+                            .content = std.fmt.allocPrint(std.heap.page_allocator, "arg '{s}' looks like a placeholder ('{s}') — resolve the real value first: look it up with the matching get-* call or ask the user; never invent ids", .{ f, v }) catch @panic("kopium: OOM"),
+                            .err = true,
+                        };
+                    }
+                }
+            }
+        }
         if (std.mem.eql(u8, tau_name, "cancel_reservation")) {
             const rid0 = jsonStr(args_json, "reservation_id") orelse "";
             var seen0 = false;
