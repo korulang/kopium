@@ -339,7 +339,16 @@ fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
     out.appendSlice(alloc, "\",\"name\":\"") catch @panic("kopium: OOM");
     out.appendSlice(alloc, tau_name) catch @panic("kopium: OOM");
     out.appendSlice(alloc, "\",\"arguments\":") catch @panic("kopium: OOM");
-    out.appendSlice(alloc, args_json) catch @panic("kopium: OOM");
+    if (jsonValid(args_json)) {
+        out.appendSlice(alloc, args_json) catch @panic("kopium: OOM");
+    } else {
+        // Invalid inner JSON (e.g. `1,094` inside a composite arg): never
+        // splice raw — a malformed call line kills the marshal's parse.
+        // Emit a self-describing payload; the env rejects it honestly.
+        out.appendSlice(alloc, "{\"_malformed_args\":\"") catch @panic("kopium: OOM");
+        jsonEscape(alloc, &out, args_json);
+        out.appendSlice(alloc, "\"}") catch @panic("kopium: OOM");
+    }
     appendUsage(alloc, &out);
     out.appendSlice(alloc, "}") catch @panic("kopium: OOM");
     writeOut(out.items);
@@ -464,6 +473,145 @@ fn jsonKeys(s: []const u8, buf: []u8) []const u8 {
         r += 1;
     }
     return buf[0..i];
+}
+
+// Strict JSON validation for assembled arg text before it is spliced
+// into a call event. Composite args arrive as model-written JSON inside
+// a koru string; jsonKeys normalizes key quoting but passes values
+// verbatim, so `1,094` or an unquoted key inside the payload used to
+// land raw in `{"kind":"call","arguments":...}` — a malformed event
+// line that killed the marshal's json.loads. Invalid args now degrade
+// to a self-describing `_malformed_args` payload the env rejects
+// honestly, instead of an unparseable event.
+const JsonCursor = struct {
+    s: []const u8,
+    i: usize = 0,
+};
+
+fn jwsp(p: *JsonCursor) void {
+    while (p.i < p.s.len) {
+        const c = p.s[p.i];
+        if (c != ' ' and c != '\t' and c != '\n' and c != '\r') break;
+        p.i += 1;
+    }
+}
+
+fn jpeek(p: *JsonCursor) u8 {
+    return if (p.i < p.s.len) p.s[p.i] else 0;
+}
+
+fn jtake(p: *JsonCursor, c: u8) bool {
+    if (jpeek(p) != c) return false;
+    p.i += 1;
+    return true;
+}
+
+fn jstring(p: *JsonCursor) bool {
+    if (!jtake(p, '"')) return false;
+    while (p.i < p.s.len) {
+        const c = p.s[p.i];
+        p.i += 1;
+        if (c == '"') return true;
+        if (c == '\\') {
+            if (p.i >= p.s.len) return false;
+            const e = p.s[p.i];
+            p.i += 1;
+            switch (e) {
+                '"', '\\', '/', 'b', 'f', 'n', 'r', 't' => {},
+                'u' => {
+                    if (p.i + 4 > p.s.len) return false;
+                    for (p.s[p.i..][0..4]) |h| {
+                        const ok = (h >= '0' and h <= '9') or
+                            (h >= 'a' and h <= 'f') or (h >= 'A' and h <= 'F');
+                        if (!ok) return false;
+                    }
+                    p.i += 4;
+                },
+                else => return false,
+            }
+        } else if (c < 0x20) {
+            return false;
+        }
+    }
+    return false;
+}
+
+fn jnumber(p: *JsonCursor) bool {
+    _ = jtake(p, '-');
+    if (jtake(p, '0')) {
+    } else {
+        if (!(jpeek(p) >= '1' and jpeek(p) <= '9')) return false;
+        while (jpeek(p) >= '0' and jpeek(p) <= '9') p.i += 1;
+    }
+    if (jtake(p, '.')) {
+        if (!(jpeek(p) >= '0' and jpeek(p) <= '9')) return false;
+        while (jpeek(p) >= '0' and jpeek(p) <= '9') p.i += 1;
+    }
+    const e = jpeek(p);
+    if (e == 'e' or e == 'E') {
+        p.i += 1;
+        const s = jpeek(p);
+        if (s == '+' or s == '-') p.i += 1;
+        if (!(jpeek(p) >= '0' and jpeek(p) <= '9')) return false;
+        while (jpeek(p) >= '0' and jpeek(p) <= '9') p.i += 1;
+    }
+    return true;
+}
+
+fn jword(p: *JsonCursor, word: []const u8) bool {
+    if (p.i + word.len > p.s.len) return false;
+    if (!std.mem.eql(u8, p.s[p.i..][0..word.len], word)) return false;
+    p.i += word.len;
+    return true;
+}
+
+fn jvalue(p: *JsonCursor, depth: usize) bool {
+    if (depth > 64) return false;
+    jwsp(p);
+    switch (jpeek(p)) {
+        '{' => {
+            p.i += 1;
+            jwsp(p);
+            if (jtake(p, '}')) return true;
+            while (true) {
+                jwsp(p);
+                if (!jstring(p)) return false;
+                jwsp(p);
+                if (!jtake(p, ':')) return false;
+                jwsp(p);
+                if (!jvalue(p, depth + 1)) return false;
+                jwsp(p);
+                if (jtake(p, '}')) return true;
+                if (!jtake(p, ',')) return false;
+            }
+        },
+        '[' => {
+            p.i += 1;
+            jwsp(p);
+            if (jtake(p, ']')) return true;
+            while (true) {
+                jwsp(p);
+                if (!jvalue(p, depth + 1)) return false;
+                jwsp(p);
+                if (jtake(p, ']')) return true;
+                if (!jtake(p, ',')) return false;
+            }
+        },
+        '"' => return jstring(p),
+        't' => return jword(p, "true"),
+        'f' => return jword(p, "false"),
+        'n' => return jword(p, "null"),
+        '-', '0'...'9' => return jnumber(p),
+        else => return false,
+    }
+}
+
+fn jsonValid(s: []const u8) bool {
+    var p = JsonCursor{ .s = s };
+    jwsp(&p);
+    if (!jvalue(&p, 0)) return false;
+    jwsp(&p);
+    return p.i == s.len;
 }
 
 // ============================================================================
