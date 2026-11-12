@@ -7,8 +7,8 @@ rows**. Phase B not built; a concrete spec is below. Committed in both repos.
 
 | | |
 |---|---|
-| koru | `koru_std/guide.kz` pub match API, new `koru_std/bridge.guide.kz`, `fired_guides` + guide text in the run report |
-| kopium | `bench/airline_guides.k` (31 rows), `bench/build-airline-gate.sh`, `bench/guides-replay.py`, gate/agent wiring |
+| koru | `8c148bdda` — `guide.kz` pub match API, new `bridge.guide.kz`, `fired_guides` + guide text in the run report |
+| kopium | `265f219` + status commit — `airline_guides.k` (31 rows), `build-airline-gate.sh`, `guides-replay.py`, gate/agent wiring, `frag-guides-fire-at-dispatch` |
 | spend | **$0.00** — no hosted API, no ollama; every check deterministic |
 | split | `SPLIT GATE PASS — no test-20 ids in selection (30 ids)`; content carries no task ids/trials/seeds |
 | corpus | `combined-r2r3-callstep.jsonl` only (2,790 records / 2,335 dispatches, train-30) |
