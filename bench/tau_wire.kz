@@ -357,8 +357,8 @@ fn watchHash(name: []const u8, args: []const u8, result: []const u8) u64 {
 }
 
 fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
-    const scope0 = std.posix.getenv("KOPIUM_SCOPE") orelse "airline";
-    if (std.mem.eql(u8, scope0, "airline")) {
+    const scope0 = "airline-native";
+    if (std.mem.eql(u8, scope0, "airline-native")) {
         // Placeholder-arg guard: id-shaped string args that are meta-words
         // ("your_reservation_id", "unknown", "test_") are never real data —
         // refuse before dispatch and teach id resolution. Task-10 specimen:
@@ -468,7 +468,7 @@ fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
             watch_log[watch_n] = .{ .hash = sig, .fired = false };
             watch_n += 1;
         }
-        if (!rerr and std.mem.eql(u8, scope0, "airline") and
+        if (!rerr and std.mem.eql(u8, scope0, "airline-native") and
             std.mem.eql(u8, tau_name, "get_reservation_details"))
         {
             if (jsonStr(args_json, "reservation_id")) |rid2| {
@@ -812,13 +812,12 @@ fn jsonValid(s: []const u8) bool {
         @panic("kopium: KOPIUM_MODEL unset — the marshal names the agent model");
 }
 
-// Which registered scope the bridge binds: "airline" (the transliterated
-// surface) or "airline-native" (the phantom-typed spine). KOPIUM_SCOPE;
-// unset is the transliterated arm, the historical default.
+// The bound scope is the phantom-typed native surface — the
+// transliterated `airline` arm is removed; there is no env override.
 ~pub tor scope-name {} -> string
 
 ~proc scope-name|zig {
-    return std.posix.getenv("KOPIUM_SCOPE") orelse "airline";
+    return "airline-native";
 }
 
 // The seed program — ONE assistant turn the model imitates, chosen for the
@@ -830,10 +829,10 @@ fn jsonValid(s: []const u8) bool {
 ~pub tor seed-text {} -> string
 
 ~proc seed-text|zig {
-    const scope = std.posix.getenv("KOPIUM_SCOPE") orelse "airline";
+    const scope = "airline-native";
     if (std.mem.eql(u8, scope, "db"))
         return "open-db(path: \"data.db\") | db c |>\nrows(conn: c, sql: \"SELECT name FROM sqlite_master\") | row s |>\ncol-text(stmt: s, index: 0) | ok t |>\nsay(text: \"first table: {{ t }}\")";
-    return "get-user-details(user_id: \"example_user_0\") | ok u |>\nsay(text: \"Welcome back, {{ u.user_id }} — membership {{ u.membership }}.\")";
+    return "get-user-details(user_id: \"example_user_0\") | ok u |>\nsay(text: \"Welcome back — I have your profile now.\")";
 }
 
 // The chat-completions endpoint — KOPIUM_API_URL overrides it so a
@@ -962,6 +961,22 @@ var toolfrag_hi: usize = 0;
 ~proc arm-word|zig {
     if (branch.len == 0) return .{ .ordinary = .{} };
     return .{ .named = .{} };
+}
+
+// Recurring splice-path coaching. The guide table graduates each row
+// after one firing per session, but one episode can hit the same refusal
+// class at a SECOND site — the task5-collapse specimen looped
+// {{ u.name.first_name }} eight times with say->error already spent and
+// died prose-collapsed. This hint re-issues on EVERY dispatch-error
+// whose message names a splice-path failure, so the teaching lands at
+// the error itself, not once per session. Domain-general: the {{ }}
+// one-level/scalar rules are wire semantics, not airline policy.
+~pub tor dispatch-hint { text: string } -> string
+
+~proc dispatch-hint|zig {
+    if (std.mem.indexOf(u8, text, "carries no field") == null and
+        std.mem.indexOf(u8, text, "not bound") == null) return "";
+    return "\ndirective: {{ x.f }} splices ONE level into the record a call bound — {{ x.f.g }} always refuses, splice {{ x.f }} for a nested object; a bare word, number, or id is a scalar — splice it as {{ x }}, never {{ x.f }}. carries-no-field means shorten the path to one level; not-bound means bind the name first. Resend the reply — the call that produced the value already answered, do not re-run it.";
 }
 
 // Per-call usage bookkeeping: a model call that completes without the SSE

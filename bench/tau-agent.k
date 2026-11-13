@@ -24,7 +24,6 @@ import std/store
 import std/string
 import std/bridge
 import std/interpreter
-import app/airline_tools
 import app/airline_native
 import app/corpus_env
 import app/tau_wire
@@ -258,7 +257,9 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
         defined: {{ d:s }}
     }: m |> observe(role: "user", text: m)
     |> app/tau_wire:count-out(kind: "define")
-| partial p |> observe(role: "user", text: p.report)
+| partial p |> app/tau_wire:dispatch-hint(text: p.report): dhint
+    |> std/fmt:fmt.blk { {{ p.report:s }}{{ dhint:s }} }: pm
+    |> observe(role: "user", text: pm)
     |> app/tau_wire:count-residue(text: p.report)
     |> app/tau_wire:partial-verdict(p.wire_failures)
     | clean |> app/tau_wire:count-out(kind: "partial")
@@ -270,8 +271,9 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
     |> app/tau_wire:arm-word(ub.branch)
     | ordinary |> app/tau_wire:count-rejection(kind: "unhandled")
     | named |> app/tau_wire:count-out(kind: "result")
-| dispatch-error e |> std/fmt:fmt.blk {
-        {{ e.trace:s }}dispatch-error {{ e.event_name:s }}: {{ e.message:s }}
+| dispatch-error e |> app/tau_wire:dispatch-hint(text: e.message): dhint
+    |> std/fmt:fmt.blk {
+        {{ e.trace:s }}dispatch-error {{ e.event_name:s }}: {{ e.message:s }}{{ dhint:s }}
     }: m
     |> observe(role: "user", text: m)
     |> app/tau_wire:count-out(kind: "result")
