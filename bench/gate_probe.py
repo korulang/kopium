@@ -146,13 +146,13 @@ case("unarmed call -> HALT unhandled-branch (arms are mandatory)",
      ["call", "status"], expect_status="HALT")
 
 case("armed chain, one line -> single item OK",
-     'get-user-details(user_id: "x") | ok u |>'
+     'get-user-details(user_id: "x") | found u |>'
      'say(text: "hi {{ u.user_id }}")\n',
      ["call", "say", "status"], expect_status="OK",
      call_result='{"user_id":"x"}')
 
 case("armed chain, two lines -> two items STEPS",
-     'get-user-details(user_id: "x") | ok u |>\n'
+     'get-user-details(user_id: "x") | found u |>\n'
      'say(text: "hi {{ u.user_id }}")\n',
      ["call", "say", "status"], expect_status="STEPS",
      call_result='{"user_id":"x"}')
@@ -163,13 +163,13 @@ case("multi-item: say then bare call (unhandled step, siblings continue)",
 
 case("multi-item: say then armed chain",
      'say(text: "one")\n'
-     'get-user-details(user_id: "x") | ok u |>'
+     'get-user-details(user_id: "x") | found u |>'
      'say(text: "two {{ u.user_id }}")\n',
      ["say", "call", "say", "status"], expect_status="STEPS",
      call_result='{"user_id":"x"}')
 
 case("multi-item: call-arm then say",
-     'get-user-details(user_id: "x") | ok u |>\n'
+     'get-user-details(user_id: "x") | found u |>\n'
      'say(text: "done {{ u.user_id }}")\n',
      ["call", "say", "status"], expect_status="STEPS",
      call_result='{"user_id":"x"}')
@@ -180,9 +180,9 @@ case("two bare calls: unhandled steps do not halt siblings",
      ["call", "call", "status"], expect_status="STEPS")
 
 case("two armed chains: call,say per item",
-     'get-user-details(user_id: "x") | ok u |>'
+     'get-user-details(user_id: "x") | found u |>'
      'say(text: "a {{ u.user_id }}")\n'
-     'get-flight-status(flight_number: "AA1", date: "2024-01-01") | ok f |>'
+     'get-flight-status(flight_number: "AA1", date: "2024-01-01") | reported f |>'
      'say(text: "b {{ f.flight_number }}")\n',
      ["call", "say", "call", "say", "status"], expect_status="STEPS",
      call_result='{"user_id":"x","flight_number":"AA1","ok":true}')
@@ -206,7 +206,7 @@ case("say arm binds the EMITTED TEXT, not a reply",
      expect_say_last="you said what is your id?")
 
 case("bound field read in arg",
-     'get-user-details(user_id: "x") | ok u |>\n'
+     'get-user-details(user_id: "x") | found u |>\n'
      'get-reservation-details(reservation_id: u.user_id)\n',
      ["call", "call", "status"], expect_status="STEPS",
      call_result='{"user_id":"x","reservation_id":"x"}')
@@ -350,7 +350,7 @@ state_check(
 
 state_check(
     "state() arm binding under turn: (multi-item turn)",
-    [('get-user-details(user_id: "x") | ok u |>\nstate()\n',
+    [('get-user-details(user_id: "x") | found u |>\nstate()\n',
       '{"user_id":"x","membership":"gold"}')],
     ["STEPS"],
     render_needles=["durable:\n  r1 = {", '"user_id":"x"',
@@ -360,7 +360,7 @@ state_check(
 
 state_check(
     "state() chain arm under item: + path (single-item turn)",
-    [('get-user-details(user_id: "x") | ok u |> state()\n',
+    [('get-user-details(user_id: "x") | found u |> state()\n',
       '{"user_id":"x","membership":"gold"}')],
     ["OK"],
     render_needles=["turn: (none)", "item:\n  u = {",
@@ -388,7 +388,7 @@ def callstep_coverage():
     g = TauGateSession(BINARY)
     t0 = time.time()
     wire = ('this is not wire\n'
-            'get-user-details(user_id: "x") | ok u |>'
+            'get-user-details(user_id: "x") | found u |>'
             'say(text: "hi {{ u.user_id }}")\n'
             'say(text: "{{ missing.field }}")\n')
     try:

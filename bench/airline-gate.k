@@ -4,7 +4,7 @@
 import std/bridge
 import std/interpreter
 import std/io
-import app/airline_tools
+import app/native_protocol
 import app/gate_intake
 import app/tau_wire
 // The doctrine table (R4): compiles this file's `std/guide:add` rows to
@@ -58,9 +58,9 @@ serve = std/io:readln()
 | eof |> _
 | failed m |> std/io:print.ln("ERROR {{ m:s }}")
 
-[with]std/bridge:create(id: "airline-gate", scope: "airline", introspection: true): br
+[with]std/bridge:create(id: "airline-gate", scope: "airline-native", introspection: true): br
 // Two module touches keep the emitted unit whole: saw-eof keeps app/tau_wire
-// (airline_tools procs reach it via koru_app), and the trivial yyjson open/close
+// (native_protocol procs reach it via koru_app), and the trivial yyjson open/close
 // keeps koru/yyjson (tau_wire procs reach it via koru_koru) — dependency
 // tracking cannot see proc-side references in either case.
 |> app/tau_wire:saw-eof()

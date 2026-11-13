@@ -1,100 +1,109 @@
-// airline_guides.k — the airline domain's doctrine table: domain-general
-// teaching rows compiled into the gate/agent binaries as `std/guide` data.
+// airline_guides.k — the airline domain's doctrine table for the
+// NATIVE protocol (native_protocol.k / native_protocol.kz).
 //
-// Provenance (train-30 ONLY; test-20 is frozen and never read):
-//   - field truth: `airline_tools.k` (generated from tau2's openai_schema)
-//     and the real payload field sets mined from
-//     `corpus/combined-r2r3-callstep.jsonl` (2,790 records / 2,335
-//     dispatches, r2+r3 train-30 regen);
-//   - workflow exemplars: canonical verb sequences counted from the same
-//     corpus (e.g. get-user-details → get-reservation-details → book);
-//   - judgment frames: `tau2-bench/data/tau2/domains/airline/policy.md`.
+// Keys are `tor` for facts true of every dispatch, and
+// `tor -> branch` for what one resolved outcome means / where it goes.
+// Branch names are the protocol's named states — a guide can only fire
+// where the protocol declares the state.
 //
-// Keys are `tor` for facts true of every dispatch of a verb, and
-// `tor -> branch` for what one resolved outcome means / where it goes
-// (the generated airlines declare `| ok | error`). Templates carry SLOTS,
-// never task ids, passenger names, or reservation ids. Each row fires at
-// most once per session, at the first dispatch that resolves to its key.
+// Handles: found-set/chosen-flight/user-known/reservation-known are typed
+// borrows carrying "quoted" JSON content; held is the pending
+// booking commitment. Pass handles by binding name where a phantom is
+// demanded — never their contents, never a literal.
+//
+// Provenance: field truth from the corpus-mined payload shapes and
+// tau2 policy; workflow frames counted from the train-30 corpus;
+// branch-keyed doctrine authored in bench/guides/*.md (this table is
+// the compiled, slot-free delivery of the same teaching).
 
 import std/guide
 
 // ============================================================================
-// FIELD TRUTH — the actual arg names and the real payload fields.
-// Derived from airline_tools.k signatures + corpus payload key sets.
+// FIELD TRUTH — what each verb takes and what its payload carries.
 // ============================================================================
 
-std/guide:add(get-user-details) { Takes user_id. The profile returns: user_id, name (object {first_name, last_name}), email, dob, address (object {address1, address2, city, state, country, zip}), membership (regular|silver|gold), reservations, saved_passengers (list of {first_name, last_name, dob}), and payment_methods as an OBJECT keyed by payment id, each {source, id, brand, last_four, amount}. Wire templates lift ONE level only: {{ u.user_id }} works, {{ u.name.first_name }} refuses — render {{ u.name }} for a nested object. There is no top-level list of payment methods and no `baggages` field — read the payment ids as the KEYS of payment_methods. }
+std/guide:add(say) { The voice channel — the only text the user hears. Always "quoted"; {{ x.f }} inside splices one level into the record bound to x. A bare word or id is a scalar — splice it as {{ x }}, never {{ x.f }}. }
 
-std/guide:add(get-reservation-details) { Takes reservation_id. If you don't have one yet, get it first: get-user-details returns the user's reservations list, or ask the user for the confirmation number — never pass a placeholder like "your_reservation_id". Returns reservation_id, user_id, origin, destination, flight_type (one_way|round_trip), cabin, flights (list of {flight_number, date, origin, destination, price}), passengers (list of {first_name, last_name, dob}), payment_history (list of {payment_id, amount}), total_baggages, nonfree_baggages, insurance, created_at, status. Wire templates lift ONE level only: {{ r.origin }} works, {{ r.flights.0.flight_number }} or deeper refuses — render {{ r.flights }} for the list. Paid amounts are payment_history[].amount — a reservation has no payment_methods field and no payment_methods/id composite. }
+std/guide:add(get-user-details) { Takes user_id. The profile returns a user-known handle whose content is JSON: user_id, name, email, dob, address, membership (regular|silver|gold), reservations (list of reservation ids), saved_passengers, and payment_methods as an OBJECT keyed by payment id. The payment ids are the KEYS of payment_methods — there is no top-level list. Wire templates lift ONE level only: render a nested object whole, never a deeper path. }
 
-std/guide:add(get-reservation-details -> error) { Reservation not found means the id is wrong or invented — never pass placeholders. Get the real id from get-user-details (its reservations list) or ask the user for the confirmation number, then retry. }
+std/guide:add(get-reservation-details) { Takes reservation_id. A reservation-known handle comes back: reservation_id, user_id, origin, destination, flight_type, cabin, flights (list of flight_number/date/origin/destination/price fields), passengers, payment_history, total_baggages, nonfree_baggages, insurance, created_at, status. Wire templates lift ONE level only — render {{ r.flights }} for the list, never a deeper path. If you lack an id, read the the user reservations list from their user-known handle or ask — never pass a placeholder. }
 
-std/guide:add(search-direct-flight) { Takes origin, destination, date (YYYY-MM-DD IATA codes). Returns a LIST of flights, each {flight_number, origin, destination, date, status, available_seats.basic_economy/.economy/.business, prices.basic_economy/.economy/.business}. Choose by prices.<cabin>; only status "available" can be booked. }
+std/guide:add(search-direct-flight) { Takes origin, destination, date (IATA codes, YYYY-MM-DD). `results` mints a found-set handle — a SET, content is a JSON array of flight objects each {flight_number, origin, destination, date, status, available_seats, prices}. Choose by prices.<cabin>; only status "available" can be booked. `none` means no flights matched — widen dates or try onestop. }
 
-std/guide:add(search-onestop-flight) { Takes origin, destination, date. Each result is an ORDERED LIST of legs (not one flight object); copy each leg flight_number and date in order. Same status/seat/price fields as search-direct-flight. }
+std/guide:add(search-onestop-flight) { Same args as search-direct-flight. Each result is an ORDERED LIST of legs — every leg flight_number and date goes into the booking, in order. }
 
-std/guide:add(book-reservation) { All eleven args are REQUIRED: user_id, origin, destination, flight_type ("one_way"|"round_trip"), cabin ("basic_economy"|"economy"|"business"), flights, passengers, payment_methods, total_baggages (integer), nonfree_baggages (integer), insurance ("yes"|"no"). The three composite args are JSON text in a double-quoted string: flights="[{flight_number,date}]", passengers="[{first_name,last_name,dob}]", payment_methods="[{payment_id,amount}]". Omitting any arg fails the call before the database sees it. }
+std/guide:add(select) { Borrows a found-set handle and validates flight_number + date AGAINST its content — `chosen` mints a chosen-flight handle carrying the single selected flight. `miss` means the pair is not in that set: the set may be stale (a newer search retires it) or the number wrong — read the found-set content for exact flight_numbers, or search again. }
 
-std/guide:add(update-reservation-flights) { Takes reservation_id, cabin, flights (JSON text: [{flight_number,date}]), payment_id (ONE id from the user profile). Origin, destination, and flight_type must stay unchanged; cabin must be the same on every flight. }
+std/guide:add(hold) { Eleven args prepare book_reservation WITHOUT spending: user (user-known), flights (chosen-flight), passengers ("quoted" JSON array of first_name/last_name/dob fields), payment_id (ONE key of the the user record payment_methods object — never invented), amount, cabin, flight_type, total_baggages, nonfree_baggages, insurance. `held` mints the held obligation — nothing is booked yet. `payment-failed` = the env rejected the payment id: re-read the valid ids from the user handle payment_methods keys. `refused` = args or policy refused the hold. }
 
-std/guide:add(update-reservation-baggages) { Takes reservation_id, total_baggages (integer), nonfree_baggages (integer), payment_id. total_baggages is the new absolute allowance, not a delta. }
+std/guide:add(release) { Spends a held obligation free — abandons the pending booking. The ONLY safe exit for a hold you cannot confirm; hang-up does this automatically, but releasing deliberately is cleaner. }
 
-std/guide:add(update-reservation-passengers) { Takes reservation_id, passengers (JSON text: [{first_name,last_name,dob}]). The number of passengers cannot change — supply the full new list, same count. }
+std/guide:add(confirm) { Spends the held obligation INTO book_reservation — the one commit. `booked` returns a reservation-known handle: confirm itinerary, total, and payment split to the user. `declined` = payment refused at commit; `unavailable` = fare or seat gone since the hold. Both mean the hold is spent — start over with a fresh search/select/hold if the user still wants it. }
 
-std/guide:add(cancel-reservation) { Takes reservation_id only. Returns the cancelled reservation JSON. }
+std/guide:add(cancel-reservation) { Borrows a reservation-known handle — the env-vended id comes out of it, so a fabricated id is a wire refusal. `cancelled` = done; tell the user refunds return to the original payment methods in 5-7 business days. `ineligible` = policy refuses (the API does NOT check the rules for you — verify before calling: booked within 24h, airline cancelled a flight, business cabin, or insurance covering the reason, and no segment flown). `already-cancelled` = nothing to do. }
 
-std/guide:add(get-flight-status) { Takes flight_number and date (YYYY-MM-DD). Returns one status word: available | delayed | on time | flying. Only "available" flights can be booked; "delayed"/"on time" have not taken off but cannot be booked; "flying" has taken off. }
+std/guide:add(update-reservation-flights) { Borrows the reservation handle; takes flights (chosen-flight — select first), cabin, payment_id. Origin, destination, and flight_type must stay unchanged; cabin must match on every flight. `updated` returns the reservation; `payment-failed`/`refused` name the fix. Basic economy cannot change flights. }
 
-std/guide:add(calculate) { Takes expression as math text in quotes, e.g. "198 + 129". Returns a number — quote it rather than recomputing by hand. }
+std/guide:add(update-reservation-baggages) { Borrows the reservation handle; takes total_baggages and nonfree_baggages as new ABSOLUTE integers (not deltas) plus payment_id. Bags can be added but never removed; each extra checked bag is 50 dollars — state the charge. Insurance cannot be added after booking. }
 
-std/guide:add(list-all-airports) { Takes no args. Returns [{iata, city}]; use the iata code in every origin/destination argument, never the city name. }
+std/guide:add(update-reservation-passengers) { Borrows the reservation handle; takes passengers ("quoted" JSON array, same count — the number cannot change). Supply the full new list. }
 
-std/guide:add(transfer-to-human-agents) { Takes summary (one line of facts). It ENDS the exchange: after the call, send exactly "YOU ARE BEING TRANSFERRED TO A HUMAN AGENT. PLEASE HOLD ON." Nothing you write after that reaches the user. }
+std/guide:add(send-certificate) { Takes user (user-known) and amount (integer dollars). A gesture of compensation, not a refund — issue only after confirming the complaint facts and the membership/insurance condition: $100 x passengers for a cancelled flight, $50 x passengers for a delayed flight the user changed or cancelled. Never for a regular member in basic economy with no insurance; never unprompted. `insufficient` = balance cannot cover it; `refused` = conditions unmet. }
 
-std/guide:add(send-certificate) { Takes user_id and amount (integer dollars). This is a gesture of compensation, not a refund mechanism — issue it only after confirming the complaint facts and the membership/insurance condition. }
+std/guide:add(get-flight-status) { Takes flight_number and date. `reported` carries one status word: available | delayed | on time | flying. Only "available" can be booked; "flying" has taken off. `unknown` = the flight is not in the system. }
 
-// ============================================================================
-// WORKFLOW EXEMPLARS — canonical successful sequences, templates with slots.
-// Counted from the train-30 corpus (2,335 dispatches); no task data baked in.
-// ============================================================================
+std/guide:add(calculate) { Takes expression as math text in "quotes". `value` returns the number — quote it in the say that follows rather than recomputing by hand. `invalid` = the expression did not parse. }
 
-std/guide:add(get-user-details -> ok) { Profile in hand. Next, read the reservation: get-reservation-details(reservation_id: "<id from the user reservations>") and arm its ok result. Take payment ids from the keys of payment_methods and passenger details from saved_passengers. }
+std/guide:add(list-all-airports) { `airports` returns iata/city pairs — use the iata code in every origin/destination argument, never the city name. }
 
-std/guide:add(get-reservation-details -> ok) { Read flights[].flight_number and .date, cabin, total_baggages/nonfree_baggages, and payment_history[].payment_id. To change flights: search-direct-flight(origin, destination, date), then update-reservation-flights(reservation_id, cabin, flights, payment_id). To cancel: the API does NOT check the rules — cancel-reservation only if created_at is within 24h, cabin is business, the airline cancelled a flight, or insurance covers the reason, and no segment has flown; otherwise transfer-to-human-agents. }
-
-std/guide:add(search-direct-flight -> ok) { Pick one result by prices.<cabin> and keep its flight_number and date. No direct flight fits? search-onestop-flight(origin, destination, date). To book: book-reservation(user_id, origin, destination, flight_type, cabin, flights: "[{flight_number, date}]", passengers, payment_methods, total_baggages, nonfree_baggages, insurance). }
-
-std/guide:add(search-onestop-flight -> ok) { Each result is a leg list — put each leg flight_number and date, in order, into the flights array. }
-
-std/guide:add(book-reservation -> ok) { The reply is the new reservation JSON: keep reservation_id, and confirm the itinerary, the total, and the payment split to the user. }
-
-std/guide:add(cancel-reservation -> ok) { The refund returns to the original payment methods within 5-7 business days — tell the user. The API does NOT check the cancellation conditions: next time verify before calling that one holds (booked within the last 24h, airline cancelled the flight, business cabin, or travel insurance covering the reason), and if any segment has already flown, transfer instead. }
-
-std/guide:add(update-reservation-flights -> ok) { Reply is the updated reservation. If baggage also changed, follow with update-reservation-baggages(reservation_id, total_baggages, nonfree_baggages, payment_id). }
-
-std/guide:add(update-reservation-baggages -> ok) { Reply is the full reservation. Bags can be added but never removed; each extra checked bag is 50 dollars — state the charge. Insurance cannot be added after booking. }
-
-std/guide:add(update-reservation-passengers -> ok) { Reply is the full reservation. Passengers can be edited but the count cannot change. }
-
-std/guide:add(calculate -> ok) { The result is a number; quote it in the say that follows. }
+std/guide:add(transfer-to-human-agents) { Takes summary (one line of confirmed facts). `handed-off` ENDS the exchange: after the call, send exactly "YOU ARE BEING TRANSFERRED TO A HUMAN AGENT. PLEASE HOLD ON." — nothing written after reaches the user. Transfer only when the request cannot be handled within your actions. }
 
 // ============================================================================
-// JUDGMENT FRAMES — adjudication at refusal/surprise edges, from policy.md.
-// These are teaching rows, not retries: the failure names a policy condition.
+// BRANCH STATES — what each named outcome means and where it goes next.
 // ============================================================================
 
-std/guide:add(book-reservation -> error) { A booking failure is a policy condition, not a retry. The sum of payment_methods amounts must EQUAL the computed total exactly; every payment id must already be in the user profile; at most one travel certificate, one credit card, three gift cards; a certificate remaining balance is not refundable. Recompute price x passengers + 50 per extra bag + 30 per passenger insurance, then re-split the payment. Read the error payload: "amount does not add up" vs "not enough balance" are different fixes. }
+std/guide:add(get-user-details -> missing) { The id is not in the database — the user gave a wrong or invented id. Re-read the exact id they gave; never invent or normalize one. If they cannot produce it, ask. `missing` is a state, not an error: resolve the id, then retry. }
 
-std/guide:add(update-reservation-flights -> error) { A flight-change failure is usually payment: the single gift card or credit card must be in the profile and cover the difference. Also check the itinerary rules before retrying — basic economy cannot change flights, and origin, destination, and trip type must not change. Read the payload before choosing a different card. }
+std/guide:add(get-reservation-details -> missing) { The reservation id is wrong or invented — never pass a placeholder. Get the real id from the the user record reservations list (get-user-details) or ask the user for the confirmation number, then retry. }
 
-std/guide:add(get-user-details -> error) { The id is not in the database. Re-read the exact id the user gave; never invent or normalize one. If they cannot produce it, ask. }
+std/guide:add(search-direct-flight -> none) { No flights matched. Check the date format and IATA codes; widen the date or try search-onestop-flight before telling the user nothing exists. }
 
-std/guide:add(get-flight-status -> ok) { Status drives bookability: only "available" can be booked. "delayed" and "on time" cannot be booked; "flying" has taken off. If the user wants to change or cancel after a delay, follow the modify/cancel rules rather than rebooking a cancelled flight. }
+std/guide:add(search-onestop-flight -> none) { No one-stop itineraries either. The route or date may not be served — confirm the cities with the user before declaring no service. }
 
-std/guide:add(transfer-to-human-agents -> ok) { Transfer only when the request cannot be handled within your actions (for example, part of a trip already flown, or a passenger-count change). The summary must state the confirmed facts; say the transfer sentence next. }
+std/guide:add(select -> miss) { The flight_number/date pair is not in the found-set set — the set may be stale (a newer search retires it) or the number wrong. Read the exact flight_numbers in the found-set handle content, or search again. Never fabricate a selection. }
 
-std/guide:add(send-certificate -> ok) { Compensation is a gesture only, after confirming the facts: $100 x passengers for a cancelled flight, $50 x passengers for a delayed flight the user changed or cancelled. Never offer it to a regular member flying basic economy with no insurance; never offer it unprompted for other reasons. }
+std/guide:add(hold -> payment-failed) { That payment_id is not one of this the user payment methods. The valid ids are the KEYS of payment_methods on the user-known handle content — read them there, or ask the user which method to use, then hold again. Never invent a payment id. }
 
-std/guide:add(* -> error) { A tool call failed. Read the error payload words before acting: a policy refusal needs a corrected plan, a missing record needs the exact user id, and an infrastructure error is not the user fault. Do not repeat the identical call — change the argument that caused the failure. }
+std/guide:add(hold -> refused) { The hold was refused on args or policy — read the payload for which condition failed, fix that argument, and hold again. The hold spends nothing; retrying is safe. }
 
-std/guide:add(say -> error) { Inside say text, {{ x.f }} resolves one level into the record bound to x — {{ x.f.g }} always refuses; splice {{ x.f }} for a nested object. A bare word, number, or id is a scalar — splice it as {{ x }}, never {{ x.f }}. carries-no-field means shorten the path to one level; not-bound means bind x first. Resend the say; the call that produced x already answered, do not re-run it. }
+std/guide:add(confirm -> declined) { The payment was declined at commit — the held args carried a payment_id the env rejected. The hold is SPENT: release is not needed, but the booking did not happen. Re-check the payment id against the the user record payment_methods keys and run hold → confirm again if the user still wants it. }
+
+std/guide:add(confirm -> unavailable) { The fare or seat disappeared between hold and commit — the hold is spent and nothing was booked. Search again for current availability, then hold → confirm fresh. Do not retry confirm on the spent hold. }
+
+std/guide:add(cancel-reservation -> ineligible) { Policy refuses this cancellation — the API does NOT check the rules, you must. Eligible only when: booked within the last 24h, the airline cancelled a flight, cabin is business, or travel insurance covers the reason — AND no segment has flown. If none holds, transfer-to-human-agents rather than force it. }
+
+std/guide:add(cancel-reservation -> already-cancelled) { Already cancelled — nothing to do. Confirm the state to the user and stop; do not retry the call. }
+
+std/guide:add(update-reservation-flights -> payment-failed) { The payment_id is not a valid method on the user record — re-read the payment_methods keys from the user-known handle and retry with a real id. }
+
+std/guide:add(update-reservation-flights -> refused) { The change was refused — likely itinerary rules (basic economy cannot change flights; origin, destination, and trip type must not change) or payment coverage. Read the payload, fix the cause, retry. }
+
+std/guide:add(update-reservation-baggages -> payment-failed) { Same as flights: the payment_id must be a real key of the the user record payment_methods. }
+
+std/guide:add(update-reservation-baggages -> refused) { Baggage update refused — check the allowance math and that bags are only added, never removed. }
+
+std/guide:add(update-reservation-passengers -> refused) { Passenger update refused — the count cannot change; supply the full list with the same count. }
+
+std/guide:add(send-certificate -> insufficient) { The balance cannot cover the amount — reduce it or explain the limit to the user. Do not retry with the same amount. }
+
+std/guide:add(send-certificate -> refused) { The compensation conditions are unmet — re-check the facts (cancelled vs delayed flight, membership tier, cabin, insurance) before offering again. }
+
+std/guide:add(calculate -> invalid) { The expression did not parse — check operator spelling and that numbers are plain digits; quote the corrected expression and retry. }
+
+std/guide:add(get-flight-status -> unknown) { That flight number/date is not in the system — re-check the spelling with the user; do not guess a status. }
+
+// ============================================================================
+// RESIDUAL ERROR — transport/environment failure only.
+// ============================================================================
+
+std/guide:add(* -> error) { A call failed at the transport or environment layer — not a domain outcome. Do not repeat the identical call; if the user is waiting, say so honestly or transfer. }
