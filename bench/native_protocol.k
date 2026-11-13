@@ -165,6 +165,83 @@ std/guide:add(cancel-reservation -> ineligible) @"guides/cancel-reservation.inel
 std/guide:add(select -> miss) @"guides/select.miss.md"
 
 // ------------------------------------------------------------------
+// THE CONTRACT — scope documentation served with the vocabulary.
+// Describes call shapes only; recovery doctrine lives in the guides.
+// ------------------------------------------------------------------
+
+[
+- doc
+# Tool contract — airline-native
+
+Handles carry "quoted" JSON text — a <found>/<chosen>/<user-known>/
+<reservation-known>/<held!> binding's content is the payload string
+the verb returned. Read fields out of it as JSON; pass handles by
+name, never their contents, where a phantom type is demanded.
+
+say(text: string) — the voice channel: what the user hears. Always
+"quoted" — {{ }} inside splices bound values into the line.
+
+Reads (cost 1):
+· list-all-airports() -> airports: string — every airport code/name.
+· calculate(expression: string) -> value: string — arithmetic only.
+· get-flight-status(flight_number, date) -> reported: string — live
+  status for a flight the user names.
+· search-direct-flight(origin, destination, date) -> results:
+  string<found> — a result SET handle; content is a JSON array of
+  flight objects. `none` means no flights matched.
+· search-onestop-flight(same args) -> results: string<found> — same
+  shape, one-stop itineraries.
+· get-user-details(user_id) -> found: string<user-known> — profile
+  JSON: user_id, name, payment_methods (object — its KEYS are the
+  valid payment_id values), reservations. `missing` = no such user.
+· get-reservation-details(reservation_id) -> found:
+  string<reservation-known> — reservation JSON: reservation_id,
+  flight numbers/dates, passengers, cabin, status. `missing` = no
+  such reservation.
+
+Composition:
+· select(flights: string<found>, flight_number, date) -> chosen:
+  string<chosen> — validates flight_number+date AGAINST the <found>
+  set's content; `miss` = not in that set (or stale set — search
+  again). `chosen` content is the single selected flight JSON.
+
+Booking (the obligation):
+· hold(user, flights, passengers, payment_id, amount, cabin,
+  flight_type, total_baggages, nonfree_baggages, insurance) -> held:
+  string<held!> — prepares book_reservation args WITHOUT spending.
+  payment_id must be a KEY of the user record's payment_methods.
+  passengers is "quoted" JSON array text — objects carrying
+  first_name, last_name, and dob in YYYY-MM-DD form.
+  `payment-failed` = the env rejected the payment id; `refused` =
+  args/policy refused.
+· release(held: string<!held>) -> string — abandons the hold free.
+  The ONLY safe exit for a hold you cannot confirm.
+· confirm(held: string<!held>) -> booked: string<reservation-known>
+  — spends the hold into book_reservation. `declined` = payment
+  refused at commit; `unavailable` = fare/seat gone since hold.
+
+Mutations (borrow the handle; env-vended id comes out of it):
+· cancel-reservation(reservation) -> cancelled | ineligible |
+  already-cancelled.
+· update-reservation-flights(reservation, flights: string<chosen>,
+  cabin, payment_id) -> updated | payment-failed | refused.
+· update-reservation-baggages(reservation, total_baggages,
+  nonfree_baggages, payment_id) -> updated | payment-failed | refused.
+· update-reservation-passengers(reservation, passengers) ->
+  updated | payment-failed | refused.
+· send-certificate(user, amount) -> sent | insufficient | refused.
+
+Escape:
+· transfer-to-human-agents(summary) -> handed-off — last resort,
+  costs the session's remaining autonomy.
+
+Every verb's residual `error` is transport/environment failure —
+not a domain outcome. Named branches are the states; treat them as
+such.
+]
+pub tor contract {} -> string
+
+// ------------------------------------------------------------------
 // THE REGISTRY — what the scope declares. Order is load-bearing:
 // release before confirm (auto-discharge must never book).
 // ------------------------------------------------------------------
