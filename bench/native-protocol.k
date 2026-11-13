@@ -158,54 +158,32 @@ import std/guide
 
 // `missing` on a lookup means the id is wrong or invented — resolve it,
 // never fabricate. This is the task-10 lesson as a branch.
-std/guide:add(get-reservation-details -> missing) {
-    No reservation under that id — it was invented or mistyped.
-    The real ids live in {{ reservations }} on the user record,
+std/guide:add(get-reservation-details -> missing) @"guides/get-reservation-details.missing.md"} on the user record,
     or ask the user for the confirmation number, then retry.
     Never pass a placeholder.
 }
 
-std/guide:add(get-user-details -> missing) {
-    No user under that id — check the id the user gave you,
-    or ask them to confirm it. user_id comes from the user's
-    message or {{ user_id }} on a reservation record —
+std/guide:add(get-user-details -> missing) @"guides/get-user-details.missing.md"} on a reservation record —
     never invent one.
 }
 
 // `payment-failed` names the recurring tau2 failure: payment_id must be
 // a KEY of the user record's payment_methods object — never invented.
-std/guide:add(hold -> payment-failed) {
-    That payment_id is not one of this user's payment methods.
-    The valid ids are the keys of {{ payment_methods }} on the
+std/guide:add(hold -> payment-failed) @"guides/hold.payment-failed.md"} on the
     user record — read them from the <user-known> handle's
     content, or ask the user which method to use.
 }
 
-std/guide:add(confirm -> declined) {
-    The payment was declined at commit time — the held args
-    carried {{ payment_id }} the env rejected. Release the hold
+std/guide:add(confirm -> declined) @"guides/confirm.declined.md"} the env rejected. Release the hold
     (release(held: ...)), re-check it against {{ payment_methods }},
     and hold again.
 }
 
-std/guide:add(confirm -> unavailable) {
-    The held itinerary is no longer bookable — a leg sold out
-    or the route closed between hold and confirm. Release the
-    hold, search again for fresh options, and re-select.
-}
+std/guide:add(confirm -> unavailable) @"guides/confirm.unavailable.md"
 
-std/guide:add(cancel-reservation -> ineligible) {
-    Policy refused the cancellation — the usual causes are the
-    24-hour window, basic-economy fares, or missing travel
-    insurance. Read the reason in the payload, explain it to
-    the user plainly, and offer transfer-to-human-agents
-    if they insist.
-}
+std/guide:add(cancel-reservation -> ineligible) @"guides/cancel-reservation.ineligible.md"
 
-std/guide:add(select -> miss) {
-    That flight_number is not in the search result you selected
-    from — select may only name what a search minted. Re-check
-    {{ flights }} in the <found> handle's content for the exact
+std/guide:add(select -> miss) @"guides/select.miss.md"} in the <found> handle's content for the exact
     flight_number, or search again.
 }
 
