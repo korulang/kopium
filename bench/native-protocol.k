@@ -3,14 +3,17 @@
 // the contract the model learns lives here.
 //
 // PHANTOM VOCABULARY — types that carry obligation state:
-//   string<found!>             a search result set the env minted
-//   string<chosen!>            a flight selection validated AGAINST it
-//   string<user-known!>        a user profile the env vended
+//   string<found>             a search result set the env minted
+//   string<chosen>            a flight selection validated AGAINST it
+//   string<user-known>        a user profile the env vended
 //   string<reservation-known>  a reservation handle (borrow — reads only)
 //   string<held!>              a pending book_reservation commitment
-//   `!` marks mint-on-produce; absence marks borrow-only.
-// A literal string where a phantom is demanded refuses BEFORE the proc
-// runs — invented ids are wire-level errors, not env roundtrips.
+//   `!` marks a real commitment — only <held!> carries it. Every other
+//   phantom is typed data: borrow-checked, forgery-proof, no discharge
+//   owed. A literal where a phantom is demanded refuses BEFORE the proc
+//   runs — invented ids are wire-level errors, not env roundtrips.
+//   Stale handles expire ambiently: a new search-* retires the prior
+//   <found> inside the proc — old results SHOULD go stale.
 //
 // BRANCHES ARE THE PROTOCOL — outcomes are named arms, not ok/error
 // strings. `| chosen`/`| miss`, `| held`/`| refused` teach the model
@@ -24,8 +27,9 @@
 //   confirm(held) spends it INTO book_reservation — the one commit
 //   release is registered BEFORE confirm: auto-discharge on hang-up
 //   releases, never books.
-//   drop-*(handle) retires a live handle early; describe-handles()
-//   lists what the session currently holds.
+//   No drop-* verbs: non-commitment handles owe no discharge. <held!>
+//   is the only obligation — release spends it free, confirm spends it
+//   into book_reservation, hang-up auto-releases.
 
 import std/runtime
 
@@ -38,23 +42,37 @@ pub tor say { text: string } -> string
 // READS — mint handles, never mutate. Cost 1.
 // ------------------------------------------------------------------
 pub tor list-all-airports {}
+| airports string
+| error string
+
 pub tor calculate { expression: string }
+| value string
+| invalid string
+| error string
+
 pub tor get-flight-status { flight_number: string, date: string }
+| reported string
+| unknown string
+| error string
 
 pub tor search-direct-flight { origin: string, destination: string, date: string }
-| ok string<found!>
+| results string<found>
+| none string
 | error string
 
 pub tor search-onestop-flight { origin: string, destination: string, date: string }
-| ok string<found!>
+| results string<found>
+| none string
 | error string
 
 pub tor get-user-details { user_id: string }
-| ok string<user-known!>
+| found string<user-known>
+| missing string
 | error string
 
 pub tor get-reservation-details { reservation_id: string }
-| ok string<reservation-known>
+| found string<reservation-known>
+| missing string
 | error string
 
 // ------------------------------------------------------------------
@@ -62,13 +80,9 @@ pub tor get-reservation-details { reservation_id: string }
 // Named branches: `chosen` mints, `miss` refuses membership.
 // ------------------------------------------------------------------
 pub tor select { flights: string<found>, flight_number: string, date: string }
-| chosen string<chosen!>
+| chosen string<chosen>
 | miss string
 
-pub tor drop-search { found: string<!found> } -> string
-pub tor drop-choice { chosen: string<!chosen> } -> string
-pub tor drop-user { user: string<!user-known> } -> string
-pub tor drop-reservation { reservation: string<!reservation-known> } -> string
 
 // ------------------------------------------------------------------
 // THE BOOKING OBLIGATION — hold is the commitment, confirm is the spend.
@@ -87,12 +101,15 @@ pub tor hold {
     insurance: string,
 }
 | held string<held!>
+| payment-failed string
 | refused string
 
 pub tor release { held: string<!held> } -> string
 
 pub tor confirm { held: string<!held> }
-| ok string<reservation-known!>
+| booked string<reservation-known>
+| declined string
+| unavailable string
 | error string
 
 // ------------------------------------------------------------------
@@ -100,7 +117,9 @@ pub tor confirm { held: string<!held> }
 // out of the handle, so a fabricated reservation_id is a wire refusal.
 // ------------------------------------------------------------------
 pub tor cancel-reservation { reservation: string<reservation-known> }
-| ok string
+| cancelled string
+| ineligible string
+| already-cancelled string
 | error string
 
 pub tor update-reservation-flights {
@@ -109,7 +128,9 @@ pub tor update-reservation-flights {
     cabin: string,
     payment_id: string,
 }
-| ok string
+| updated string
+| payment-failed string
+| refused string
 | error string
 
 pub tor update-reservation-baggages {
@@ -118,25 +139,31 @@ pub tor update-reservation-baggages {
     nonfree_baggages: i64,
     payment_id: string,
 }
-| ok string
+| updated string
+| payment-failed string
+| refused string
 | error string
 
 pub tor update-reservation-passengers {
     reservation: string<reservation-known>,
     passengers: string,
 }
-| ok string
+| updated string
+| payment-failed string
+| refused string
 | error string
 
 pub tor send-certificate { user: string<user-known>, amount: i64 }
-| ok string
+| sent string
+| insufficient string
+| refused string
 | error string
 
 // ------------------------------------------------------------------
 // ESCAPE HATCHES — cost 1, always available.
 // ------------------------------------------------------------------
 pub tor transfer-to-human-agents { summary: string }
-| ok string
+| handed-off string
 | error string
 
 // ------------------------------------------------------------------
@@ -162,8 +189,4 @@ std/runtime:register(scope: "airline-native") {
     update-reservation-passengers(10)
     send-certificate(10)
     transfer-to-human-agents(1)
-    drop-search(1)
-    drop-choice(1)
-    drop-user(1)
-    drop-reservation(1)
 }
