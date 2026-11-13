@@ -1,6 +1,15 @@
 ---
-name: airline-failure-replay
-catalog: challenges/airline-failure-replay/catalog
+challenge: airline-failure-replay
+kind: frame
+status: standing
+yields: one verified fix to the doctrine/periphery layer, replay-proven
+created: 2026-11-12
+---
+
+*Walker context: the first packaged failure — task-10 prose-collapse
+FATAL. Output drains into the codebase as fixes; catalog/ holds the
+judged submissions.*
+
 ---
 
 # CHALLENGE: replay a packaged agent failure, return a fix that survives replay
