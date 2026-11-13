@@ -167,6 +167,33 @@ pub tor transfer-to-human-agents { summary: string }
 | error string
 
 // ------------------------------------------------------------------
+// GUIDES — doctrine rows keyed to the branches above. These fire at
+// dispatch, once per session, at the first resolution to their key.
+// Domain-general only: field truth, workflow rules, recovery patterns —
+// never task ids, names, or answers.
+// ------------------------------------------------------------------
+
+import std/guide
+
+// `missing` on a lookup means the id is wrong or invented — resolve it,
+// never fabricate. This is the task-10 lesson as a branch.
+std/guide:add(get-reservation-details -> missing) { No reservation under that id — it was invented or mistyped. Get the real id from get-user-details (its reservations list carries them) or ask the user for the confirmation number, then retry. Never pass a placeholder. }
+
+std/guide:add(get-user-details -> missing) { No user under that id — check the id the user gave you, or ask them to confirm it. user_id values look like name_number (emma_kim_9957). }
+
+// `payment-failed` names the recurring tau2 failure: payment_id must be
+// a KEY of the user record's payment_methods object — never invented.
+std/guide:add(hold -> payment-failed) { That payment_id is not one of this user's payment methods. The valid ids are the KEYS of the user record's payment_methods object — read them from the <user-known> handle's content, or ask the user which method to use. }
+
+std/guide:add(confirm -> declined) { The payment was declined at commit time — the held args carried a payment the env rejected. Release the hold (release(held: ...)), re-check the payment_id against the user record, and hold again. }
+
+std/guide:add(confirm -> unavailable) { The held itinerary is no longer bookable — a leg sold out or the route closed between hold and confirm. Release the hold, search again for fresh options, and re-select. }
+
+std/guide:add(cancel-reservation -> ineligible) { Policy refused the cancellation — the usual causes are the 24-hour window, basic-economy fares, or missing travel insurance. Read the reason in the payload, explain it to the user plainly, and offer transfer-to-human-agents if they insist. }
+
+std/guide:add(select -> miss) { That flight_number is not in the search result you selected from — select may only name what a search minted. Re-check the <found> handle's content for the exact flight_number, or search again. }
+
+// ------------------------------------------------------------------
 // THE REGISTRY — what the scope declares. Order is load-bearing:
 // release before confirm (auto-discharge must never book).
 // ------------------------------------------------------------------

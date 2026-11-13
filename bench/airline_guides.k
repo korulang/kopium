@@ -96,3 +96,5 @@ std/guide:add(transfer-to-human-agents -> ok) { Transfer only when the request c
 std/guide:add(send-certificate -> ok) { Compensation is a gesture only, after confirming the facts: $100 x passengers for a cancelled flight, $50 x passengers for a delayed flight the user changed or cancelled. Never offer it to a regular member flying basic economy with no insurance; never offer it unprompted for other reasons. }
 
 std/guide:add(* -> error) { A tool call failed. Read the error payload words before acting: a policy refusal needs a corrected plan, a missing record needs the exact user id, and an infrastructure error is not the user fault. Do not repeat the identical call — change the argument that caused the failure. }
+
+std/guide:add(say -> error) { Inside say text, {{ x.f }} resolves one level into the record bound to x — {{ x.f.g }} always refuses; splice {{ x.f }} for a nested object. A bare word, number, or id is a scalar — splice it as {{ x }}, never {{ x.f }}. carries-no-field means shorten the path to one level; not-bound means bind x first. Resend the say; the call that produced x already answered, do not re-run it. }
