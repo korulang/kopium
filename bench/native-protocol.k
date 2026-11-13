@@ -2,34 +2,8 @@
 // Pure Koru (.k): no host lines. Proc bodies live in airline_native.kz;
 // the contract the model learns lives here.
 //
-// PHANTOM VOCABULARY — types that carry obligation state:
-//   string<found>             a search result set the env minted
-//   string<chosen>            a flight selection validated AGAINST it
-//   string<user-known>        a user profile the env vended
-//   string<reservation-known>  a reservation handle (borrow — reads only)
-//   string<held!>              a pending book_reservation commitment
-//   `!` marks a real commitment — only <held!> carries it. Every other
-//   phantom is typed data: borrow-checked, forgery-proof, no discharge
-//   owed. A literal where a phantom is demanded refuses BEFORE the proc
-//   runs — invented ids are wire-level errors, not env roundtrips.
-//   Stale handles expire ambiently: a new search-* retires the prior
-//   <found> inside the proc — old results SHOULD go stale.
-//
-// BRANCHES ARE THE PROTOCOL — outcomes are named arms, not ok/error
-// strings. `| chosen`/`| miss`, `| held`/`| refused` teach the model
-// the workflow's real branches; phantom types ride the arm payload.
-//
-// OBLIGATION LIFECYCLE:
-//   search-* mints <found!>  ->  select borrows it, mints <chosen!>
-//   get-user-details mints <user-known!>
-//   hold(user, flights, ...) mints <held!> — prepared args, unspent
-//   release(held) spends it free          — hang-up path
-//   confirm(held) spends it INTO book_reservation — the one commit
-//   release is registered BEFORE confirm: auto-discharge on hang-up
-//   releases, never books.
-//   No drop-* verbs: non-commitment handles owe no discharge. <held!>
-//   is the only obligation — release spends it free, confirm spends it
-//   into book_reservation, hang-up auto-releases.
+// `!` marks the one real commitment — <held!>. Everything else is
+// typed data: borrow-checked, discharge-free.
 
 import std/runtime
 
