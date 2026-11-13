@@ -20,3 +20,4 @@ tau-agent
 corpus-*.fixture.jsonl
 corpus-replay.fixture.jsonl
 guide_table.txt
+probe_collect.db
