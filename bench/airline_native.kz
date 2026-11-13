@@ -2,25 +2,15 @@
 // the phantom layer IS the experiment, so it lives in the declaration, not
 // a generator.
 //
-// What the types enforce, that the transliterated surface cannot:
-//   search-*            -> string<found!>              mints a result set
-//   select(flights: string<found>, ...)                borrows it — a literal
-//     or foreign handle refuses before the proc runs. Membership-checked:
-//     a flight_number not IN the result comes back `miss`, never books.
-//   get-user-details    -> string<user-known!>
-//   get-reservation-details -> string<reservation-known!>
-//   hold(user: <user-known>, flights: <chosen>, ...)   validates payment_id
-//     against the minted user record, derives origin/destination from the
-//     chosen legs, and mints <held!> whose VALUE is the prepared
-//     book_reservation args — one obligation, one pending commitment.
-//   release(held: string<!held>)                       spends it, no env call.
-//   confirm(held: string<!held>) -> <reservation-known!>  spends it INTO the
-//     one book_reservation env call. `release` is registered first so a
-//     hang-up's auto-discharge releases — an abandoned hold can never book.
-//   cancel / update-* borrow <reservation-known> — the reservation_id the
-//     env actually vended comes out of the handle, so a fabricated ID is a
-//     wire-level refusal, not an env roundtrip. Borrow, not consume: a
-//     hang-up must never fire cancel on the env.
+// Protocol v2 (native-protocol.k is the contract):
+//   Every outcome is a named branch — results/none/missing, chosen/miss,
+//   held/payment-failed/refused, booked/declined/unavailable,
+//   cancelled/ineligible/already-cancelled, updated/payment-failed/refused.
+//   `error` is residual transport only.
+//   `!` marks real commitments ONLY: <held!> is the sole obligation.
+//   found/chosen/user-known/reservation-known are typed borrows —
+//   forgery-proof, discharge-free. No drop-* verbs: non-commitment
+//   handles owe nothing; staleness is ambient.
 
 ~import std/runtime
 ~import app/tau_wire
@@ -67,6 +57,30 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     return yj.c.yyjson_obj_getn(o, key.ptr, key.len);
 }
 
+// Case-insensitive substring check — env error text arrives capitalized
+// inconsistently; branch classification must not depend on casing luck.
+fn __hasCI(hay: []const u8, needle: []const u8) bool {
+    if (needle.len > hay.len) return false;
+    var i: usize = 0;
+    while (i + needle.len <= hay.len) : (i += 1) {
+        var j: usize = 0;
+        while (j < needle.len) : (j += 1) {
+            if (std.ascii.toLower(hay[i + j]) != std.ascii.toLower(needle[j])) break;
+        }
+        if (j == needle.len) return true;
+    }
+    return false;
+}
+
+// `none` detector for search results: an empty JSON array is a state,
+// not an error.
+fn __emptyResult(s: []const u8) bool {
+    const d = yj.c.yyjson_read(@constCast(s.ptr), s.len, 0) orelse return false;
+    defer yj.c.yyjson_doc_free(d);
+    const r = yj.c.yyjson_doc_get_root(d);
+    return yj.c.yyjson_is_arr(r) and yj.c.yyjson_arr_size(r) == 0;
+}
+
 // ============================================================================
 // VOICE + AMBIENT READS
 // ============================================================================
@@ -78,7 +92,8 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
 }
 
 ~pub tor search-direct-flight { origin: string, destination: string, date: string }
-| ok string<found!>
+| results string<found>
+| none string
 | error string
 
 ~proc search-direct-flight|zig {
@@ -94,11 +109,13 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
         .{ origin_v, destination_v, date_v }) catch @panic("kopium: search_direct_flight args exceed scratch");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("search_direct_flight", __args);
     if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__emptyResult(__r.content)) return .{ .none = "no flights matched that search — widen it or tell the user" };
+    return .{ .results = __r.content };
 }
 
 ~pub tor search-onestop-flight { origin: string, destination: string, date: string }
-| ok string<found!>
+| results string<found>
+| none string
 | error string
 
 ~proc search-onestop-flight|zig {
@@ -114,11 +131,13 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
         .{ origin_v, destination_v, date_v }) catch @panic("kopium: search_onestop_flight args exceed scratch");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("search_onestop_flight", __args);
     if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__emptyResult(__r.content)) return .{ .none = "no flights matched that search — widen it or tell the user" };
+    return .{ .results = __r.content };
 }
 
 ~pub tor get-user-details { user_id: string }
-| ok string<user-known!>
+| found string<user-known>
+| missing string
 | error string
 
 ~proc get-user-details|zig {
@@ -129,12 +148,18 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
         "{{\"user_id\": \"{s}\"}}",
         .{ user_id_v }) catch @panic("kopium: get_user_details args exceed scratch");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("get_user_details", __args);
-    if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__r.err) {
+        const c = __r.content;
+        if (__hasCI(c, "not found") or __hasCI(c, "no such") or __hasCI(c, "does not exist") or __hasCI(c, "unknown user") or __hasCI(c, "unknown reservation"))
+            return .{ .missing = c };
+        return .{ .error = c };
+    }
+    return .{ .found = __r.content };
 }
 
 ~pub tor get-reservation-details { reservation_id: string }
-| ok string<reservation-known!>
+| found string<reservation-known>
+| missing string
 | error string
 
 ~proc get-reservation-details|zig {
@@ -145,12 +170,18 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
         "{{\"reservation_id\": \"{s}\"}}",
         .{ reservation_id_v }) catch @panic("kopium: get_reservation_details args exceed scratch");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("get_reservation_details", __args);
-    if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__r.err) {
+        const c = __r.content;
+        if (__hasCI(c, "not found") or __hasCI(c, "no such") or __hasCI(c, "does not exist") or __hasCI(c, "unknown user") or __hasCI(c, "unknown reservation"))
+            return .{ .missing = c };
+        return .{ .error = c };
+    }
+    return .{ .found = __r.content };
 }
 
 ~pub tor get-flight-status { flight_number: string, date: string }
-| ok string
+| reported string
+| unknown string
 | error string
 
 ~proc get-flight-status|zig {
@@ -163,22 +194,28 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
         "{{\"flight_number\": \"{s}\", \"date\": \"{s}\"}}",
         .{ flight_number_v, date_v }) catch @panic("kopium: get_flight_status args exceed scratch");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("get_flight_status", __args);
-    if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__r.err) {
+        const c = __r.content;
+        if (__hasCI(c, "not found") or __hasCI(c, "no such") or __hasCI(c, "unknown") or __hasCI(c, "does not exist"))
+            return .{ .unknown = c };
+        return .{ .error = c };
+    }
+    return .{ .reported = __r.content };
 }
 
 ~pub tor list-all-airports {}
-| ok string
+| airports string
 | error string
 
 ~proc list-all-airports|zig {
     const __r = @import("root").koru_app.koru_tau_wire.callIO("list_all_airports", "{}");
     if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    return .{ .airports = __r.content };
 }
 
 ~pub tor calculate { expression: string }
-| ok string
+| value string
+| invalid string
 | error string
 
 ~proc calculate|zig {
@@ -189,8 +226,13 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
         "{{\"expression\": \"{s}\"}}",
         .{ expression_v }) catch @panic("kopium: calculate args exceed scratch");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("calculate", __args);
-    if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__r.err) {
+        const c = __r.content;
+        if (__hasCI(c, "invalid") or __hasCI(c, "characters") or __hasCI(c, "syntax") or __hasCI(c, "parse"))
+            return .{ .invalid = c };
+        return .{ .error = c };
+    }
+    return .{ .value = __r.content };
 }
 
 // ============================================================================
@@ -202,7 +244,7 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
 // fabricated booking leg. Onestop pairs come back whole — booking the pair
 // is the only honest read of a one-stop itinerary.
 ~pub tor select { flights: string<found>, flight_number: string, date: string }
-| chosen string<chosen!>
+| chosen string<chosen>
 | miss string
 
 ~proc select|zig {
@@ -283,6 +325,7 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
 // a payment method the user never had is `refused`, not an env call.
 ~pub tor hold { user: string<user-known>, flights: string<chosen>, passengers: string, payment_id: string, amount: i64, cabin: string, flight_type: string, total_baggages: i64, nonfree_baggages: i64, insurance: string }
 | held string<held!>
+| payment-failed string
 | refused string
 
 ~proc hold|zig {
@@ -308,7 +351,7 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
                 first = false;
             }
         }
-        return .{ .refused = std.fmt.allocPrint(std.heap.page_allocator,
+        return .{ .payment_failed = std.fmt.allocPrint(std.heap.page_allocator,
             "payment_id '{s}' is not among this user's payment methods — they are: {s}", .{ payment_id, keys.items }) catch "payment_id not in the user's methods" };
     }
 
@@ -358,13 +401,22 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
 }
 
 ~pub tor confirm { held: string<!held> }
-| ok string<reservation-known!>
+| booked string<reservation-known>
+| declined string
+| unavailable string
 | error string
 
 ~proc confirm|zig {
     const __r = @import("root").koru_app.koru_tau_wire.callIO("book_reservation", held);
-    if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__r.err) {
+        const c = __r.content;
+        if (__hasCI(c, "declin") or __hasCI(c, "payment") or __hasCI(c, "insufficient") or __hasCI(c, "balance"))
+            return .{ .declined = c };
+        if (__hasCI(c, "unavailable") or __hasCI(c, "sold out") or __hasCI(c, "no flight") or __hasCI(c, "not available") or __hasCI(c, "full"))
+            return .{ .unavailable = c };
+        return .{ .error = c };
+    }
+    return .{ .booked = __r.content };
 }
 
 // ============================================================================
@@ -372,7 +424,9 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
 // ============================================================================
 
 ~pub tor cancel-reservation { reservation: string<reservation-known> }
-| ok string
+| cancelled string
+| ineligible string
+| already-cancelled string
 | error string
 
 ~proc cancel-reservation|zig {
@@ -387,12 +441,21 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const args = std.fmt.bufPrint(&buf,
         "{{\"reservation_id\": \"{s}\"}}", .{rid_v}) catch @panic("kopium: cancel args exceed scratch");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("cancel_reservation", args);
-    if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__r.err) {
+        const c = __r.content;
+        if (__hasCI(c, "already cancel"))
+            return .{ .already_cancelled = c };
+        if (__hasCI(c, "not eligible") or __hasCI(c, "cannot") or __hasCI(c, "policy") or __hasCI(c, "24 hour") or __hasCI(c, "insurance") or __hasCI(c, "basic economy") or __hasCI(c, "not allowed"))
+            return .{ .ineligible = c };
+        return .{ .error = c };
+    }
+    return .{ .cancelled = __r.content };
 }
 
 ~pub tor update-reservation-flights { reservation: string<reservation-known>, flights: string<chosen>, cabin: string, payment_id: string }
-| ok string<reservation-known!>
+| updated string
+| payment-failed string
+| refused string
 | error string
 
 ~proc update-reservation-flights|zig {
@@ -421,12 +484,21 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
         "{{\"reservation_id\": \"{s}\", \"cabin\": \"{s}\", \"flights\": {s}, \"payment_id\": \"{s}\"}}",
         .{ rid_v, cab_v, legs_raw[0..legs_len], pid_v }) catch @panic("kopium: update_reservation_flights args OOM");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("update_reservation_flights", args);
-    if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__r.err) {
+        const c = __r.content;
+        if (__hasCI(c, "payment") or __hasCI(c, "declin") or __hasCI(c, "insufficient"))
+            return .{ .payment_failed = c };
+        if (__hasCI(c, "not eligible") or __hasCI(c, "cannot") or __hasCI(c, "policy") or __hasCI(c, "not allowed"))
+            return .{ .refused = c };
+        return .{ .error = c };
+    }
+    return .{ .updated = __r.content };
 }
 
 ~pub tor update-reservation-baggages { reservation: string<reservation-known>, total_baggages: i64, nonfree_baggages: i64, payment_id: string }
-| ok string<reservation-known!>
+| updated string
+| payment-failed string
+| refused string
 | error string
 
 ~proc update-reservation-baggages|zig {
@@ -443,12 +515,21 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
         "{{\"reservation_id\": \"{s}\", \"total_baggages\": {d}, \"nonfree_baggages\": {d}, \"payment_id\": \"{s}\"}}",
         .{ rid_v, total_baggages, nonfree_baggages, pid_v }) catch @panic("kopium: update_reservation_baggages args OOM");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("update_reservation_baggages", args);
-    if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__r.err) {
+        const c = __r.content;
+        if (__hasCI(c, "payment") or __hasCI(c, "declin") or __hasCI(c, "insufficient"))
+            return .{ .payment_failed = c };
+        if (__hasCI(c, "not eligible") or __hasCI(c, "cannot") or __hasCI(c, "policy") or __hasCI(c, "not allowed"))
+            return .{ .refused = c };
+        return .{ .error = c };
+    }
+    return .{ .updated = __r.content };
 }
 
 ~pub tor update-reservation-passengers { reservation: string<reservation-known>, passengers: string }
-| ok string<reservation-known!>
+| updated string
+| payment-failed string
+| refused string
 | error string
 
 ~proc update-reservation-passengers|zig {
@@ -463,8 +544,15 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
         "{{\"reservation_id\": \"{s}\", \"passengers\": {s}}}",
         .{ rid_v, passengers }) catch @panic("kopium: update_reservation_passengers args OOM");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("update_reservation_passengers", args);
-    if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__r.err) {
+        const c = __r.content;
+        if (__hasCI(c, "payment") or __hasCI(c, "declin") or __hasCI(c, "insufficient"))
+            return .{ .payment_failed = c };
+        if (__hasCI(c, "not eligible") or __hasCI(c, "cannot") or __hasCI(c, "policy") or __hasCI(c, "not allowed"))
+            return .{ .refused = c };
+        return .{ .error = c };
+    }
+    return .{ .updated = __r.content };
 }
 
 // What a minted handle CARRIES — the possession type says you hold it, this
@@ -475,37 +563,10 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
 // point of need; live obligations are bridge custody state, not a
 // domain call.
 
-// AMBIENT RETIREMENT — every minted tag needs a discharger or the bridge's
-// hang-up calls it a leak. These are no-ops: a search result or a user
-// record is a capability, not a resource claim — there is nothing to
-// release env-side, only the obligation to retire. The model may call them
-// to drop a stale result; at hang-up the bridge fires them on leftovers.
-~pub tor drop-search { found: string<!found> } -> string
-~proc drop-search|zig {
-    _ = found;
-    return "search result dropped";
-}
-
-~pub tor drop-choice { chosen: string<!chosen> } -> string
-~proc drop-choice|zig {
-    _ = chosen;
-    return "selection dropped";
-}
-
-~pub tor drop-user { user: string<!user-known> } -> string
-~proc drop-user|zig {
-    _ = user;
-    return "user record dropped";
-}
-
-~pub tor drop-reservation { reservation: string<!reservation-known> } -> string
-~proc drop-reservation|zig {
-    _ = reservation;
-    return "reservation record dropped";
-}
-
 ~pub tor send-certificate { user: string<user-known>, amount: i64 }
-| ok string
+| sent string
+| insufficient string
+| refused string
 | error string
 
 ~proc send-certificate|zig {
@@ -519,12 +580,19 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     const args = std.fmt.allocPrint(std.heap.page_allocator,
         "{{\"user_id\": \"{s}\", \"amount\": {d}}}", .{ uid_v, amount }) catch @panic("kopium: send_certificate args OOM");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("send_certificate", args);
-    if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    if (__r.err) {
+        const c = __r.content;
+        if (__hasCI(c, "insufficient") or __hasCI(c, "balance") or __hasCI(c, "amount"))
+            return .{ .insufficient = c };
+        if (__hasCI(c, "payment") or __hasCI(c, "declin") or __hasCI(c, "not eligible") or __hasCI(c, "cannot"))
+            return .{ .refused = c };
+        return .{ .error = c };
+    }
+    return .{ .sent = __r.content };
 }
 
 ~pub tor transfer-to-human-agents { summary: string }
-| ok string
+| handed-off string
 | error string
 
 ~proc transfer-to-human-agents|zig {
@@ -535,7 +603,7 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
         "{{\"summary\": \"{s}\"}}", .{summary_v}) catch @panic("kopium: transfer args exceed scratch");
     const __r = @import("root").koru_app.koru_tau_wire.callIO("transfer_to_human_agents", args);
     if (__r.err) return .{ .error = __r.content };
-    return .{ .ok = __r.content };
+    return .{ .handed_off = __r.content };
 }
 
 // release BEFORE confirm is load-bearing: `get_discharge_event` returns the
@@ -560,8 +628,4 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     update-reservation-passengers(10)
     send-certificate(10)
     transfer-to-human-agents(1)
-    drop-search(1)
-    drop-choice(1)
-    drop-user(1)
-    drop-reservation(1)
 }
