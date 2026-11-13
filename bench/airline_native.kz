@@ -470,15 +470,10 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
 // What a minted handle CARRIES — the possession type says you hold it, this
 // says what it is. Wire-visible so the model can ask mid-session; vocab-doc
 // also runs it at boot and appends it to the prompt.
-~pub tor describe-handles {} -> string
-~proc describe-handles|zig {
-    return
-        "<found> — a search result list; each leg carries flight_number, origin, destination, scheduled times, date, available_seats, prices\n" ++
-        "<user-known> — the user record: user_id, name, address, email, dob, payment_methods (their ids — gift cards, certificates, credit cards — and amounts), saved_passengers, membership, reservations\n" ++
-        "<chosen> — the legs select cut out: {flights: [{flight_number, date}], origin, destination}\n" ++
-        "<held> — the prepared book_reservation arguments, waiting for confirm or release\n" ++
-        "<reservation-known> — the reservation record: reservation_id, user_id, flights, passengers, payment_history, total_baggages, nonfree_baggages, insurance, status, total_price";
-}
+// describe-handles removed 2026-11-13 — a doc-string verb is not a
+// protocol verb. Type legends belong in the guide/vocabulary render at
+// point of need; live obligations are bridge custody state, not a
+// domain call.
 
 // AMBIENT RETIREMENT — every minted tag needs a discharger or the bridge's
 // hang-up calls it a leak. These are no-ops: a search result or a user
@@ -569,5 +564,4 @@ fn __jfield(obj: ?*yj.c.yyjson_val, key: []const u8) ?*yj.c.yyjson_val {
     drop-choice(1)
     drop-user(1)
     drop-reservation(1)
-    describe-handles(1)
 }
