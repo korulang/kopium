@@ -24,7 +24,7 @@ import std/store
 import std/string
 import std/bridge
 import std/interpreter
-import app/airline_native
+import app/native_protocol
 import app/corpus_env
 import app/tau_wire
 import app/db_scope
@@ -427,20 +427,20 @@ seed = app/tau_wire:seed-text(): st |> observe(role: "assistant", text: st)
 // not success.
 tor demo-seed {}
 demo-seed = observe-human(text: "My user ID is DEMO_USER_0001, please look me up.")
-    |> observe(role: "assistant", text: "get-user-details(user_id: \"DEMO_USER_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
-    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"error\",\"value\":\"Error: User DEMO_USER_0001 not found\"}")
-    |> observe(role: "assistant", text: "get-user-details(user_id: \"demo_user_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
-    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"ok\",\"value\":\"{\\\"user_id\\\": \\\"demo_user_0001\\\", \\\"name\\\": {\\\"first_name\\\": \\\"Demo\\\"}}\"}")
+    |> observe(role: "assistant", text: "get-user-details(user_id: \"DEMO_USER_0001\") | found u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
+    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"missing\",\"value\":\"Error: User DEMO_USER_0001 not found\"}")
+    |> observe(role: "assistant", text: "get-user-details(user_id: \"demo_user_0001\") | found u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
+    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"found\",\"value\":\"{\\\"user_id\\\": \\\"demo_user_0001\\\", \\\"name\\\": {\\\"first_name\\\": \\\"Demo\\\"}}\"}")
 
 // Arm-B2: wire-only exemplar — the lookup error->retry exchange WITHOUT
 // the prose-collapse exemplar. Arm-B's prose turn is the suspected
 // collapse trigger (it models the failure mode in the agent's own voice).
 tor demo-wire-seed {}
 demo-wire-seed = observe-human(text: "My user ID is DEMO_USER_0001, please look me up.")
-    |> observe(role: "assistant", text: "get-user-details(user_id: \"DEMO_USER_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
-    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"error\",\"value\":\"Error: User DEMO_USER_0001 not found\"}")
-    |> observe(role: "assistant", text: "get-user-details(user_id: \"demo_user_0001\") | ok u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
-    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"ok\",\"value\":\"{\\\"user_id\\\": \\\"demo_user_0001\\\", \\\"name\\\": {\\\"first_name\\\": \\\"Demo\\\"}}\"}")
+    |> observe(role: "assistant", text: "get-user-details(user_id: \"DEMO_USER_0001\") | found u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
+    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"missing\",\"value\":\"Error: User DEMO_USER_0001 not found\"}")
+    |> observe(role: "assistant", text: "get-user-details(user_id: \"demo_user_0001\") | found u |>\nsay(text: \"Found you, {{ u.user_id }}!\")")
+    |> observe(role: "user", text: "step 1/1 result: {\"branch\":\"found\",\"value\":\"{\\\"user_id\\\": \\\"demo_user_0001\\\", \\\"name\\\": {\\\"first_name\\\": \\\"Demo\\\"}}\"}")
 
 tor demo-wire-gate {}
 demo-wire-gate = std/env:is-set(name: "KOPIUM_DEMO_WIRE")

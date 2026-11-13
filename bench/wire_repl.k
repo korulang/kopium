@@ -19,7 +19,7 @@ import std/fmt
 import std/bridge
 import std/interpreter
 import app/airline_tools
-import app/airline_native
+import app/native_protocol
 import app/corpus_env
 import app/tau_wire
 import app/db_scope

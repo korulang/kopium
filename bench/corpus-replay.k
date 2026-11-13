@@ -14,7 +14,7 @@ import std/bridge
 import std/interpreter
 import std/string
 import app/airline_tools
-import app/airline_native
+import app/native_protocol
 import app/tau_wire
 import app/corpus_env
 import koru/yyjson

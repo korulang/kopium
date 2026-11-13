@@ -11,7 +11,7 @@
 //
 // name<x> possession types are deliberately NOT emitted — the
 // transliterated arm mints no handles; that layer is hand-authored in
-// airline_native.kz, where the phantoms ARE the experiment.
+// native_protocol.kz, where the phantoms ARE the experiment.
 //
 // Run: ./gen_airline.sh  (dump + koruc + run)
 // Output: airline_tools.k + airline_vocab_doc.md — GENERATED files.

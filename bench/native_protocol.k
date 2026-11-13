@@ -1,5 +1,5 @@
 // native-protocol.k — the hand-written tool surface, declarations only.
-// Pure Koru (.k): no host lines. Proc bodies live in airline_native.kz;
+// Pure Koru (.k): no host lines. Proc bodies live in native_protocol.kz;
 // the contract the model learns lives here.
 //
 // `!` marks the one real commitment — <held!>. Everything else is
@@ -156,36 +156,13 @@ pub tor transfer-to-human-agents { summary: string }
 
 import std/guide
 
-// `missing` on a lookup means the id is wrong or invented — resolve it,
-// never fabricate. This is the task-10 lesson as a branch.
-std/guide:add(get-reservation-details -> missing) @"guides/get-reservation-details.missing.md"} on the user record,
-    or ask the user for the confirmation number, then retry.
-    Never pass a placeholder.
-}
-
-std/guide:add(get-user-details -> missing) @"guides/get-user-details.missing.md"} on a reservation record —
-    never invent one.
-}
-
-// `payment-failed` names the recurring tau2 failure: payment_id must be
-// a KEY of the user record's payment_methods object — never invented.
-std/guide:add(hold -> payment-failed) @"guides/hold.payment-failed.md"} on the
-    user record — read them from the <user-known> handle's
-    content, or ask the user which method to use.
-}
-
-std/guide:add(confirm -> declined) @"guides/confirm.declined.md"} the env rejected. Release the hold
-    (release(held: ...)), re-check it against {{ payment_methods }},
-    and hold again.
-}
-
+std/guide:add(get-reservation-details -> missing) @"guides/get-reservation-details.missing.md"
+std/guide:add(get-user-details -> missing) @"guides/get-user-details.missing.md"
+std/guide:add(hold -> payment-failed) @"guides/hold.payment-failed.md"
+std/guide:add(confirm -> declined) @"guides/confirm.declined.md"
 std/guide:add(confirm -> unavailable) @"guides/confirm.unavailable.md"
-
 std/guide:add(cancel-reservation -> ineligible) @"guides/cancel-reservation.ineligible.md"
-
-std/guide:add(select -> miss) @"guides/select.miss.md"} in the <found> handle's content for the exact
-    flight_number, or search again.
-}
+std/guide:add(select -> miss) @"guides/select.miss.md"
 
 // ------------------------------------------------------------------
 // THE REGISTRY — what the scope declares. Order is load-bearing:

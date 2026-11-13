@@ -111,7 +111,7 @@ catalog you diverge from.
 The agent runs the NATIVE protocol — NOT the old transliterated
 surface. Contract: `/Users/larsde/src/kopium/bench/native-protocol.k`
 (declarations, named outcome branches, `std/runtime:register`).
-Implementation: `/Users/larsde/src/kopium/bench/airline_native.kz`
+Implementation: `/Users/larsde/src/kopium/bench/native_protocol.kz`
 (proc bodies, phantom types `string<found>`/`<chosen>`/`<user-known>`/
 `<reservation-known>`/`<held!>`, branch classification).
 Doctrine: `/Users/larsde/src/kopium/bench/guides/*.md` — external
@@ -125,7 +125,7 @@ KOPIUM_SCOPE env var anymore.
 All in `/Users/larsde/src/kopium/bench/`:
 
 - `native-protocol.k` — declarations, branch names, registry, guide keys
-- `airline_native.kz` — procs: callIO args, branch classification,
+- `native_protocol.kz` — procs: callIO args, branch classification,
   phantom mint/borrow handling
 - `guides/*.md` — doctrine prose per (tor, branch); `{{ slot }}`
   templates resolve against bindings (MISSING = produce it first)

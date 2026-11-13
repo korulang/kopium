@@ -10,7 +10,7 @@ import std/fmt
 import std/bridge
 import std/interpreter
 import std/string
-import app/airline_native
+import app/native_protocol
 import app/tau_wire
 import koru/yyjson
 

@@ -1,4 +1,5 @@
-// airline_native.kz — the Koru-native arm. Hand-authored register block:
+// native-protocol.kz — impl-only companion to native-protocol.k.
+// Decls live in the .k contract; this file carries ~proc bodies only.
 // the phantom layer IS the experiment, so it lives in the declaration, not
 // a generator.
 //
@@ -85,16 +86,11 @@ fn __emptyResult(s: []const u8) bool {
 // VOICE + AMBIENT READS
 // ============================================================================
 
-~pub tor say { text: string } -> string
 
 ~proc say|zig {
     return @import("root").koru_app.koru_tau_wire.sayIO(text);
 }
 
-~pub tor search-direct-flight { origin: string, destination: string, date: string }
-| results string<found>
-| none string
-| error string
 
 ~proc search-direct-flight|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -113,10 +109,6 @@ fn __emptyResult(s: []const u8) bool {
     return .{ .results = __r.content };
 }
 
-~pub tor search-onestop-flight { origin: string, destination: string, date: string }
-| results string<found>
-| none string
-| error string
 
 ~proc search-onestop-flight|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -135,10 +127,6 @@ fn __emptyResult(s: []const u8) bool {
     return .{ .results = __r.content };
 }
 
-~pub tor get-user-details { user_id: string }
-| found string<user-known>
-| missing string
-| error string
 
 ~proc get-user-details|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -157,10 +145,6 @@ fn __emptyResult(s: []const u8) bool {
     return .{ .found = __r.content };
 }
 
-~pub tor get-reservation-details { reservation_id: string }
-| found string<reservation-known>
-| missing string
-| error string
 
 ~proc get-reservation-details|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -179,10 +163,6 @@ fn __emptyResult(s: []const u8) bool {
     return .{ .found = __r.content };
 }
 
-~pub tor get-flight-status { flight_number: string, date: string }
-| reported string
-| unknown string
-| error string
 
 ~proc get-flight-status|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -203,9 +183,6 @@ fn __emptyResult(s: []const u8) bool {
     return .{ .reported = __r.content };
 }
 
-~pub tor list-all-airports {}
-| airports string
-| error string
 
 ~proc list-all-airports|zig {
     const __r = @import("root").koru_app.koru_tau_wire.callIO("list_all_airports", "{}");
@@ -213,10 +190,6 @@ fn __emptyResult(s: []const u8) bool {
     return .{ .airports = __r.content };
 }
 
-~pub tor calculate { expression: string }
-| value string
-| invalid string
-| error string
 
 ~proc calculate|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
@@ -243,9 +216,6 @@ fn __emptyResult(s: []const u8) bool {
 // result set, so a flight_number the search never returned is `miss`, not a
 // fabricated booking leg. Onestop pairs come back whole — booking the pair
 // is the only honest read of a one-stop itinerary.
-~pub tor select { flights: string<found>, flight_number: string, date: string }
-| chosen string<chosen>
-| miss string
 
 ~proc select|zig {
     const doc = yj.c.yyjson_read(@constCast(flights.ptr), flights.len, 0) orelse
@@ -323,10 +293,6 @@ fn __emptyResult(s: []const u8) bool {
 // hold gathers everything book_reservation needs into ONE pending
 // commitment. The payment_id is checked against the minted user record —
 // a payment method the user never had is `refused`, not an env call.
-~pub tor hold { user: string<user-known>, flights: string<chosen>, passengers: string, payment_id: string, amount: i64, cabin: string, flight_type: string, total_baggages: i64, nonfree_baggages: i64, insurance: string }
-| held string<held!>
-| payment-failed string
-| refused string
 
 ~proc hold|zig {
     const udoc = yj.c.yyjson_read(@constCast(user.ptr), user.len, 0) orelse
@@ -393,18 +359,12 @@ fn __emptyResult(s: []const u8) bool {
 
 // Registered BEFORE confirm: auto-discharge takes the first non-reissuing
 // discharger, and a hang-up must release — never book.
-~pub tor release { held: string<!held> } -> string
 
 ~proc release|zig {
     _ = held;
     return "released — the booking was not placed";
 }
 
-~pub tor confirm { held: string<!held> }
-| booked string<reservation-known>
-| declined string
-| unavailable string
-| error string
 
 ~proc confirm|zig {
     const __r = @import("root").koru_app.koru_tau_wire.callIO("book_reservation", held);
@@ -423,11 +383,6 @@ fn __emptyResult(s: []const u8) bool {
 // RESERVATION LIFECYCLE — borrow the minted record, extract the real id
 // ============================================================================
 
-~pub tor cancel-reservation { reservation: string<reservation-known> }
-| cancelled string
-| ineligible string
-| already-cancelled string
-| error string
 
 ~proc cancel-reservation|zig {
     const doc = yj.c.yyjson_read(@constCast(reservation.ptr), reservation.len, 0) orelse
@@ -452,11 +407,6 @@ fn __emptyResult(s: []const u8) bool {
     return .{ .cancelled = __r.content };
 }
 
-~pub tor update-reservation-flights { reservation: string<reservation-known>, flights: string<chosen>, cabin: string, payment_id: string }
-| updated string
-| payment-failed string
-| refused string
-| error string
 
 ~proc update-reservation-flights|zig {
     const rdoc = yj.c.yyjson_read(@constCast(reservation.ptr), reservation.len, 0) orelse
@@ -495,11 +445,6 @@ fn __emptyResult(s: []const u8) bool {
     return .{ .updated = __r.content };
 }
 
-~pub tor update-reservation-baggages { reservation: string<reservation-known>, total_baggages: i64, nonfree_baggages: i64, payment_id: string }
-| updated string
-| payment-failed string
-| refused string
-| error string
 
 ~proc update-reservation-baggages|zig {
     const rdoc = yj.c.yyjson_read(@constCast(reservation.ptr), reservation.len, 0) orelse
@@ -526,11 +471,6 @@ fn __emptyResult(s: []const u8) bool {
     return .{ .updated = __r.content };
 }
 
-~pub tor update-reservation-passengers { reservation: string<reservation-known>, passengers: string }
-| updated string
-| payment-failed string
-| refused string
-| error string
 
 ~proc update-reservation-passengers|zig {
     const rdoc = yj.c.yyjson_read(@constCast(reservation.ptr), reservation.len, 0) orelse
@@ -563,11 +503,6 @@ fn __emptyResult(s: []const u8) bool {
 // point of need; live obligations are bridge custody state, not a
 // domain call.
 
-~pub tor send-certificate { user: string<user-known>, amount: i64 }
-| sent string
-| insufficient string
-| refused string
-| error string
 
 ~proc send-certificate|zig {
     const udoc = yj.c.yyjson_read(@constCast(user.ptr), user.len, 0) orelse
@@ -591,9 +526,6 @@ fn __emptyResult(s: []const u8) bool {
     return .{ .sent = __r.content };
 }
 
-~pub tor transfer-to-human-agents { summary: string }
-| handed-off string
-| error string
 
 ~proc transfer-to-human-agents|zig {
     var e0: [1024]u8 = undefined;
@@ -609,23 +541,3 @@ fn __emptyResult(s: []const u8) bool {
 // release BEFORE confirm is load-bearing: `get_discharge_event` returns the
 // first non-reissuing discharger in register order, and a session hang-up
 // must release an abandoned hold — never fire book_reservation on it.
-~std/runtime:register(scope: "airline-native") {
-    say(1)
-    list-all-airports(1)
-    calculate(1)
-    get-flight-status(1)
-    search-direct-flight(1)
-    search-onestop-flight(1)
-    get-user-details(1)
-    get-reservation-details(1)
-    select(2)
-    hold(2)
-    release(1)
-    confirm(10)
-    cancel-reservation(10)
-    update-reservation-flights(10)
-    update-reservation-baggages(10)
-    update-reservation-passengers(10)
-    send-certificate(10)
-    transfer-to-human-agents(1)
-}
