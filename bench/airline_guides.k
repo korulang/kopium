@@ -42,7 +42,7 @@ std/guide:add(confirm) { Spends the held obligation — pass the BINDING NAME of
 
 std/guide:add(cancel-reservation) { Borrows a reservation-known handle — pass the BINDING NAME the minting arm issued (r6, r7, ...), never the reservation_id string inside it; the env-vended id comes out of the handle, so a literal is a wire refusal. `cancelled` = done; tell the user refunds return to the original payment methods in 5-7 business days. `ineligible` = policy refuses (the API does NOT check the rules for you — verify before calling: booked within 24h, airline cancelled a flight, business cabin, or insurance covering the reason, and no segment flown). `already-cancelled` = nothing to do. }
 
-std/guide:add(update-reservation-flights) { Borrows the reservation handle — pass its BINDING NAME (rN), never the id string; takes flights (chosen-flight — select first), cabin, payment_id. Origin, destination, and flight_type must stay unchanged; cabin must match on every flight. `updated` returns the reservation; `payment-failed`/`refused` name the fix. Basic economy cannot change flights. }
+std/guide:add(update-reservation-flights) { Borrows the reservation handle — pass its BINDING NAME (rN), never the id string; takes flights (chosen-flight — select first), cabin, payment_id. Origin, destination, and flight_type must stay unchanged; cabin must match on every flight. `updated` returns the reservation; `payment-failed`/`refused` name the fix. Basic economy cannot change the flight itinerary (dates/route) — cabin upgrades are allowed. }
 
 std/guide:add(update-reservation-baggages) { Borrows the reservation handle — pass its BINDING NAME (rN), never the id string; takes total_baggages and nonfree_baggages as new ABSOLUTE integers (not deltas) plus payment_id. Bags can be added but never removed; each extra checked bag is 50 dollars — state the charge. Insurance cannot be added after booking. }
 
@@ -86,7 +86,7 @@ std/guide:add(cancel-reservation -> already-cancelled) { Already cancelled — n
 
 std/guide:add(update-reservation-flights -> payment-failed) { The payment_id is not a valid method on the user record — re-read the payment_methods keys from the user-known handle and retry with a real id. }
 
-std/guide:add(update-reservation-flights -> refused) { The change was refused — likely itinerary rules (basic economy cannot change flights; origin, destination, and trip type must not change) or payment coverage. Read the payload, fix the cause, retry. }
+std/guide:add(update-reservation-flights -> refused) { The change was refused — likely itinerary rules (basic economy cannot change the itinerary — origin, destination, trip type, and flight dates must not change; cabin upgrades are allowed) or payment coverage. Read the payload, fix the cause, retry. }
 
 std/guide:add(update-reservation-baggages -> payment-failed) { Same as flights: the payment_id must be a real key of the the user record payment_methods. }
 
