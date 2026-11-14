@@ -32,6 +32,22 @@ beneath (marshal, evaluator, comparability) but doesn't name what reaches
 the agent's surface, it is a frame error — not diligence. Correct execution
 inside the wrong frame is how this failure survives scrutiny.
 
+## Measurement discipline — receipt first, always
+
+A benchmark reward is a lagging indicator, never the oracle. The oracle is
+the request body (`bench/results/runs/*/receipts/call_*.json`) — what the
+model actually saw.
+
+- 0.0 on a repeated shape means READ THE RECEIPTS before running anything
+  else. A wall of identical failures is a protocol bug until proven
+  otherwise, not a model limitation.
+- Never run-and-patch: no rerun to "see if it works" without first naming
+  what the request body contained.
+- "Model issue" is a hypothesis allowed ONLY after the request body is
+  verified clean. Until then it is blame without evidence.
+- If the trajectory and the request body disagree, the request body wins —
+  the trajectory is downstream of whatever the model was shown.
+
 ## The shame wall
 
 This failure mode is on the public wall:
