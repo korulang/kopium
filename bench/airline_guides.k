@@ -22,7 +22,7 @@ import std/guide
 // FIELD TRUTH — what each verb takes and what its payload carries.
 // ============================================================================
 
-std/guide:add(say) { The voice channel — the only text the user hears. Always "quoted"; {{ x.f }} inside splices one level into the record bound to x. A bare word or id is a scalar — splice it as {{ x }}, never {{ x.f }}. Emit say LAST: no continuation arrow and no outcome arm after it. }
+std/guide:add(say) { The voice channel — the only text the user hears. Always "quoted"; {{ x.f }} inside splices one level into the record bound to x. A bare word or id is a scalar — splice it as {{ x }}, never {{ x.f }}. say is a statement on its own line — the next call starts on a new line; no continuation arrow and no outcome arm after it. }
 
 std/guide:add(get-user-details) { Takes user_id. The profile returns a user-known handle whose content is JSON: user_id, name, email, dob, address, membership (regular|silver|gold), reservations (list of reservation ids), saved_passengers, and payment_methods as an OBJECT keyed by payment id. The payment ids are the KEYS of payment_methods — there is no top-level list. Wire templates lift ONE level only: render a nested object whole, never a deeper path. }
 

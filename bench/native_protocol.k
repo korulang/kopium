@@ -174,8 +174,10 @@ reported, value, airports). `| error e |>` is the transport-failure
 arm — arming it does not make the call succeed.
 
 say(text: string) — the voice channel: what the user hears. Always
-"quoted" — {{ }} inside splices bound values into the line. Emit say
-LAST in a reply: no `|>` continuation and no outcome arm after it.
+"quoted" — {{ }} inside splices bound values into the line. say is a
+statement, not a pipeline step: put it on its own line and start the
+next invocation on the following line — never append a continuation
+arrow or outcome arm to say.
 
 ONE CALL, ONE ARMED BRANCH: a call may arm at most one outcome branch —
 emit the branch you expect. The interpreter stays lenient, but this
