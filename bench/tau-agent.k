@@ -170,6 +170,19 @@ against these conditions, reading them against the records you fetch.
         | ok |> _
         | err e |> app/tau_wire:die(msg: e)
 
+// The live callable surface for this turn — held handles plus the verbs
+// their phantom args make legal right now. Rendered fresh with the grammar
+// so a `defined` flow or a discharged hold changes what the model sees.
+tor afford-note { br: *std/bridge:Bridge<session> } -> string
+afford-note = std/bridge:affordances(br)
+| ok af |> std/fmt:fmt.blk {
+
+CALLABLE NOW — handles you hold and verbs legal this turn. Phantom args take the binding name (rN), never the id string.
+
+{{ af:s }}
+}: an -> an
+| not-found _ -> ""
+
 // Drain the bridge's call_step JSONL to the side channel after each run —
 // one file per drain under KOPIUM_RECEIPT_DIR, origin-stamped ("harness"
 // for the agent's own grammar() read, "model" for agent-emitted wires).
@@ -188,9 +201,9 @@ drain-calls = std/bridge:take-calls(br) |> app/tau_wire:write-callsteps(origin)
 tor ask { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string }
 ask = std/store:query(transcript)
 ! query h |> std/bridge:grammar(br)
-    | ok g |> drain-calls(br, origin: "harness") |> std/store:query(domain_policy)
+    | ok g |> drain-calls(br, origin: "harness") |> afford-note(br): an |> std/store:query(domain_policy)
         ! query dp |> std/fmt:fmt.blk {
-{{ g:s }}{{ dp:S }}
+{{ g:s }}{{ an:s }}{{ dp:S }}
             }: sysg |> headless/wire:msg(role: "system", content: sysg): sysmsg
             |> app/tau_wire:body(model, max_tokens, temperature, syshead: sysmsg, history: h): req
             |> app/tau_wire:mark-call-start()

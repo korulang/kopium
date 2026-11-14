@@ -141,28 +141,10 @@ pub tor transfer-to-human-agents { summary: string }
 | error string
 
 // ------------------------------------------------------------------
-// GUIDES — doctrine rows keyed to the branches above. These fire at
-// dispatch, once per session, at the first resolution to their key.
-// Domain-general only: field truth, workflow rules, recovery patterns —
-// never task ids, names, or answers.
-//
-// TEMPLATE CONTRACT (spec): guide text carries {{ slot }} references
-// that resolve against the reply/session binding context at fire time —
-// same one-level lift as say text. A slot with no bound source renders
-// as an explicit MISSING marker, telling the agent it must produce the
-// binding before the call is valid — the guide names its own
-// precondition instead of silently blanking.
+// GUIDES — recovery doctrine is keyed to the branches above and lives in
+// app/airline_guides (the slot-free live table). The authored {{ }} spec
+// is bench/guides/*.md; std/guide stays dumb and never interpolates.
 // ------------------------------------------------------------------
-
-import std/guide
-
-std/guide:add(get-reservation-details -> missing) @"guides/get-reservation-details.missing.md"
-std/guide:add(get-user-details -> missing) @"guides/get-user-details.missing.md"
-std/guide:add(hold -> payment-failed) @"guides/hold.payment-failed.md"
-std/guide:add(confirm -> declined) @"guides/confirm.declined.md"
-std/guide:add(confirm -> unavailable) @"guides/confirm.unavailable.md"
-std/guide:add(cancel-reservation -> ineligible) @"guides/cancel-reservation.ineligible.md"
-std/guide:add(select -> miss) @"guides/select.miss.md"
 
 // ------------------------------------------------------------------
 // THE CONTRACT — scope documentation served with the vocabulary.
