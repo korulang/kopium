@@ -203,7 +203,11 @@ ask = std/store:query(transcript)
 ! query h |> std/bridge:grammar(br)
     | ok g |> drain-calls(br, origin: "harness") |> afford-note(br): an |> std/store:query(domain_policy)
         ! query dp |> std/fmt:fmt.blk {
-{{ g:s }}{{ an:s }}{{ dp:S }}
+{{ g:s }}{{ an:s }}
+
+REPLY LANES — invocations act; say(text: "...") reaches the user; note(text: "...") thinks for the observer; bare prose binds as residue and reaches nobody — reasoning only, never the answer.
+
+{{ dp:S }}
             }: sysg |> headless/wire:msg(role: "system", content: sysg): sysmsg
             |> app/tau_wire:body(model, max_tokens, temperature, syshead: sysmsg, history: h): req
             |> app/tau_wire:mark-call-start()
@@ -359,7 +363,7 @@ drive = app/tau_wire:channel()
 // e.g. a reasoning model muted by effort:none), and the strike lands under
 // its own kind so session.json separates silence from malformed wire.
 tor empty-reply {}
-empty-reply = observe(role: "user", text: "your reply carried no wire — emit wire text: `say(text: ...)` reaches the user, `verb(field: ...)` calls; `vocabulary()` lists every verb")
+empty-reply = observe(role: "user", text: "your reply carried no wire — emit wire text: `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls; `vocabulary()` lists every verb")
     |> observe(role: "assistant", text: "say(text: \"One moment — let me check that for you.\")")
     |> app/tau_wire:count-rejection(kind: "empty")
 
@@ -404,7 +408,7 @@ loop = clear-reply()
             | stop |> app/tau_wire:session-end() |> std/io:eprint.ln("--- eof, session ends")
             | again |> app/tau_wire:bump-fail(n: silents, bound)
                 | edge nf |> std/fmt:fmt.blk {
-                    observer: {{ nf:d }} consecutive replies reached nobody. `say(text: ...)` reaches the user, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what are you waiting for?
+                    observer: {{ nf:d }} consecutive replies reached nobody. `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what are you waiting for?
                 }: m |> observe(role: "user", text: m)
                     |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
                 | retry nf |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
@@ -413,7 +417,7 @@ loop = clear-reply()
         | yes |> app/tau_wire:session-end()
         | no |> app/tau_wire:bump-fail(n: fails, bound)
             | edge nf |> std/fmt:fmt.blk {
-                observer: {{ nf:d }} consecutive refused replies. `say(text: ...)` reaches the user, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what were you trying to do?
+                observer: {{ nf:d }} consecutive refused replies. `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what were you trying to do?
             }: m |> observe(role: "user", text: m)
                 |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
             | retry nf |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
