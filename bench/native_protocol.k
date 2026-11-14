@@ -173,10 +173,23 @@ std/guide:add(select -> miss) @"guides/select.miss.md"
 - doc
 # Tool contract — airline-native
 
-Handles carry "quoted" JSON text — a <found>/<chosen>/<user-known>/
-<reservation-known>/<held!> binding's content is the payload string
-the verb returned. Read fields out of it as JSON; pass handles by
-name, never their contents, where a phantom type is demanded.
+Handles carry "quoted" JSON text — a found/chosen/user-known/
+reservation-known/held binding's content is the payload string
+the verb returned. Read fields out of it as JSON.
+
+PHANTOM ARGS TAKE BINDING NAMES: where a signature demands
+<found>, <chosen>, <user-known>, <reservation-known>, or <!held>,
+pass the BARE rN name the minting arm issued (r6, r9, ...) — the
+names in the bound-lines/you-hold listing. NEVER the id string,
+never JSON inside, and never a field path: `r5.reservation_id`
+unwraps the handle to the string and is refused identically to a
+literal. A phantom arg that is not a bare held name dies before
+the call runs.
+
+ARM THE OUTCOME, NOT THE FALLBACK: `| found r |>` arms the branch
+you expect (found, chosen, held, booked, cancelled, updated, sent,
+reported, value, airports). `| error e |>` is the transport-failure
+arm — arming it does not make the call succeed.
 
 say(text: string) — the voice channel: what the user hears. Always
 "quoted" — {{ }} inside splices bound values into the line.

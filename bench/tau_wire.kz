@@ -832,7 +832,7 @@ fn jsonValid(s: []const u8) bool {
     const scope = "airline-native";
     if (std.mem.eql(u8, scope, "db"))
         return "open-db(path: \"data.db\") | db c |>\nrows(conn: c, sql: \"SELECT name FROM sqlite_master\") | row s |>\ncol-text(stmt: s, index: 0) | ok t |>\nsay(text: \"first table: {{ t }}\")";
-    return "get-user-details(user_id: \"example_user_0\") | ok u |>\nsay(text: \"Welcome back — I have your profile now.\")";
+    return "get-user-details(user_id: \"example_user_0\") | found u |>\nsay(text: \"Welcome back — I have your profile now.\")";
 }
 
 // The chat-completions endpoint — KOPIUM_API_URL overrides it so a

@@ -309,7 +309,7 @@ class AirlineLladaAgent(HalfDuplexAgent[AirlineAgentState]):
         # shape every airline task opens with.
         state.transcript.append({
             "role": "assistant",
-            "content": 'get-user-details(user_id: "example_user_0") | ok u |>\n'
+            "content": 'get-user-details(user_id: "example_user_0") | found u |>\n'
                        'say(text: "Welcome back, {{ u.user_id }} — membership {{ u.membership }}.")',
         })
         # the Oct-2 gate binary deadlocks completing multi-line turns —
