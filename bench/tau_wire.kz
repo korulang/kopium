@@ -933,6 +933,66 @@ fn jsonValid(s: []const u8) bool {
         @panic("kopium: KOPIUM_MODEL unset — the marshal names the agent model");
 }
 
+// Tier routing: the affordance set is possession-filtered, so the hardest
+// CALLABLE verb is the state's real difficulty. Per-verb tags are
+// experiential annotations — verbs that spend/commit are hard, handle
+// borrows medium, reads trivial. Tier maps to KOPIUM_MODEL_T{0,1,2};
+// unset tiers walk down, all-unset falls back to the boot model.
+// KOPIUM_MODEL_TIER_FORCE pins a tier for A/B runs.
+const VerbTag = struct { name: []const u8, d: u8 };
+const verb_tags = [_]VerbTag{
+    .{ .name = "say", .d = 0 }, .{ .name = "note", .d = 0 },
+    .{ .name = "list-all-airports", .d = 0 }, .{ .name = "get-flight-status", .d = 0 },
+    .{ .name = "calculate", .d = 0 }, .{ .name = "get-user-details", .d = 0 },
+    .{ .name = "get-reservation-details", .d = 0 }, .{ .name = "transfer-to-human-agents", .d = 0 },
+    .{ .name = "open-db", .d = 0 }, .{ .name = "close-db", .d = 0 }, .{ .name = "finish-stmt", .d = 0 },
+    .{ .name = "search-direct-flight", .d = 0 }, .{ .name = "search-onestop-flight", .d = 0 },
+    .{ .name = "select", .d = 1 }, .{ .name = "release", .d = 1 },
+    .{ .name = "cancel-reservation", .d = 1 }, .{ .name = "rows", .d = 1 }, .{ .name = "next-row", .d = 1 },
+    .{ .name = "hold", .d = 2 }, .{ .name = "confirm", .d = 2 },
+    .{ .name = "update-reservation-flights", .d = 2 }, .{ .name = "update-reservation-baggages", .d = 2 },
+    .{ .name = "update-reservation-passengers", .d = 2 }, .{ .name = "send-certificate", .d = 2 },
+};
+
+fn verbDifficulty(name: []const u8) u8 {
+    for (verb_tags) |t| {
+        if (std.mem.eql(u8, t.name, name)) return t.d;
+    }
+    return 1;
+}
+
+~pub tor pick-model { afford: string<*>, fallback: string<*> } -> string
+
+~proc pick-model|zig {
+    const alloc = std.heap.page_allocator;
+    var maxd: u8 = 0;
+    if (std.mem.indexOf(u8, afford, "callable now:")) |mi| {
+        var rest = afford[mi + "callable now:".len ..];
+        while (std.mem.indexOf(u8, rest, "pub tor ")) |pi| {
+            const p = rest[pi + "pub tor ".len ..];
+            var end: usize = 0;
+            while (end < p.len and p[end] != ' ' and p[end] != '{' and p[end] != '|' and p[end] != '\n') : (end += 1) {}
+            const d = verbDifficulty(p[0..end]);
+            if (d > maxd) maxd = d;
+            rest = p[end..];
+        }
+    }
+    var tier = maxd;
+    if (std.posix.getenv("KOPIUM_MODEL_TIER_FORCE")) |f| {
+        tier = std.fmt.parseInt(u8, std.mem.sliceTo(f, 0), 10) catch tier;
+        if (tier > 2) tier = 2;
+    }
+    while (true) {
+        const key = std.fmt.allocPrint(alloc, "KOPIUM_MODEL_T{d}", .{tier}) catch break;
+        if (std.posix.getenv(key)) |m| {
+            return alloc.dupe(u8, std.mem.sliceTo(m, 0)) catch "";
+        }
+        if (tier == 0) break;
+        tier -= 1;
+    }
+    return alloc.dupe(u8, fallback) catch "";
+}
+
 // The bound scope is the phantom-typed native surface — the
 // transliterated `airline` arm is removed; there is no env override.
 ~pub tor scope-name {} -> string

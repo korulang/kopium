@@ -201,7 +201,9 @@ drain-calls = std/bridge:take-calls(br) |> app/tau_wire:write-callsteps(origin)
 tor ask { br: *std/bridge:Bridge<session>, model: string, max_tokens: u32, temperature: string }
 ask = std/store:query(transcript)
 ! query h |> std/bridge:grammar(br)
-    | ok g |> drain-calls(br, origin: "harness") |> afford-note(br): an |> std/store:query(domain_policy)
+    | ok g |> drain-calls(br, origin: "harness") |> afford-note(br): an
+        |> app/tau_wire:pick-model(afford: an, fallback: model): pm
+        |> std/store:query(domain_policy)
         ! query dp |> std/fmt:fmt.blk {
 {{ g:s }}{{ an:s }}
 
@@ -209,7 +211,7 @@ REPLY LANES — invocations act; say(text: "...") reaches the user; note(text: "
 
 {{ dp:S }}
             }: sysg |> headless/wire:msg(role: "system", content: sysg): sysmsg
-            |> app/tau_wire:body(model, max_tokens, temperature, syshead: sysmsg, history: h): req
+            |> app/tau_wire:body(model: pm, max_tokens, temperature, syshead: sysmsg, history: h): req
             |> app/tau_wire:mark-call-start()
             |> app/tau_wire:write-receipt(body: req)
             | written |> send(req) |> app/tau_wire:usage-check()
