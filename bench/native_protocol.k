@@ -10,7 +10,7 @@ import std/runtime
 // ------------------------------------------------------------------
 // VOICE — the only verb the user hears
 // ------------------------------------------------------------------
-pub tor say { text: string } -> string
+pub tor say { text: string }
 
 // ------------------------------------------------------------------
 // READS — mint handles, never mutate. Cost 1.

@@ -199,11 +199,11 @@ case("empty say text still emits say event",
      'say(text: "")\n',
      ["say", "status"], expect_status="OK")
 
-case("say arm binds the EMITTED TEXT, not a reply",
+case("say is void: ok arm binds no utterance",
      'say(text: "what is your id?") | ok reply |>\n'
-     'say(text: "you said {{ reply }}")\n',
+     'say(text: "you said [{{ reply }}]")\n',
      ["say", "say", "status"], expect_status="STEPS",
-     expect_say_last="you said what is your id?")
+     expect_say_last="you said []")
 
 case("bound field read in arg",
      'get-user-details(user_id: "x") | found u |>\n'

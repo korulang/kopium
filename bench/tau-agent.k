@@ -229,6 +229,23 @@ observe-human = std/fmt:fmt.blk {
         user: {{ text:s }}
     }: m |> observe(role: "user", text: m)
 
+// Say is the assistant's utterance, not the wire that carried it. Drain the
+// turn's emitted say text into history as the assistant message so the model
+// reasons over what it actually told the user.
+tor observe-says {}
+observe-says = app/tau_wire:emitted-says()
+    | empty |> _
+    | wire s |> app/tau_wire:say-form(text: s): sf
+        |> observe(role: "assistant", text: sf)
+
+// No-op watch teaching is a tool-channel signal, not payload text — drain it
+// as its own user message so the model cannot miss that a repeat changed
+// nothing and the held handle already has the answer.
+tor observe-watch {}
+observe-watch = app/tau_wire:emitted-watch()
+    | empty |> _
+    | wire s |> observe(role: "user", text: s)
+
 // Run what the model wrote and report the outcome back verbatim — the
 // bridge's own diagnostic words, no authored coaching.
 tor run-capped { br: *std/bridge:Bridge<session>, source: string<*> }
@@ -269,6 +286,8 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
     |> std/fmt:fmt.blk {
         {{ r.trace:s }}result: {{ v:s }} bound: {{ r.bound:s }}
     }: m |> observe(role: "user", text: m)
+    |> observe-says()
+    |> observe-watch()
     |> app/tau_wire:count-out(kind: "result")
 | defined d |> std/fmt:fmt.blk {
         defined: {{ d:s }}
@@ -277,6 +296,8 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
 | partial p |> app/tau_wire:dispatch-hint(text: p.report): dhint
     |> std/fmt:fmt.blk { {{ p.report:s }}{{ dhint:s }} }: pm
     |> observe(role: "user", text: pm)
+    |> observe-says()
+    |> observe-watch()
     |> app/tau_wire:count-residue(text: p.report)
     |> app/tau_wire:partial-verdict(p.wire_failures)
     | clean |> app/tau_wire:count-out(kind: "partial")
@@ -285,6 +306,8 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
         unhandled-branch: {{ ub.branch:s }} — {{ ub.payload:s }} (held {{ ub.handles:s }}). An arm word must be a branch name — `ok` binds an ordinary result, a named branch binds under its own name; no other arm word matches.
 {{ ub.guides:s }}    }: m
     |> observe(role: "user", text: m)
+    |> observe-says()
+    |> observe-watch()
     |> app/tau_wire:arm-word(ub.branch)
     | ordinary |> app/tau_wire:count-rejection(kind: "unhandled")
     | named |> app/tau_wire:count-out(kind: "result")
@@ -293,11 +316,15 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
         {{ e.trace:s }}dispatch-error {{ e.event_name:s }}: {{ e.message:s }}{{ dhint:s }}
     }: m
     |> observe(role: "user", text: m)
+    |> observe-says()
+    |> observe-watch()
     |> app/tau_wire:count-out(kind: "result")
 | event-denied ev |> std/fmt:fmt.blk {
         event-denied: {{ ev:s }}
     }: m
     |> observe(role: "user", text: m)
+    |> observe-says()
+    |> observe-watch()
     |> app/tau_wire:count-rejection(kind: "event-denied")
 | residue r |> observe(role: "user", text: r.report)
     |> app/tau_wire:count-residue(text: r.report)
@@ -408,7 +435,7 @@ loop = clear-reply()
             | stop |> app/tau_wire:session-end() |> std/io:eprint.ln("--- eof, session ends")
             | again |> app/tau_wire:bump-fail(n: silents, bound)
                 | edge nf |> std/fmt:fmt.blk {
-                    observer: {{ nf:d }} consecutive replies reached nobody. `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what are you waiting for?
+                    observer: {{ nf:d }} consecutive replies reached nobody. Answer with note(text: ...) or say(text: ...) — `vocabulary()` lists every verb. In one line: what are you waiting for?
                 }: m |> observe(role: "user", text: m)
                     |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
                 | retry nf |> loop(br, model, max_tokens, temperature, bound, fails, silents: nf)
@@ -417,7 +444,7 @@ loop = clear-reply()
         | yes |> app/tau_wire:session-end()
         | no |> app/tau_wire:bump-fail(n: fails, bound)
             | edge nf |> std/fmt:fmt.blk {
-                observer: {{ nf:d }} consecutive refused replies. `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls — `vocabulary()` lists every verb. In one line: what were you trying to do?
+                observer: {{ nf:d }} consecutive refused replies. Answer with note(text: ...) or say(text: ...) — `vocabulary()` lists every verb. In one line: what were you trying to do?
             }: m |> observe(role: "user", text: m)
                 |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
             | retry nf |> loop(br, model, max_tokens, temperature, bound, fails: nf, silents: 0)
@@ -425,7 +452,7 @@ loop = clear-reply()
 
 tor clear-reply {}
 clear-reply = std/store:query(reply)
-! query buf |> std/string:clear(s: buf)
+! query buf |> std/string:clear(s: buf) |> app/tau_wire:emitted-clear()
 
 // The seed: the language shown by example — ONE assistant turn carrying a
 // program that ends in a `say`. Per-scope (app/tau_wire:seed-text): a seed
@@ -516,4 +543,6 @@ app/tau_wire:scope-name(): sc
 |> app/corpus_env:env-or(key: "KOPIUM_WORLD", fallback: ""): w
 |> [with]std/bridge:create(id: "tau-agent", scope: sc, introspection: true, world: w): br
 |> app/tau_wire:model-name(): m
+|> app/tau_wire:record-says(on: true)
+|> app/tau_wire:record-watch(on: true)
 |> boot(br, model: m, max_tokens: 16384, temperature: "0", bound: 10)

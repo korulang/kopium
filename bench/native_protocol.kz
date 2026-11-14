@@ -88,7 +88,7 @@ fn __emptyResult(s: []const u8) bool {
 
 
 ~proc say|zig {
-    return @import("root").koru_app.koru_tau_wire.sayIO(text);
+    _ = @import("root").koru_app.koru_tau_wire.sayIO(text);
 }
 
 

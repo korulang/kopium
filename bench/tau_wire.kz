@@ -299,6 +299,18 @@ fn pushPending(text: []const u8) void {
 // PROC-SIDE I/O — called from inside dispatched procs, mid-run.
 // ============================================================================
 
+// User-facing say text emitted this turn, kept page-backed so the agent can
+// land it in the transcript as the assistant's message after the run.
+var say_log = std.ArrayListUnmanaged(u8){};
+var say_recording = false;
+
+fn noteSay(text: []const u8) void {
+    if (!say_recording) return;
+    const alloc = std.heap.page_allocator;
+    if (say_log.items.len > 0) say_log.appendSlice(alloc, "\n\n") catch @panic("kopium: OOM");
+    say_log.appendSlice(alloc, text) catch @panic("kopium: OOM");
+}
+
 // say(text:) — emit the SAY line and return the emitted text. Say is a
 // write, not a read: it never blocks the turn, so a reply can speak AND
 // call. The user's reply arrives as an ordinary inbound "user" line and
@@ -315,6 +327,7 @@ fn sayIO(text: []const u8) []const u8 {
     appendUsage(alloc, &out);
     out.appendSlice(alloc, "}") catch @panic("kopium: OOM");
     writeOut(out.items);
+    noteSay(text);
     return text;
 }
 
@@ -345,6 +358,8 @@ var reservation_reads = std.StringHashMapUnmanaged(void){};
 const WatchEntry = struct { hash: u64, fired: bool };
 var watch_log: [32]WatchEntry = undefined;
 var watch_n: usize = 0;
+var watch_msgs = std.ArrayListUnmanaged(u8){};
+var watch_recording = false;
 
 fn watchHash(name: []const u8, args: []const u8, result: []const u8) u64 {
     var h: u64 = 1469598103934665603;
@@ -444,7 +459,7 @@ fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
             @panic("kopium: result id does not match the outstanding call");
         var rcontent = jsonStr(line, "content") orelse
             @panic("kopium: result line without content");
-        const rerr = jsonBool(line, "error");
+        var rerr = jsonBool(line, "error");
         // Zero-information watch: identical (name,args,result) seen before
         // means the world did not move — teach once per signature.
         const sig = watchHash(tau_name, args_json, rcontent);
@@ -456,13 +471,13 @@ fn callIO(tau_name: []const u8, args_json: []const u8) CallResult {
             }
         }
         if (wslot) |we| {
-            if (!we.fired) {
+            const teach = "[watch] identical call returned an identical result — the world did not change; you already hold this data — answer the user from the earlier result or change approach; do not repeat the call.";
+            if (watch_recording) {
+                rerr = true;
+                rcontent = teach;
+            } else if (!we.fired) {
                 we.fired = true;
-                rcontent = std.fmt.allocPrint(
-                    alloc,
-                    "{s}\n\n[watch] identical call returned an identical result — the world did not change; if this is a retry loop, change approach or say so.",
-                    .{rcontent},
-                ) catch @panic("kopium: OOM");
+                rcontent = std.fmt.allocPrint(alloc, "{s}\n\n{s}", .{ rcontent, teach }) catch @panic("kopium: OOM");
             }
         } else if (watch_n < watch_log.len) {
             watch_log[watch_n] = .{ .hash = sig, .fired = false };
@@ -760,6 +775,66 @@ fn jsonValid(s: []const u8) bool {
     appendUsage(alloc, &out);
     out.appendSlice(alloc, "}") catch @panic("kopium: OOM");
     writeOut(out.items);
+}
+
+// The turn's user-facing say text, drained once for the transcript. Say is
+// the assistant's message; the wire program that emitted it is the action,
+// not the utterance.
+~pub tor emitted-says {}
+| empty
+| wire string
+
+~proc emitted-says|zig {
+    if (say_log.items.len == 0) return .empty;
+    const s = std.heap.page_allocator.dupe(u8, say_log.items) catch return .empty;
+    say_log.clearRetainingCapacity();
+    return .{ .wire = s };
+}
+
+~pub tor emitted-clear {}
+
+~proc emitted-clear|zig {
+    say_log.clearRetainingCapacity();
+    watch_msgs.clearRetainingCapacity();
+}
+
+// Only the agent transcript consumes say_log; the bare gate would leak it.
+~pub tor record-says { on: bool }
+
+~proc record-says|zig {
+    say_recording = on;
+}
+
+// Same split for the no-op watch: the agent gets it as a salient transcript
+// message; the gate keeps it inside the result payload.
+~pub tor record-watch { on: bool }
+
+~proc record-watch|zig {
+    watch_recording = on;
+}
+
+~pub tor emitted-watch {}
+| empty
+| wire string
+
+~proc emitted-watch|zig {
+    if (watch_msgs.items.len == 0) return .empty;
+    const s = std.heap.page_allocator.dupe(u8, watch_msgs.items) catch return .empty;
+    watch_msgs.clearRetainingCapacity();
+    return .{ .wire = s };
+}
+
+// Render drained say text back as the say call that carried it, resolved —
+// history keeps the utterance without teaching bare-prose replies.
+~pub tor say-form { text: string<*> } -> string
+
+~proc say-form|zig {
+    const alloc = std.heap.page_allocator;
+    var out = std.ArrayListUnmanaged(u8){};
+    out.appendSlice(alloc, "say(text: \"") catch @panic("kopium: OOM");
+    jsonEscape(alloc, &out, text);
+    out.appendSlice(alloc, "\")") catch @panic("kopium: OOM");
+    return alloc.dupe(u8, out.items) catch "";
 }
 
 ~pub tor take-pending {}
