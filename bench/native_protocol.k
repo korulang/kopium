@@ -12,6 +12,11 @@ import std/runtime
 // ------------------------------------------------------------------
 pub tor say { text: string }
 
+// note(text:) — observer lane. Reaches nobody user-facing; the agent
+// transcript lands it as an `observer:` message so reasoning stays visible
+// without becoming an answer.
+pub tor note { text: string }
+
 // ------------------------------------------------------------------
 // READS — mint handles, never mutate. Cost 1.
 // ------------------------------------------------------------------
@@ -249,6 +254,7 @@ pub tor contract {} -> string
 // ------------------------------------------------------------------
 std/runtime:register(scope: "airline-native") {
     say(1)
+    note(1)
     list-all-airports(1)
     calculate(1)
     get-flight-status(1)

@@ -311,6 +311,20 @@ fn noteSay(text: []const u8) void {
     say_log.appendSlice(alloc, text) catch @panic("kopium: OOM");
 }
 
+// Observer-side reasoning text emitted this turn — the note(text:) lane.
+// Reaches nobody user-facing; the agent transcript lands it as an
+// `observer:` user-role message so the model sees its own thinking flagged
+// as non-answer.
+var note_log = std.ArrayListUnmanaged(u8){};
+var note_recording = false;
+
+fn noteIO(text: []const u8) void {
+    if (!note_recording) return;
+    const alloc = std.heap.page_allocator;
+    if (note_log.items.len > 0) note_log.appendSlice(alloc, "\n\n") catch @panic("kopium: OOM");
+    note_log.appendSlice(alloc, text) catch @panic("kopium: OOM");
+}
+
 // say(text:) — emit the SAY line and return the emitted text. Say is a
 // write, not a read: it never blocks the turn, so a reply can speak AND
 // call. The user's reply arrives as an ordinary inbound "user" line and
@@ -796,13 +810,32 @@ fn jsonValid(s: []const u8) bool {
 ~proc emitted-clear|zig {
     say_log.clearRetainingCapacity();
     watch_msgs.clearRetainingCapacity();
+    note_log.clearRetainingCapacity();
 }
 
-// Only the agent transcript consumes say_log; the bare gate would leak it.
+// The turn's observer-side note text, drained once for the transcript.
+~pub tor emitted-notes {}
+| empty
+| wire string
+
+~proc emitted-notes|zig {
+    if (note_log.items.len == 0) return .empty;
+    const s = std.heap.page_allocator.dupe(u8, note_log.items) catch return .empty;
+    note_log.clearRetainingCapacity();
+    return .{ .wire = s };
+}
+
+// Only the agent transcript consumes the emit logs; the bare gate would leak them.
 ~pub tor record-says { on: bool }
 
 ~proc record-says|zig {
     say_recording = on;
+}
+
+~pub tor record-notes { on: bool }
+
+~proc record-notes|zig {
+    note_recording = on;
 }
 
 // Same split for the no-op watch: the agent gets it as a salient transcript
@@ -822,6 +855,19 @@ fn jsonValid(s: []const u8) bool {
     const s = std.heap.page_allocator.dupe(u8, watch_msgs.items) catch return .empty;
     watch_msgs.clearRetainingCapacity();
     return .{ .wire = s };
+}
+
+// A result report is only meaningful when it carries data — a void emit
+// (say/note) binds nothing and returns an empty value, and reporting
+// `result: {"branch":""} bound:` as a user message is noise the model must
+// reason around. empty = skip the report; real = observe it.
+~pub tor result-verdict { bound: string }
+| empty
+| real
+
+~proc result-verdict|zig {
+    if (bound.len == 0) return .{ .empty = .{} };
+    return .{ .real = .{} };
 }
 
 // Render drained say text back as the say call that carried it, resolved —

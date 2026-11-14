@@ -246,6 +246,15 @@ observe-watch = app/tau_wire:emitted-watch()
     | empty |> _
     | wire s |> observe(role: "user", text: s)
 
+// Note text is the observer lane — it reaches nobody user-facing, so it
+// lands as an `observer:` user-role message: visible to the model's own
+// reasoning, flagged as not-an-answer.
+tor observe-notes {}
+observe-notes = app/tau_wire:emitted-notes()
+    | empty |> _
+    | wire s |> std/fmt:fmt.blk { observer: {{ s:s }} }: m
+        |> observe(role: "user", text: m)
+
 // Run what the model wrote and report the outcome back verbatim — the
 // bridge's own diagnostic words, no authored coaching.
 tor run-capped { br: *std/bridge:Bridge<session>, source: string<*> }
@@ -282,13 +291,15 @@ run-capped = app/tau_wire:item-cap(source, max: 128)
 
 tor act { br: *std/bridge:Bridge<session>, source: string<*> }
 act = observe(role: "assistant", text: source) |> run-capped(br, source)
-| result r |> std/interpreter:value.stringify(r.value): v
-    |> std/fmt:fmt.blk {
-        {{ r.trace:s }}result: {{ v:s }} bound: {{ r.bound:s }}
-    }: m |> observe(role: "user", text: m)
-    |> observe-says()
-    |> observe-watch()
-    |> app/tau_wire:count-out(kind: "result")
+| result r |> app/tau_wire:result-verdict(r.bound)
+    | empty |> observe-says() |> observe-watch() |> observe-notes()
+        |> app/tau_wire:count-out(kind: "result")
+    | real |> std/interpreter:value.stringify(r.value): v
+        |> std/fmt:fmt.blk {
+            {{ r.trace:s }}result: {{ v:s }} bound: {{ r.bound:s }}
+        }: m |> observe(role: "user", text: m)
+        |> observe-says() |> observe-watch() |> observe-notes()
+        |> app/tau_wire:count-out(kind: "result")
 | defined d |> std/fmt:fmt.blk {
         defined: {{ d:s }}
     }: m |> observe(role: "user", text: m)
@@ -298,6 +309,7 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
     |> observe(role: "user", text: pm)
     |> observe-says()
     |> observe-watch()
+    |> observe-notes()
     |> app/tau_wire:count-residue(text: p.report)
     |> app/tau_wire:partial-verdict(p.wire_failures)
     | clean |> app/tau_wire:count-out(kind: "partial")
@@ -308,6 +320,7 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
     |> observe(role: "user", text: m)
     |> observe-says()
     |> observe-watch()
+    |> observe-notes()
     |> app/tau_wire:arm-word(ub.branch)
     | ordinary |> app/tau_wire:count-rejection(kind: "unhandled")
     | named |> app/tau_wire:count-out(kind: "result")
@@ -318,6 +331,7 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
     |> observe(role: "user", text: m)
     |> observe-says()
     |> observe-watch()
+    |> observe-notes()
     |> app/tau_wire:count-out(kind: "result")
 | event-denied ev |> std/fmt:fmt.blk {
         event-denied: {{ ev:s }}
@@ -325,13 +339,13 @@ act = observe(role: "assistant", text: source) |> run-capped(br, source)
     |> observe(role: "user", text: m)
     |> observe-says()
     |> observe-watch()
+    |> observe-notes()
     |> app/tau_wire:count-rejection(kind: "event-denied")
 | residue r |> observe(role: "user", text: r.report)
     |> app/tau_wire:count-residue(text: r.report)
     |> app/tau_wire:residue-verdict(r.observer, prose: r.text)
     | observer |> app/tau_wire:count-out(kind: "note")
     | strike |> app/tau_wire:count-rejection(kind: "residue")
-        |> observe(role: "assistant", text: "say(text: \"One moment — let me check that for you.\")")
 | parse-error p |> std/fmt:fmt.blk {
         parse-error: {{ p.message:s }}
     }: m
@@ -391,14 +405,12 @@ drive = app/tau_wire:channel()
 // its own kind so session.json separates silence from malformed wire.
 tor empty-reply {}
 empty-reply = observe(role: "user", text: "your reply carried no wire — emit wire text: `say(text: ...)` reaches the user, `note(text: ...)` thinks, `verb(field: ...)` calls; `vocabulary()` lists every verb")
-    |> observe(role: "assistant", text: "say(text: \"One moment — let me check that for you.\")")
     |> app/tau_wire:count-rejection(kind: "empty")
 
 // The toolcall reply carried no koru program — a rejected turn, observed
 // back like any other.
 tor no-program {}
 no-program = observe(role: "user", text: "no koru program in the reply — emit one koru tool call whose program is wire text; `vocabulary()` lists every verb")
-    |> observe(role: "assistant", text: "say(text: \"One moment — let me check that for you.\")")
     |> app/tau_wire:count-rejection(kind: "residue")
 
 // User replies captured by say() procs mid-run become real user messages
@@ -544,5 +556,6 @@ app/tau_wire:scope-name(): sc
 |> [with]std/bridge:create(id: "tau-agent", scope: sc, introspection: true, world: w): br
 |> app/tau_wire:model-name(): m
 |> app/tau_wire:record-says(on: true)
+|> app/tau_wire:record-notes(on: true)
 |> app/tau_wire:record-watch(on: true)
 |> boot(br, model: m, max_tokens: 16384, temperature: "0", bound: 10)

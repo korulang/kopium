@@ -16,3 +16,12 @@ nothing, so they never mint a durable `rN`. A repeated call that returns an
 identical result is a no-op: for the agent it is an error branch that says "you
 already hold this data," not an ok payload with buried teaching. The wire
 program is how actions are encoded; history is what the agent remembers.
+
+The receipt audit (task7 `20261114T180109Z`) added three sharper rulings:
+a rejected or residue turn must NOT mint a clean assistant say — the harness
+used to inject `say(text: "One moment…")` the model never wrote, so failed
+replies looked successful and the model repeated them. A void emit produces
+no `result:` report at all — `result: {"branch":""} bound:` was noise every
+say left behind. And `note` is a declared void observer verb, not prose
+residue — it lands as an `observer:` user-role message, visible to the
+model's reasoning, flagged as not-an-answer.

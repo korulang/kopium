@@ -92,6 +92,11 @@ fn __emptyResult(s: []const u8) bool {
 }
 
 
+~proc note|zig {
+    @import("root").koru_app.koru_tau_wire.noteIO(text);
+}
+
+
 ~proc search-direct-flight|zig {
     const __S = struct { threadlocal var buf: [1024]u8 = undefined; };
     var __e0: [1024]u8 = undefined;
