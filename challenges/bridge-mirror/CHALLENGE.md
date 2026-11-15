@@ -58,6 +58,13 @@ verdict → class**. Class is one of:
 - `supported` — same semantics on both surfaces.
 - `refused-honest` — a named refusal (parse-error, event-denied, shape-error)
   that says why. A deliberate narrowing counts: record the intent.
+- `deferred` — the compiler refuses at compile time, the bridge runs the
+  program and hands the problem back as a named outcome when the path is
+  reached (`unhandled-branch`, residue parked as `rN`, a trailing `|>` run
+  as a partial program). The lenient interpreter's allowance: it may move
+  *when* a verdict lands, never *what* the program means. Deferring a
+  meaning error (unknown field, undeclared arm word, shadowing) is a
+  `gap`, not `deferred`.
 - `gap` — silent divergence, a wrong verdict, a panic, or a refusal that
   lies about the construct. A gap is a *found* seam, not a failed replay —
   the card names the disposition it wants (koru pin, deliberate narrowing,
