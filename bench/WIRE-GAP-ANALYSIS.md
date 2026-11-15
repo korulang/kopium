@@ -67,6 +67,31 @@ contract's say rule is correct-as-written (#3 verified) or over-broad (#4).
 - Guide timing: confirm `std/guide` fires only post-dispatch (cell #15) —
   pre-dispatch doctrine must live in contract/system surface.
 
+## Resource bridge — the string-handle projection (added 2026-11-15)
+
+The wire shows handles as `rN` strings with `<type>` phantom tags. The
+interpreter's pool is richer (`interpreter.handles.kz`,
+`bridge.affordances-render.kz`): each `Handle` carries `handle_id`,
+`obligation_name`, `obligation_module`, `discharge_event`, `discharged`,
+plus `hasUndischargedDependents` — a dependency graph the wire never sees.
+
+| Layer | Wire sees | Interpreter holds | Gap |
+|-------|-----------|-------------------|-----|
+| identity | `r1`, `u`, `c1` strings | `handle_id` in pool | name-only; no module qualification |
+| type | `string<reservation-known>` phantom tag | `obligation_name` + `obligation_module` | module lost — two scopes' `found` collide |
+| lifecycle | bound in result, gone at discharge | `discharged` flag + `discharge_event` provenance | wire can't ask *why* a handle died |
+| custody | "pass the binding name" prose rule | `hasUndischargedDependents` graph | dependents invisible — release-order bugs possible |
+| resources beyond handles | nothing | stores, channels, `*T<state!>` fields, custody witnesses (the ~2000-test language surface) | wire exposes ONLY the handle-pool slice |
+
+**The question for Fable:** is `rN`+phantom-tag the right *projection* of
+the interpreter's resource model, or should wire handles carry richer
+identity — module-qualified obligation refs, dependency edges, discharge
+provenance? The regression suite is the reference for what "resource" means
+in the language proper; the wire currently approximates it with strings.
+Cells to add to the matrix once the resource section is scoped: phantom
+`<type>` vs `<!type>` vs `type!` enforcement parity (compile vs dispatch),
+dependent-release ordering, module-qualified obligation collisions.
+
 ## Teaching-surface audit (after matrix is green)
 
 - `native_protocol.k` contract text vs verified column — every "never/always"
