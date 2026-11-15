@@ -385,26 +385,6 @@ fn emitTool(v: *yyj.Value) void {
     put(&kz_final, GENERATED_HEADER);
     put(&kz_final, SAY_TOR);
     put(&kz_final, tors_out.items);
-    // The tool contract is the scope's documentation, never a verb:
-    // `contract` is declared with the whole doc as its annotation prose but
-    // never registered — `register` lifts the prose into the scope manifest
-    // and the grammar render serves it, so the field shapes ride the system
-    // message instead of costing a model turn to fetch. Same text as
-    // airline_vocab_doc.md — doc_final is emitted already prose-canonical
-    // (trimmed lines, `·` sub-items, no bullet-marker starts), and the two
-    // panics guard the block's own delimiters.
-    put(&kz_final, "// The tool contract — scope documentation, not a call.\n// Same text as airline_vocab_doc.md.\n\n[\n- doc\n");
-    var lines = std.mem.splitScalar(u8, doc_final.items, '\n');
-    while (lines.next()) |line| {
-        if (line.len == 0 and lines.peek() == null) break;
-        const t = std.mem.trim(u8, line, " \t");
-        if (t.len > 0 and t[0] == ']')
-            @panic("gen_airline: doc line would close the annotation block");
-        if (t.len > 1 and (t[0] == '-' or t[0] == '*' or t[0] == '+') and (t[1] == ' ' or t[1] == '\t'))
-            @panic("gen_airline: doc line would parse as a flag bullet, not prose");
-        putf(&kz_final, "{s}\n", .{line});
-    }
-    put(&kz_final, "]\npub tor contract {} -> string\n\n");
     put(&kz_final, "std/runtime:register(scope: \"airline\") {\n    say(1)\n");
     put(&kz_final, reg_out.items);
     put(&kz_final, "}\n");

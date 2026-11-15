@@ -18,10 +18,10 @@ conflicts).
 |---|-----------|-----------|-------------------|--------|----------------------|
 | 1 | say, standalone | `say(text: "...")` | emit-only, void, reaches user | verified | gate_probe cases; receipts |
 | 2 | say receiving pipe | `call \| found u |> say(text: "{{u.x}}")` | canonical end-of-pipeline step | verified | gate_probe; every run |
-| 3 | say emitting pipe | `say(text: "...") \|>` | contract says ILLEGAL ("never append continuation arrow") | verified-rejected | task7 receipts: `unknown field '(text:...) |>' on 'say'` ×10 |
-| 4 | say mid-pipe | `prev |> say(text:"...") \|> next` | user asserts legal; contract implies illegal | **DISPUTED — first cell to close** | probe wires below |
-| 5 | void-step piping | does `\|>` pipe data or sequence? | unknown — say/note return void | assumed | interpreter audit (Fable) |
-| 6 | say with outcome arm | `say(...) \| ok x \|>` | contract says illegal | assumed | same probe batch as #4 |
+| 3 | say emitting pipe | `say(text: "...") \|>` | contract said ILLEGAL — **confirmed** | verified | TauGateSession probe: `unknown field '(text:) |>'` |
+| 4 | say mid-pipe | `prev |> say(...) \|> next` | **CLOSED 2026-11-15: ILLEGAL.** say/note are emit-only terminals — may receive `\|>` input and take an outcome arm, cannot emit `\|>` forward | verified | probes: `say|>say`→REJECT invalid syntax; `note|>say|>note`→REJECT residue |
+| 5 | void-step piping | does `\|>` pipe data or sequence? | emit-only tors emit no pipeable result | partially verified | cell #4 shows terminals can't emit; data-vs-sequence for calls still open (Fable) |
+| 6 | say with outcome arm | `say(...) \| ok x \|>` | contract said ILLEGAL — **WRONG: legal**, arm binds emitted text | verified | probe: say emitted + `status:OK say bound=`; gate_probe docstring already documented it |
 | 7 | note | `note(text: "...")` | emit-only, observer lane, void | verified | receipts; `observer:` history msgs |
 | 8 | residue | bare prose / unparseable | binds rN, reaches nobody, reasoning only | verified | receipts; REJECT verdicts |
 | 9 | multi-item turn | newline-separated items, indent continuation | items run in order; indent = pipeline continuation | partially verified | resp_*.txt shapes; needs pipe-semantics pin |
@@ -36,25 +36,25 @@ conflicts).
 | 18 | define | `define name { ... }` | session invention joins vocabulary | asserted | probe_session_mock covers mock scope |
 | 19 | `expr: Expression` args | `tor f { expr: Expression }` | exists in koru_std (array sort `[norun|expand]`, cell, channel) | assumed-for-emit | would `say { expr: Expression }` legalize `say("...")`? unprobed |
 | 20 | `@"path"` literal | `f(@"file.md")` | NOT Koru — passes frontend, dies in backend | verified-hole | koru red test `100_089_at_string_literal_passes_parser` (2183477d0) |
-| 21 | contract() verb | `contract()` → whole doctrine blob | **VERDICT (Lars, 2026-11-15): worst-kind design — remove.** Bridge must be self-describing from per-verb docs; affordances already render signatures+branches live. 0 observed calls in all receipts. Content dissolves into verb declarations (self-describing tors), not a fetchable manual | verified-dead | native_protocol.k:253; callsteps grep = 0 |
+| 21 | contract() verb | `contract()` → whole doctrine blob | **REMOVED both surfaces.** native_protocol.k `46fc178`; airline_tools.k twin + gen_airline.kz emission removed (regenerated, 94 deletions). Tors already self-describe via per-tor `[- doc]`; vocab doc artifact kept | verified-dead→removed | callsteps grep = 0; regen: 14 tors + say, 0 contract refs |
 
-## Cell #4 — the disputed one (close first)
+## Cell #4 — CLOSED 2026-11-15 (was the disputed one)
 
-Exact wires to run through `gate_probe.py`'s harness (it drains
-STEPS/CALLSTEPS correctly — do NOT hand-roll `GateSession.send`, it desyncs
-on CALLSTEPS-BEGIN blocks):
+Probed through `TauGateSession` (the protocol-correct harness —
+`GateSession.send` desyncs on CALLSTEPS-BEGIN; do not hand-roll):
 
 ```
-say(text: "a") |>                                   # baseline: rejected?
-note(text: "n") |> say(text: "a") |> note(text: "m")  # say mid-pipe, emit-only chain
-say(text: "a") | ok x |>                            # say + outcome arm
-say(text: "a")\n    say(text: "b")                  # indented say, no pipe
-call | found u |> say(text: "{{u.x}}") |> next-call  # say mid-pipe after real call
+say(text: "a") |>                  -> ERROR  unknown field '(text: "a") |>' on 'say'
+say(text: "a") |> say(text: "b")   -> REJECT Invalid invocation syntax
+note |> say |> note                -> REJECT residue bound: r1
+say(text: "a") | ok x |>           -> say emitted + status:OK say bound=   ← arm is LEGAL
+say(text:"a")\n    say(text:"b")   -> two says, STEPS — indent = separate items
 ```
 
-Expected outputs to record per wire: verdict (OK/REJECT/ERROR), item_outcome,
-whether say emitted, whether next item ran. The answer decides whether the
-contract's say rule is correct-as-written (#3 verified) or over-broad (#4).
+Verdict: say/note are emit-only **terminals** — receive `|>` input, may
+take `| ok x |>` (binds emitted text), never emit `|>` forward. The
+deleted contract text had this half-right (no continuation arrow) and
+half-wrong ("no outcome arm" — the arm is legal and meaningful).
 
 ## What Fable's session should audit (interpreter side)
 
