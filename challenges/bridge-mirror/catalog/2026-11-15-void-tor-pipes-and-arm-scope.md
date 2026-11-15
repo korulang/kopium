@@ -9,7 +9,7 @@ compiled probes under `/tmp/koru-probes/phase1/`; koru `8a78f248c` before,
 |---|---|---|---|---|
 | `void() \|> next()` | backbone — 440_050 harness chains `\|> step(...)` on a void tor | `REJECT Invalid invocation syntax` (parser split only at `\| word`) | runs in order (I1, F1) | ~~gap~~ **supported** |
 | trailing `say(...) \|>` | incomplete program | misparse `unknown field '(text: "a") \|>'` | runs the say — partial program (I2) | **deferred** (Lars 2026-11-15) |
-| `outcome_tor() \|> next()` (2+ non-panic branches) | `KORU022 anonymous '\|>' after 'run' is ambiguous — … name the one to continue on`, normal AND `[prototype]` (`/tmp/koru-probes/phase5/`, shape from `400_160`) | parse refusal | parses; outcome handed back `unhandled-branch` (A/I3) | **gap** — ambiguity is a meaning error; deferring it is not allowed |
+| `outcome_tor() \|> next()` (2+ non-panic branches) | `KORU022 anonymous '\|>' after 'run' is ambiguous — … name the one to continue on`, normal AND `[prototype]` (`/tmp/koru-probes/phase5/`, shape from `400_160`) | parse refusal | parses; outcome handed back `unhandled-branch` (A/I3) | ~~gap~~ **refused-honest** — koru `3753d2638`: refused with koruc's ambiguity wording (A/I3) |
 | one branch armed, another unhandled | `KORU022 branch 'done' must be handled`; `[prototype]` compiles a hole → `panic: unhandled branch 'done' reached — prototype hole`, exit 134 | — | unarmed outcome → `unhandled-branch` hand-back | **deferred** (compiler refuses, prototype panics, bridge hands back) |
 | arm on a void tor, `\| ok x \|>` / `\| ok \|>` / `\| ok _ \|>` | no passing test arms a void tor | accepted, `x` bound empty | refused: `'say' is void — it issues no outcome …; chain the next call with a bare \|>` (F2) | ~~gap~~ **refused-honest** (shape bug, Lars) |
 | same name in sibling arms | compiles + runs (`n23_siblings.k`) | `Shadowing not allowed` | fired arm runs (G1) | ~~gap~~ **supported** |
@@ -24,3 +24,10 @@ Side catch: call_step records after an armed call were malformed JSON
 (held-handle ids unescaped) and dropped silently by `tau_gate_session` —
 fixed both ends (`a48213855`, `7d49e10`); see
 `concepts/frag-callstep-records-can-vanish.md`.
+
+`-> T` tor + bare `|>`: koruc refuses `KORU092 … has nowhere to land`
+(compiled spelling binds with `probe(): v |> …`); the bridge refuses with
+the same wording, adapted to arming. The wire's synthetic `| ok v |>` on a
+`-> T` tor has no compiled twin — koruc refuses it (`KORU021 a bare return
+has no tags`). Open: the wire has no `:` binding, so `| ok v |>` stands in.
+

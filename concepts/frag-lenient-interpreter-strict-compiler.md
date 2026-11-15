@@ -38,6 +38,10 @@ divergence. An anonymous `|>` after a tor with two or more outcomes is
 not that case: koruc calls it ambiguous in both modes, a meaning error,
 so the bridge must refuse it too rather than hand it back.
 
-**Open questions:** Should the
+The wire still carries one spelling with no compiled twin: `| ok v |>`
+on a `-> T` tor, standing in for koruc's `probe(): v |> …` binding.
+
+**Open questions:** Does the wire need the `:` binding so `-> T` tors
+stop leaning on a synthetic `ok`? Should the
 interpreter share the compiler's checker code rather than mirror it,
 so the two judges cannot drift?
