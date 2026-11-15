@@ -123,8 +123,51 @@ case("F1: note(text: a) |> say(text: b)",
      [(ok, False)])
 
 # F2 — say arm binds the emitted text
+case("I1: void chain say |> say",
+     'say(text: "a") |> say(text: "b")\n',
+     [(ok, False)],)
+
+case("I2: trailing pipe say |>",
+     'say(text: "Hello") |>\n',
+     [(ok, False)],)
+
+case("I3: outcome tor bare pipe (re-measure A)",
+     'get-user-details(user_id: "mia_li_3668") |> say(text: "x")\n',
+     [(ok, False)],)
+
 case("F2: say | ok x |> say({{x}})",
      'say(text: "a") | ok x |> say(text: "{{x}}")\n',
      [(ok, False)])
+
+# --- fix-campaign phase-1 cells ---------------------------------------------
+
+# G1 — #23 sibling arms binding the SAME name on one invocation
+# (compiled: legal — n23_siblings.k built + ran, modeled on 400_163)
+case("G1: sibling arms same name | found p |> ... | missing p |> ... | error p |>",
+     f'get-user-details(user_id: "{USER[0]}") | found p |> say(text: "f") '
+     '| missing p |> say(text: "m") | error p |> say(text: "e")\n',
+     [(USER[1], False)])
+
+# G2 — #23 nested re-bind: inner arm re-binds u already bound by outer arm
+# (compiled: refused — error[KORU106] shadowing)
+case("G2: nested re-bind | found u |> get-user-details | found u |>",
+     f'get-user-details(user_id: "{USER[0]}") | found u |> '
+     f'get-user-details(user_id: "mia_li_3668") | found u |> '
+     'say(text: "{{u.user_id}}")\n',
+     [(USER[1], False)])
+
+# H1 — #22 two-level interpolation {{u.name.first_name}} (compiled: works)
+case("H1: {{u.name.first_name}} two-level interpolation",
+     f'get-user-details(user_id: "{USER[0]}") | found u |> '
+     'say(text: "{{u.name.first_name}}")\n',
+     [(USER[1], False)])
+
+# H2 — #22 two-level path as bare arg value (compiled: works as arg).
+# u must be bound first — two items in one turn (STEPS report expected).
+case("H2: u.name.first_name as bare arg value",
+     f'get-user-details(user_id: "{USER[0]}") | found u |> say(text: "bound")\n'
+     'get-user-details(user_id: u.name.first_name) | found v |> '
+     'say(text: "{{v.user_id}}")\n',
+     [(USER[1], False)])
 
 print(f"\n=== done, binary={BINARY.name} ===")

@@ -1157,7 +1157,7 @@ var toolfrag_hi: usize = 0;
 ~proc dispatch-hint|zig {
     if (std.mem.indexOf(u8, text, "carries no field") == null and
         std.mem.indexOf(u8, text, "not bound") == null) return "";
-    return "\ndirective: {{ x.f }} splices ONE level into the record a call bound — {{ x.f.g }} always refuses, splice {{ x.f }} for a nested object; a bare word, number, or id is a scalar — splice it as {{ x }}, never {{ x.f }}. carries-no-field means shorten the path to one level; not-bound means bind the name first. Resend the reply — the call that produced the value already answered, do not re-run it.";
+    return "\ndirective: {{ x.f.g }} walks into nested records the call bound — a list stops the path, splice the list whole; a bare word, number, or id is a scalar — splice it as {{ x }}, never {{ x.f }}. carries-no-field names the level and the fields it has — pick one of those; not-bound means bind the name first. Resend the reply — the call that produced the value already answered, do not re-run it.";
 }
 
 // Per-call usage bookkeeping: a model call that completes without the SSE

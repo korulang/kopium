@@ -5,39 +5,33 @@ ts: 2026-11-15
 tags: [kopium, wire, semantics, probes, say, note]
 provenance: TauGateSession probes 2026-11-15 closing matrix cell #4 —
   say/note pipe behavior verified after contract text taught it wrong;
-  evolved same day by bench/probe_pipe_semantics.py (cells #5, #6)
+  evolved same day by bench/probe_pipe_semantics.py (cells #5, #6) and
+  Lars's ruling that `|>` after a void tor is the language's backbone
 ---
 
 # frag-emit-only-terminal-pipes
 
-**Belief:** emit-only tors (`say`, `note`) are pipeline *terminals* in
-the wire language. They may receive `|>` input (the canonical
-`call | found u |> say(...)` shape) but can never emit `|>` forward,
-because they produce no pipeable result. `say|>next` is a parse-level
-rejection, not a style rule. And `|>` never carries data on its own for
-any call: a bare `|>` after a call is refused at parse; data moves only
-through a named arm, whose name is bound for the rest of the turn.
+**Belief:** `say` and `note` are void tors — no return value, no outcome.
+A bare `|>` after any void tor sequences the next call; that is the
+backbone of Koru, and the wire speaks it exactly as compiled Koru does.
+A trailing `|>` with nothing after it is a partial program and runs.
+An outcome arm on a void tor (`| ok x |>`, `| ok |>`, `| ok _ |>`) is a
+shape bug and refuses — there is no outcome to listen to. `|>` never
+carries data on its own: data moves only through a named arm on a tor
+that declares that outcome, and after an outcome-bearing tor a bare
+`|>` names no outcome, so the result is handed back unhandled.
 
-The outcome arm on a terminal is NOT settled. `say(...) | ok x |>` is
-accepted, but `x` binds an empty value — `{{x}}` renders `""` — while an
-undeclared arm word on any outcome-bearing verb is refused. Accepting a
-construct and giving it no meaning is the silent-mis-render class the
-interpreter is meant to refuse; whether it should be refused or given
-a meaning the compiler shares is open.
+**Why:** this belief was wrong twice in one day, both times by trusting
+the bridge as if it were the language. First, "terminals cannot emit
+`|>`" — the probe was real, but it measured a bridge parser that only
+split continuations at `| word` heads, not the language; every compiled
+harness chains void steps with a bare `|>`. Second, "the arm on say is
+legal and binds the emitted text" — read off a docstring and a status
+line that never showed the binding; it bound nothing, and a void tor has
+nothing to bind. The bridge is evidence about the bridge. What the
+language says comes from the declaration and the compiler.
 
-**Why:** the deleted contract blob taught "never append a continuation
-arrow *or outcome arm* to say" — right about the arrow. The earlier
-version of this belief called the arm "legal and meaningful (binds
-emitted text)" on the strength of gate_probe's docstring and a status
-line that never showed the binding's contents — the probe that rendered
-`{{x}}` showed it empty. Teaching surface that contradicts the language doesn't just fail to
-help — it trains the model to avoid a legal shape while still committing
-the illegal one, because the real rule was never stated precisely.
-
-**Open questions:** should an arm on a void tor refuse (like any
-undeclared arm word) — and what does koruc say about the same shape?
-Did void-say ever bind its text, or did the docstring describe a binder
-that skipped void values (koru `bridge.bind.kz` has an uncommitted
-change making void values skip `rN`)? Do other
-emit-only verbs exist beyond say/note, and is "terminal" a declared
-property or an emergent one of void returns?
+**Open questions:** does koruc itself refuse a bare `|>` after an
+outcome-bearing tor, or accept it as an unhandled path — i.e. is the
+bridge's hand-back a deferral or a divergence? Is "void" worth naming
+in the rendered vocabulary so the model sees it before dispatch?

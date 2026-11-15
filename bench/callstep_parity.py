@@ -48,7 +48,7 @@ WIRES = [
     'this is not wire\n'
     'get-user-details(user_id: "x") | ok u |> say(text: "hi {{ u.user_id }}")\n'
     'say(text: "{{ missing.field }}")\n',
-    'say(text: "q?") | ok r |>\nsay(text: "you said {{ r }}")\n',
+    'say(text: "q?")\nsay(text: "you asked something")\n',
     'get-flight-status(flight_number: "AA1", date: "2024-01-01") | ok f |>\n'
     'say(text: "flight {{ f.flight_number }}")\n',
 ]

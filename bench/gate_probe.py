@@ -21,7 +21,7 @@ Protocol under test (tau_wire.kz + airline-gate.k, measured 2026-11-09):
     items (STEPS report). An unarmed outcome on a single-item turn is
     HALT; inside a multi-item turn it is a per-step
     `unhandled-branch:` line that does NOT stop sibling items.
-  - say's `| ok x |>` arm binds the EMITTED TEXT, not a user reply.
+  - say is void: an outcome arm on it refuses ('| ok x |>' has nothing to arm).
 
 Each case: send wire -> pump events (say->read-only drain,
 call->feed_result) -> assert the exact event-kind sequence + status.
@@ -199,11 +199,11 @@ case("empty say text still emits say event",
      'say(text: "")\n',
      ["say", "status"], expect_status="OK")
 
-case("say is void: ok arm binds no utterance",
+case("say is void: ok arm refuses",
      'say(text: "what is your id?") | ok reply |>\n'
      'say(text: "you said [{{ reply }}]")\n',
-     ["say", "say", "status"], expect_status="STEPS",
-     expect_say_last="you said []")
+     ["say", "status"], expect_status="STEPS",
+     expect_say_last="you said")
 
 case("bound field read in arg",
      'get-user-details(user_id: "x") | found u |>\n'
