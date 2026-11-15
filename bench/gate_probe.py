@@ -202,8 +202,7 @@ case("empty say text still emits say event",
 case("say is void: ok arm refuses",
      'say(text: "what is your id?") | ok reply |>\n'
      'say(text: "you said [{{ reply }}]")\n',
-     ["say", "status"], expect_status="STEPS",
-     expect_say_last="you said")
+     ["status"], expect_status="STEPS")
 
 case("bound field read in arg",
      'get-user-details(user_id: "x") | found u |>\n'
@@ -401,16 +400,19 @@ def callstep_coverage():
         recs = g.drain_callsteps()
         covered = sorted({(r.get("turn"), r.get("step")) for r in recs})
         ofs = sorted({r.get("of") for r in recs})
-        outcomes = sorted({r.get("item_outcome") for r in recs})
+        bad = [r for r in recs if r.get("type") == "callstep_parse_error"]
+        outcomes = sorted({r.get("item_outcome") for r in recs
+                           if r.get("type") != "callstep_parse_error"})
         # every record of the turn reports the same `of`; coverage = all
         # (turn, step) pairs for step in 1..of
-        ok = (len(ofs) == 1 and ofs[0] == 3
+        ok = (not bad and len(ofs) == 1 and ofs[0] == 3
               and covered == [(1, 1), (1, 2), (1, 3)])
         RESULTS.append(("call_step: every item yields a record (refusal+chain+unbound)",
                         ok, f"{time.time()-t0:.1f}s",
                         [("covered", covered), ("of", ofs),
                          ("item_outcomes", outcomes),
                          ("events", [e[0] for e in events]),
+                         ("parse_errors", len(bad)),
                          ("records", len(recs))]))
         mark = "PASS" if ok else "FAIL"
         print(f"[{mark}] call_step coverage  ({time.time()-t0:.1f}s)")

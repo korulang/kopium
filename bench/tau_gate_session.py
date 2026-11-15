@@ -36,6 +36,7 @@ import json
 import os
 import queue
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -225,8 +226,13 @@ class TauGateSession:
                         rec = json.loads(l2)
                         rec["origin"] = self._pending_origin
                         self._callsteps.append(rec)
-                    except json.JSONDecodeError:
-                        continue
+                    except json.JSONDecodeError as e:
+                        print(f"callstep line did not parse: {e} — {l2[:160]}",
+                              file=sys.stderr)
+                        self._callsteps.append({
+                            "type": "callstep_parse_error",
+                            "raw": l2, "error": str(e),
+                            "origin": self._pending_origin})
                 continue
             if line.startswith("{"):
                 try:

@@ -62,11 +62,13 @@ above measured a bridge parser gap (koru `9f527faea` fixed it).
 - ~~`std/bridge` pipe semantics~~ — closed, cell #5: a bare `|>` after a
   call is refused; data moves only through named arms.
 - ~~Arm words on void tors~~ — closed, cell #6: refused.
-- call_step records vanish after an armed item: in a multi-item turn,
-  dispatches after a `| word name |>` item (and that arm's own
-  continuation) write no call_step — gate_probe `call_step coverage`
-  22/24. Measured identical at koru `b9671ab00`, so it predates the
-  void-pipe work. Open.
+- ~~call_step records vanish after an armed item~~ — closed, koru
+  `a48213855`: held-handle ids were written into the record unescaped, so
+  any record made while a JSON-text handle was held was malformed, and
+  `tau_gate_session` dropped malformed CALLSTEPS lines silently. Both
+  fixed; a malformed line now lands as a `callstep_parse_error` record.
+  Receipts recorded before this fix undercount call_steps after armed
+  calls.
 - Residue binding: bare prose mints rN with the raw text — is that the
   intended custody story or an accident?
 - Validation-error diagnostics: `unknown field '(text:...) |>'` names the

@@ -182,7 +182,8 @@ def path_agent(receipt_dir: Path) -> list[dict]:
 
 def tuples(recs):
     return [(r.get("turn"), r.get("step"), r.get("verb"),
-             r.get("item_outcome")) for r in recs]
+             r.get("item_outcome")) for r in recs
+            if r.get("type") != "callstep_parse_error"]
 
 
 def main():
