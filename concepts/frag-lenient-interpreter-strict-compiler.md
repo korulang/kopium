@@ -30,7 +30,14 @@ and nested field paths — all plain Koru — and agents were taught those
 refusals as the language. The bridge is evidence about the bridge;
 the declaration and the compiler say what the language is.
 
-**Open questions:** does koruc accept a bare `|>` after an outcome
-tor, making the bridge's hand-back a true deferral? Should the
+Lars, 2026-11-15: koruc must never compile a partial program in normal
+mode; `[prototype]` mode compiles unhandled outcomes as holes that
+panic when reached. So an unhandled outcome is judged three times —
+refused, panicked, handed back — and that is the one sanctioned
+divergence. An anonymous `|>` after a tor with two or more outcomes is
+not that case: koruc calls it ambiguous in both modes, a meaning error,
+so the bridge must refuse it too rather than hand it back.
+
+**Open questions:** Should the
 interpreter share the compiler's checker code rather than mirror it,
 so the two judges cannot drift?
