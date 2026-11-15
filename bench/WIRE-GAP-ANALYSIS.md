@@ -36,6 +36,7 @@ conflicts).
 | 18 | define | `define name { ... }` | session invention joins vocabulary | asserted | probe_session_mock covers mock scope |
 | 19 | `expr: Expression` args | `tor f { expr: Expression }` | exists in koru_std (array sort `[norun|expand]`, cell, channel) | assumed-for-emit | would `say { expr: Expression }` legalize `say("...")`? unprobed |
 | 20 | `@"path"` literal | `f(@"file.md")` | NOT Koru — passes frontend, dies in backend | verified-hole | koru red test `100_089_at_string_literal_passes_parser` (2183477d0) |
+| 21 | contract() verb | `contract()` → whole doctrine blob | **VERDICT (Lars, 2026-11-15): worst-kind design — remove.** Bridge must be self-describing from per-verb docs; affordances already render signatures+branches live. 0 observed calls in all receipts. Content dissolves into verb declarations (self-describing tors), not a fetchable manual | verified-dead | native_protocol.k:253; callsteps grep = 0 |
 
 ## Cell #4 — the disputed one (close first)
 
