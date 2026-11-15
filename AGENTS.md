@@ -48,6 +48,32 @@ model actually saw.
 - If the trajectory and the request body disagree, the request body wins —
   the trajectory is downstream of whatever the model was shown.
 
+## Design law — no escape hatches, ever
+
+The surface computes what the agent needs; it never fetches it. Every verb
+self-describes from its declaration; affordances render what is callable
+now; guides deepen post-dispatch. When the surface is insufficient, fix
+the structure — dissolve content into the declarations and the computed
+views — never route around it with more surface.
+
+Banned, absolutely:
+
+- Fetch-a-manual verbs (`contract()` — removed `46fc178`; 0 calls in every
+  receipt proved it was dead surface). Doctrine the model must know to
+  fetch is doctrine it will never fetch.
+- Degraded fallback paths labeled as defaults (the global no-fallbacks law
+  applies here double).
+- Bolt-on doctrine blobs, second channels around the interpreter, or any
+  surface added because "the model keeps getting it wrong" — if the model
+  keeps failing a shape, the shape or the computed view is wrong, not the
+  model's work ethic.
+- Doing it "of your own volition" when the design contradicts the thesis.
+  Surface additions are Lars's call, always.
+
+An escape hatch counter to the thesis is worse than a missing feature: it
+teaches the agent — and the next session — that the real path doesn't have
+to work.
+
 ## The shame wall
 
 This failure mode is on the public wall:
